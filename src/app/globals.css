@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-barlow: 'Barlow', system-ui, sans-serif;
+  --font-jetbrains: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-inter);
+  background: #ffffff;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Utility classes */
+.font-display { font-family: var(--font-barlow); }
+.font-mono { font-family: var(--font-jetbrains); }
+
+/* Ticker */
+.ticker-wrap { overflow: hidden; }
+.ticker-track { display: flex; width: max-content; }
+.ticker-track:hover { animation-play-state: paused; }
+
+/* Mega menu */
+.mega-menu { 
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+}
+.mega-menu-trigger:hover .mega-menu,
+.mega-menu-trigger:focus-within .mega-menu {
+  display: block;
+}
+
+/* Hero carousel */
+.hero-slide { display: none; }
+.hero-slide.active { display: flex; }
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 bg-accent text-navy-900 font-display font-700 text-sm px-5 py-2.5 rounded hover:bg-accent-dark transition-colors duration-200;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 border border-navy-800 text-navy-900 font-display font-600 text-sm px-5 py-2.5 rounded hover:bg-navy-900 hover:text-white transition-colors duration-200;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 text-navy-800 font-600 text-sm hover:text-accent transition-colors;
+  }
+  .section-label {
+    @apply font-mono text-xs tracking-widest uppercase text-accent font-500 mb-3;
+  }
+  .section-heading {
+    @apply font-display font-800 text-navy-900 leading-tight;
+  }
+}
