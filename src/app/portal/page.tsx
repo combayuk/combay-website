@@ -1,14 +1,21 @@
-import TopBar from "@/components/TopBar";
-import Navigation from "@/components/Navigation";
-import Footer from "@/components/Footer";
-export default function Page() {
+import type { Metadata } from "next";
+import TopBar from "@/components/layout/TopBar";
+import Navigation from "@/components/layout/Navigation";
+import Footer from "@/components/layout/Footer";
+import PortalClient from "@/components/portal/PortalClient";
+
+export const metadata: Metadata = {
+  title: "Customer Portal",
+  description: "Manage your orders, returns, tracking and account settings.",
+};
+
+export default function PortalPage() {
   return (
-    <main><TopBar /><Navigation />
-    <section className="py-20 text-center">
-      <p className="font-mono text-xs tracking-widest uppercase text-accent mb-3">Coming Soon</p>
-      <h1 className="font-display font-800 text-4xl text-navy-900 capitalize">portal</h1>
-      <p className="text-gray-500 mt-3">This page is under construction.</p>
-    </section>
-    <Footer /></main>
+    <main>
+      <TopBar />
+      <Navigation />
+      <PortalClient />
+      <Footer />
+    </main>
   );
 }
