@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ZoomIn, MessageSquare, FileText, Star, Phone, Mail } from "lucide-react";
 import { formatPrice, CONDITIONS } from "@/lib/utils";
-import Badge from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 
 // Demo product data — replace with DB fetch
 const DEMO_PRODUCT = {
