@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
 import React from "react";
+import { cn } from "@/lib/utils";
 
 interface FormFieldProps {
   label: string;
@@ -19,11 +19,13 @@ export function FormField({ label, error, children, hint }: FormFieldProps) {
   );
 }
 
-export function Input({ label, error, hint, className, ...props }: React.InputHTMLAttributes<HTMLInputElement> & {
+type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
   label: string;
   error?: string;
   hint?: string;
-}) {
+};
+
+export function Input({ label, error, hint, className, ...props }: InputProps) {
   return (
     <FormField label={label} error={error} hint={hint}>
       <input className={cn("input", className)} {...props} />
@@ -31,27 +33,31 @@ export function Input({ label, error, hint, className, ...props }: React.InputHT
   );
 }
 
-export function Textarea({ label, error, hint, className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
   label: string;
   error?: string;
   hint?: string;
-}) {
+};
+
+export function Textarea({ label, error, hint, className, ...props }: TextareaProps) {
   return (
     <FormField label={label} error={error} hint={hint}>
-      <textarea className={cn("input", className)} {...props} />
+      <textarea className={cn("textarea", className)} {...props} />
     </FormField>
   );
 }
 
-export function Select({ label, error, hint, options, className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & {
+type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   error?: string;
   hint?: string;
   options: { value: string; label: string }[];
-}) {
+};
+
+export function Select({ label, error, hint, options, className, ...props }: SelectProps) {
   return (
     <FormField label={label} error={error} hint={hint}>
-      <select className={cn("input", className)} {...props}>
+      <select className={cn("select", className)} {...props}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
