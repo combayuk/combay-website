@@ -1,17 +1,38 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Package, ShoppingCart, Wrench, RotateCcw, Bell, Mail, Cpu, Settings, TrendingUp, AlertCircle, RefreshCw } from "lucide-react";
+import { getAllAdminProducts } from "@/lib/adminCatalog";
+import { Package, ShoppingCart, Wrench, RotateCcw, Mail, Cpu, RefreshCw } from "lucide-react";
 
 export default function AdminDashboard() {
   const [emailConfig,   setEmailConfig]   = useState({ host:"", port:"587", user:"", pass:"" });
   const [aiKey,         setAiKey]         = useState("");
   const [stripeKey,     setStripeKey]     = useState("");
+  const [ebayConfig,    setEbayConfig]    = useState({ clientId:"", clientSecret:"" });
   const [configSaved,   setConfigSaved]   = useState(false);
   const [syncing,       setSyncing]       = useState(false);
   const [syncMsg,       setSyncMsg]       = useState("");
+  const products = useMemo(() => getAllAdminProducts(), []);
 
-  const saveConfig = () => { setConfigSaved(true); setTimeout(()=>setConfigSaved(false),3000); };
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("combay_admin_settings_v1");
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.emailConfig) setEmailConfig(saved.emailConfig);
+      if (saved.aiKey) setAiKey(saved.aiKey);
+      if (saved.stripeKey) setStripeKey(saved.stripeKey);
+      if (saved.ebayConfig) setEbayConfig(saved.ebayConfig);
+    } catch {
+      // ignore invalid browser preview settings
+    }
+  }, []);
+
+  const saveConfig = () => {
+    window.localStorage.setItem("combay_admin_settings_v1", JSON.stringify({ emailConfig, aiKey, stripeKey, ebayConfig }));
+    setConfigSaved(true);
+    setTimeout(()=>setConfigSaved(false),3000);
+  };
 
   const triggerSync = async () => {
     setSyncing(true); setSyncMsg("Connecting to eBay API...");
@@ -22,10 +43,10 @@ export default function AdminDashboard() {
   };
 
   const stats = [
-    { label:"Total Products",   val:"0",  sub:"Connect DB to load", icon:<Package size={18}/>,     color:"bg-blue-50 text-blue-600",   href:"/admin/products" },
-    { label:"Active Orders",    val:"0",  sub:"Connect DB to load", icon:<ShoppingCart size={18}/>, color:"bg-green-50 text-green-600", href:"/admin/orders" },
-    { label:"Repair Requests",  val:"0",  sub:"Awaiting response",  icon:<Wrench size={18}/>,       color:"bg-amber-50 text-amber-600", href:"/admin/requests" },
-    { label:"Pending Returns",  val:"0",  sub:"Review required",    icon:<RotateCcw size={18}/>,    color:"bg-red-50 text-red-600",     href:"/admin/returns" },
+    { label:"Total Products",   val:String(products.length),  sub:"Preview catalogue", icon:<Package size={18}/>,     color:"bg-blue-50 text-blue-600",   href:"/admin/products" },
+    { label:"Active Orders",    val:"2",  sub:"Phase 3 checkout demo", icon:<ShoppingCart size={18}/>, color:"bg-green-50 text-green-600", href:"/admin/orders" },
+    { label:"Open Requests",  val:"8",  sub:"Quotes/support/repair",  icon:<Wrench size={18}/>,       color:"bg-amber-50 text-amber-600", href:"/admin/requests" },
+    { label:"Pending Returns",  val:"1",  sub:"Approval required",    icon:<RotateCcw size={18}/>,    color:"bg-red-50 text-red-600",     href:"/admin/returns" },
   ];
 
   return (
@@ -100,6 +121,10 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <RefreshCw size={16} className="text-accent"/>
             <h2 className="font-display font-700 text-navy-950">Inventory Sync</h2>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3 mb-4">
+            <div><label className="label text-xs">eBay Client ID</label><input className="input text-sm font-mono" value={ebayConfig.clientId} onChange={e=>setEbayConfig(c=>({...c,clientId:e.target.value}))} placeholder="Client ID / App ID" /></div>
+            <div><label className="label text-xs">eBay Client Secret</label><input type="password" className="input text-sm font-mono" value={ebayConfig.clientSecret} onChange={e=>setEbayConfig(c=>({...c,clientSecret:e.target.value}))} placeholder="Client Secret" /></div>
           </div>
           <div className="space-y-3 mb-4">
             <button onClick={triggerSync} disabled={syncing}
