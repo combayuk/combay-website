@@ -52,7 +52,7 @@ const MANUFACTURERS = [
   { name:"Electro Freeze",         cat:"Food Service" },
 ];
 
-const categories = [...new Set(MANUFACTURERS.map(m => m.cat))];
+const categories = Array.from(new Set(MANUFACTURERS.map((m) => m.cat)));
 
 export default function ManufacturersPage() {
   return (
