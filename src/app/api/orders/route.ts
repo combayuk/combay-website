@@ -113,3 +113,57 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ ok: true, mode: "preview", reason: dbResult.reason, data: orders, orders, portalOrders });
 }
+
+
+export async function PATCH(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  if (!body) return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+
+  const id = String(body.id ?? body.orderId ?? "").trim();
+  const orderNumber = String(body.orderNumber ?? "").trim();
+  if (!id && !orderNumber) {
+    return NextResponse.json({ ok: false, error: "Missing order id or order number" }, { status: 400 });
+  }
+
+  const trackingCarrier = body.trackingCarrier === undefined ? undefined : String(body.trackingCarrier ?? "").trim() || null;
+  const trackingNumber = body.trackingNumber === undefined ? undefined : String(body.trackingNumber ?? "").trim() || null;
+  const trackingUrl = body.trackingUrl === undefined ? undefined : String(body.trackingUrl ?? "").trim() || null;
+  const status = body.status === undefined ? undefined : String(body.status ?? "").trim();
+
+  const allowedStatuses = ["PENDING_PAYMENT", "PAYMENT_RECEIVED", "PROCESSING", "DISPATCHED", "DELIVERED", "CANCELLED", "REFUNDED"];
+  if (status && !allowedStatuses.includes(status)) {
+    return NextResponse.json({ ok: false, error: "Invalid order status" }, { status: 400 });
+  }
+
+  const data: any = {};
+  if (trackingCarrier !== undefined) data.trackingCarrier = trackingCarrier;
+  if (trackingNumber !== undefined) data.trackingNumber = trackingNumber;
+  if (trackingUrl !== undefined) data.trackingUrl = trackingUrl;
+  if (status) data.status = status;
+
+  if (trackingNumber && !status) {
+    data.status = "DISPATCHED";
+  }
+  if ((status === "DISPATCHED" || data.status === "DISPATCHED") && !data.dispatchedAt) {
+    data.dispatchedAt = new Date();
+  }
+  if (status === "DELIVERED") {
+    data.dispatchedAt = body.dispatchedAt ? new Date(body.dispatchedAt) : undefined;
+  }
+
+  const dbResult = await withDatabase(async () => {
+    const updated = await prisma.order.update({
+      where: id ? { id } : { orderNumber },
+      data,
+      include: { items: true, returns: true },
+    });
+    return updated;
+  });
+
+  if (!dbResult.ok) {
+    return NextResponse.json({ ok: false, mode: "preview", error: "Could not update order", reason: dbResult.reason }, { status: 500 });
+  }
+
+  const order = normalizeAdminOrder(dbResult.data);
+  return NextResponse.json({ ok: true, mode: "database", order, data: order });
+}
