@@ -29,7 +29,7 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
   const [tab, setTab] = useState<Tab>("description");
   const [zoom, setZoom] = useState(false);
   const [modal, setModal] = useState<EnquiryType>(null);
-  const [formSent, setFormSent] = useState<EnquiryType>(null);
+  const [formSent, setFormSent] = useState<{ type: "quote" | "question"; reference: string; emailMessage: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState(false);
 
@@ -39,16 +39,15 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
     if (params.get("quote") === "1") setModal("quote");
   }, []);
 
-  async function sendForm(type: "quote" | "question") {
+  async function sendForm(type: "quote" | "question", form: { name: string; email: string; phone?: string; message: string }) {
     setLoading(true);
-    const reference = `CB-${type.toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
     try {
-      await fetch(type === "quote" ? "/api/quotes" : "/api/support", {
+      const response = await fetch(type === "quote" ? "/api/quotes" : "/api/support", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...form,
           type,
-          reference,
           product: {
             id: product.id,
             sku: product.sku,
@@ -58,15 +57,24 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
           source: "product-detail",
         }),
       });
+      const result = await response.json();
+      setFormSent({
+        type,
+        reference: result.reference || "REQUEST-RECEIVED",
+        emailMessage: result.email?.message || "Request logged.",
+      });
     } catch {
-      // Phase 2/3 placeholder API remains non-blocking while real email/DB wiring is added later.
+      setFormSent({
+        type,
+        reference: "REQUEST-RECEIVED",
+        emailMessage: "Request captured in the browser but the API did not return a confirmation.",
+      });
     }
     setLoading(false);
-    setFormSent(type);
     setTimeout(() => {
       setModal(null);
       setFormSent(null);
-    }, 2500);
+    }, 3200);
   }
 
   function addToCart() {
@@ -211,7 +219,7 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
           loading={loading}
           formSent={formSent}
           onClose={() => setModal(null)}
-          onSubmit={() => sendForm(modal)}
+          onSubmit={(form) => sendForm(modal, form)}
         />
       )}
     </div>
@@ -296,9 +304,9 @@ function EnquiryModal({
   product: CatalogProduct;
   type: "quote" | "question";
   loading: boolean;
-  formSent: EnquiryType;
+  formSent: { type: "quote" | "question"; reference: string; emailMessage: string } | null;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: (form: { name: string; email: string; phone?: string; message: string }) => void;
 }) {
   const isQuote = type === "quote";
   return (
@@ -309,19 +317,29 @@ function EnquiryModal({
           <div className="text-center py-8">
             <div className="text-3xl mb-3">✓</div>
             <h3 className="font-display font-800 text-lg text-navy-950 mb-1">Request received</h3>
-            <p className="text-sm text-gray-500">A reference has been generated and the request has been passed to the current Phase 2 API endpoint.</p>
+            <p className="text-sm text-gray-500 mb-2">Reference: <span className="font-mono font-700 text-navy-900">{formSent.reference}</span></p>
+            <p className="text-xs text-gray-400">{formSent.emailMessage}</p>
           </div>
         ) : (
-          <form onSubmit={(event) => { event.preventDefault(); onSubmit(); }} className="space-y-4">
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            onSubmit({
+              name: String(form.get("name") || ""),
+              email: String(form.get("email") || ""),
+              phone: String(form.get("phone") || ""),
+              message: String(form.get("message") || ""),
+            });
+          }} className="space-y-4">
             <div>
               <p className="font-mono text-[10px] text-accent tracking-widest uppercase mb-1">{product.sku}</p>
               <h3 className="font-display font-800 text-xl text-navy-950">{isQuote ? "Request a quote" : "Ask a question"}</h3>
               <p className="text-sm text-gray-500 mt-1">{product.title}</p>
             </div>
-            <input required className="input" placeholder="Your name" />
-            <input required type="email" className="input" placeholder="Email address" />
-            <input className="input" placeholder="Phone number (optional)" />
-            <textarea required className="input min-h-[120px]" placeholder={isQuote ? "Quantity required, delivery location, urgency or any specific requirements..." : "What would you like to know about this item?"} />
+            <input name="name" required className="input" placeholder="Your name" />
+            <input name="email" required type="email" className="input" placeholder="Email address" />
+            <input name="phone" className="input" placeholder="Phone number (optional)" />
+            <textarea name="message" required className="input min-h-[120px]" placeholder={isQuote ? "Quantity required, delivery location, urgency or any specific requirements..." : "What would you like to know about this item?"} />
             <button disabled={loading} type="submit" className="btn-primary w-full py-3">{loading ? "Submitting..." : isQuote ? "Submit quote request" : "Submit question"}</button>
           </form>
         )}
