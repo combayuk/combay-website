@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -63,6 +63,8 @@ const NAV: { id: Section; label: string; icon: ReactNode }[] = [
 ];
 
 const STATUS_STYLE: Record<string, string> = {
+  PAYMENT_RECEIVED: "text-blue-700 bg-blue-50 border-blue-100",
+  PENDING_PAYMENT: "text-yellow-700 bg-yellow-50 border-yellow-100",
   PROCESSING: "text-blue-700 bg-blue-50 border-blue-100",
   DISPATCHED: "text-purple-700 bg-purple-50 border-purple-100",
   DELIVERED: "text-green-700 bg-green-50 border-green-100",
@@ -104,6 +106,23 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
     },
   ]);
   const [savedCardPreview, setSavedCardPreview] = useState(false);
+  const [orders, setOrders] = useState<PortalOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+
+  useEffect(() => {
+    if (!session) return;
+    setOrdersLoading(true);
+    fetch("/api/orders?portal=1", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        const portalOrders = Array.isArray(data.portalOrders) ? data.portalOrders : [];
+        setOrders(portalOrders.length ? portalOrders : []);
+      })
+      .catch(() => setOrders([]))
+      .finally(() => setOrdersLoading(false));
+  }, [session]);
+
+  const portalOrders = orders;
 
   const activeReturn = useMemo(
     () => PORTAL_RETURNS[0],
@@ -203,10 +222,10 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
           </aside>
 
           <div className="flex-1 min-w-0">
-            {section === "orders" && <OrdersPanel onReturn={setReturnOrder} onSupport={openSupportForOrder} />}
-            {section === "returns" && <ReturnsPanel onReturn={setReturnOrder} />}
-            {section === "tracking" && <TrackingPanel />}
-            {section === "support" && <SupportPanel orderId={supportOrder} onOrderChange={setSupportOrder} />}
+            {section === "orders" && <OrdersPanel orders={portalOrders} loading={ordersLoading} onReturn={setReturnOrder} onSupport={openSupportForOrder} />}
+            {section === "returns" && <ReturnsPanel orders={portalOrders} onReturn={setReturnOrder} />}
+            {section === "tracking" && <TrackingPanel orders={portalOrders} loading={ordersLoading} />}
+            {section === "support" && <SupportPanel orders={portalOrders} orderId={supportOrder} onOrderChange={setSupportOrder} />}
             {section === "account" && (
               <AccountPanel
                 accountType={accountType}
@@ -253,12 +272,14 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
   );
 }
 
-function OrdersPanel({ onReturn, onSupport }: { onReturn: (order: PortalOrder) => void; onSupport: (orderId: string) => void }) {
+function OrdersPanel({ orders, loading, onReturn, onSupport }: { orders: PortalOrder[]; loading: boolean; onReturn: (order: PortalOrder) => void; onSupport: (orderId: string) => void }) {
   return (
     <section>
       <SectionHeader title="Your Orders" subtitle="Track purchases, request support, and check return eligibility." />
       <div className="space-y-3">
-        {PORTAL_ORDERS.map((order) => {
+        {loading && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">Loading orders…</div>}
+        {!loading && orders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No orders found yet.</div>}
+        {!loading && orders.map((order) => {
           const pendingReturn = PORTAL_PENDING_RETURNS.find((item) => item.orderId === order.id);
           const approvedReturn = PORTAL_RETURNS.find((item) => item.orderId === order.id);
           const eligible = canReturn(order) && !pendingReturn && !approvedReturn;
@@ -276,10 +297,12 @@ function OrdersPanel({ onReturn, onSupport }: { onReturn: (order: PortalOrder) =
               </div>
               <p className="text-gray-600 text-sm mb-4">{order.item}</p>
               <div className="flex flex-wrap items-center gap-3 text-xs">
-                {order.tracking && (
+                {order.tracking ? (
                   <a href={trackingUrl(order)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-mono text-accent hover:text-accent-dark transition-colors">
                     {order.tracking} <ExternalLink size={10} />
                   </a>
+                ) : (
+                  <span className="text-gray-400 font-display font-600">Tracking not uploaded yet</span>
                 )}
                 {pendingReturn ? (
                   <span className="text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-1 font-display font-600">Return awaiting approval</span>
@@ -303,12 +326,12 @@ function OrdersPanel({ onReturn, onSupport }: { onReturn: (order: PortalOrder) =
   );
 }
 
-function ReturnsPanel({ onReturn }: { onReturn: (order: PortalOrder) => void }) {
+function ReturnsPanel({ orders, onReturn }: { orders: PortalOrder[]; onReturn: (order: PortalOrder) => void }) {
   const ordersWithReturnRecords = new Set([
     ...PORTAL_PENDING_RETURNS.map((item) => item.orderId),
     ...PORTAL_RETURNS.map((item) => item.orderId),
   ]);
-  const eligibleOrders = PORTAL_ORDERS.filter((order) => canReturn(order) && !ordersWithReturnRecords.has(order.id));
+  const eligibleOrders = orders.filter((order) => canReturn(order) && !ordersWithReturnRecords.has(order.id));
   const returnStageIndex = RETURN_STAGES.findIndex((stage) => stage.id === PORTAL_RETURNS[0]?.stage);
 
   return (
@@ -366,12 +389,15 @@ function ReturnsPanel({ onReturn }: { onReturn: (order: PortalOrder) => void }) 
   );
 }
 
-function TrackingPanel() {
+function TrackingPanel({ orders, loading }: { orders: PortalOrder[]; loading: boolean }) {
+  const trackedOrders = orders.filter((order) => order.tracking);
   return (
     <section>
-      <SectionHeader title="Tracking" subtitle="Carrier tracking links open directly with your tracking number." />
+      <SectionHeader title="Tracking" subtitle="Tracking details appear here once admin adds a courier and tracking number to the order." />
       <div className="space-y-3">
-        {PORTAL_ORDERS.filter((order) => order.tracking).map((order) => (
+        {loading && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">Loading tracking details…</div>}
+        {!loading && trackedOrders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No tracking has been uploaded yet.</div>}
+        {!loading && trackedOrders.map((order) => (
           <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
               <div>
@@ -390,7 +416,7 @@ function TrackingPanel() {
   );
 }
 
-function SupportPanel({ orderId, onOrderChange }: { orderId: string; onOrderChange: (value: string) => void }) {
+function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[]; orderId: string; onOrderChange: (value: string) => void }) {
   const [sent, setSent] = useState<SubmitState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -438,7 +464,7 @@ function SupportPanel({ orderId, onOrderChange }: { orderId: string; onOrderChan
             <Field label="Related order">
               <select name="orderId" className="input" value={orderId} onChange={(event) => onOrderChange(event.target.value)}>
                 <option value="">Optional</option>
-                {PORTAL_ORDERS.map((order) => <option key={order.id} value={order.id}>#{order.id} — {order.sku}</option>)}
+                {orders.map((order) => <option key={order.id} value={order.id}>#{order.id} — {order.sku}</option>)}
               </select>
             </Field>
           </div>
