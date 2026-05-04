@@ -56,7 +56,7 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
     setTimeout(() => { setModal(null); setFormSent(null); }, 3200);
   }
 
-  function addToCart() { addCartItem(product.sku, 1); setAdded(true); setTimeout(() => setAdded(false), 1800); }
+  function addToCart() { addCartItem(product, 1); setAdded(true); setTimeout(() => setAdded(false), 1800); }
   const condition = CONDITION_LABELS[product.condition];
   const formattedPrice = product.priceOnRequest || product.price === null ? "Price on request" : `£${product.price.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const tabs: [Tab, string, ReactNode][] = [["description", "Description", <AlignLeft key="description" size={13} />], ["overview", "Overview", <BookOpen key="overview" size={13} />], ["specs", "Specifications", <HelpCircle key="specs" size={13} />], ["documents", "Documents", <FileText key="documents" size={13} />]];

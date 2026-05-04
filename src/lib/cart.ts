@@ -2,9 +2,12 @@ import { getProductBySku, type CatalogProduct } from "@/lib/catalog";
 
 export const CART_STORAGE_KEY = "combay_cart_v1";
 
+export type CartProductSnapshot = CatalogProduct;
+
 export type CartLine = {
   sku: string;
   qty: number;
+  product?: CartProductSnapshot;
 };
 
 export type CartProductLine = {
@@ -21,6 +24,15 @@ export type CartSummary = {
   hasUnavailableItems: boolean;
 };
 
+function normaliseLine(line: any): CartLine | null {
+  if (!line || typeof line.sku !== "string" || !Number.isFinite(Number(line.qty))) return null;
+  return {
+    sku: line.sku,
+    qty: Math.max(1, Math.floor(Number(line.qty))),
+    product: line.product && typeof line.product === "object" ? line.product : undefined,
+  };
+}
+
 export function readCartLines(): CartLine[] {
   if (typeof window === "undefined") return [];
 
@@ -29,10 +41,7 @@ export function readCartLines(): CartLine[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((line) => line && typeof line.sku === "string" && Number.isFinite(Number(line.qty)))
-      .map((line) => ({ sku: line.sku, qty: Math.max(1, Math.floor(Number(line.qty))) }));
+    return parsed.map(normaliseLine).filter((line): line is CartLine => Boolean(line));
   } catch {
     return [];
   }
@@ -44,14 +53,17 @@ export function writeCartLines(lines: CartLine[]) {
   window.dispatchEvent(new CustomEvent("combay-cart-updated"));
 }
 
-export function addCartItem(sku: string, qty = 1) {
+export function addCartItem(productOrSku: CatalogProduct | string, qty = 1) {
+  const sku = typeof productOrSku === "string" ? productOrSku : productOrSku.sku;
+  const product = typeof productOrSku === "string" ? undefined : productOrSku;
   const lines = readCartLines();
   const existing = lines.find((line) => line.sku === sku);
 
   if (existing) {
     existing.qty += qty;
+    if (product) existing.product = product;
   } else {
-    lines.push({ sku, qty });
+    lines.push({ sku, qty, product });
   }
 
   writeCartLines(lines);
@@ -79,9 +91,9 @@ export function clearCart() {
 export function getCartSummary(lines: CartLine[]): CartSummary {
   const productLines = lines
     .map((line) => {
-      const product = getProductBySku(line.sku);
+      const product = line.product ?? getProductBySku(line.sku);
       if (!product) return null;
-      const price = product.priceOnRequest || product.price === null ? 0 : product.price;
+      const price = product.priceOnRequest || product.price === null ? 0 : Number(product.price);
       return {
         product,
         qty: line.qty,

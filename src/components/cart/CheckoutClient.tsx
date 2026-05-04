@@ -90,6 +90,11 @@ export default function CheckoutClient() {
         throw new Error(data?.error || "Checkout request failed.");
       }
 
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
       setResult({ reference: data.reference, paymentMode: data.paymentMode });
       clearCart();
     } catch (err) {
@@ -135,7 +140,7 @@ export default function CheckoutClient() {
         <div className="max-w-7xl mx-auto px-4">
           <p className="font-mono text-xs tracking-widest uppercase text-accent mb-2">Secure checkout</p>
           <h1 className="font-display font-900 text-3xl lg:text-4xl">Delivery and payment</h1>
-          <p className="text-gray-400 text-sm mt-2">Stripe-ready checkout structure. No payment is captured until Stripe keys are configured.</p>
+          <p className="text-gray-400 text-sm mt-2">Enter delivery details and continue to secure Stripe card payment when configured.</p>
         </div>
       </div>
 
@@ -187,10 +192,10 @@ export default function CheckoutClient() {
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 mb-4 flex gap-2">
             <Lock size={14} className="text-gray-400 mt-0.5" />
-            {stripeConfigured ? "Stripe key detected. Payment intent integration can be enabled in the next step." : "Stripe key not configured. This submit will create an unpaid checkout request only."}
+            {stripeConfigured ? "Stripe card checkout is enabled. You will be redirected to Stripe to complete payment." : "Stripe key not configured. This submit will create an unpaid checkout request only."}
           </div>
           <button disabled={loading || summary.hasUnavailableItems} type="submit" className="btn-primary w-full py-3">
-            {loading ? "Submitting..." : stripeConfigured ? "Continue to payment" : "Create unpaid checkout request"}
+            {loading ? "Submitting..." : stripeConfigured ? "Continue to secure card payment" : "Create unpaid checkout request"}
           </button>
           <Link href="/cart" className="btn-secondary w-full mt-2">Back to cart</Link>
         </aside>
