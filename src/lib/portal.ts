@@ -23,6 +23,14 @@ export type PortalReturn = {
   statusText: string;
 };
 
+export type PortalPendingReturn = {
+  id: string;
+  orderId: string;
+  item: string;
+  requestedAt: string;
+  statusText: string;
+};
+
 export const RETURN_STAGES: { id: ReturnStage; label: string }[] = [
   { id: "REQUEST_SUBMITTED", label: "Request submitted" },
   { id: "COLLECTION_BOOKED", label: "Collection booked" },
@@ -71,6 +79,16 @@ export const PORTAL_ORDERS: PortalOrder[] = [
     status: "DISPATCHED",
     courier: "DHL",
     tracking: "JD0146000099999999",
+  },
+];
+
+export const PORTAL_PENDING_RETURNS: PortalPendingReturn[] = [
+  {
+    id: "RET-PENDING-001",
+    orderId: "CB1ACB2F",
+    item: "Siemens SIMATIC S7-400 CPU 412-2 PLC Module",
+    requestedAt: "2026-05-04",
+    statusText: "Awaiting admin approval before the return process starts.",
   },
 ];
 

@@ -24,6 +24,7 @@ import {
   COUNTRIES,
   PHONE_CODES,
   PORTAL_ORDERS,
+  PORTAL_PENDING_RETURNS,
   PORTAL_RETURNS,
   RETURN_STAGES,
   canReturn,
@@ -258,7 +259,9 @@ function OrdersPanel({ onReturn, onSupport }: { onReturn: (order: PortalOrder) =
       <SectionHeader title="Your Orders" subtitle="Track purchases, request support, and check return eligibility." />
       <div className="space-y-3">
         {PORTAL_ORDERS.map((order) => {
-          const eligible = canReturn(order);
+          const pendingReturn = PORTAL_PENDING_RETURNS.find((item) => item.orderId === order.id);
+          const approvedReturn = PORTAL_RETURNS.find((item) => item.orderId === order.id);
+          const eligible = canReturn(order) && !pendingReturn && !approvedReturn;
           return (
             <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-5">
               <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
@@ -278,8 +281,12 @@ function OrdersPanel({ onReturn, onSupport }: { onReturn: (order: PortalOrder) =
                     {order.tracking} <ExternalLink size={10} />
                   </a>
                 )}
-                {eligible ? (
-                  <button onClick={() => onReturn(order)} className="text-accent hover:text-accent-dark font-display font-600 transition-colors">Return item</button>
+                {pendingReturn ? (
+                  <span className="text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-1 font-display font-600">Return awaiting approval</span>
+                ) : approvedReturn ? (
+                  <span className="text-green-700 bg-green-50 border border-green-100 rounded-full px-2.5 py-1 font-display font-600">Return in progress</span>
+                ) : eligible ? (
+                  <button onClick={() => onReturn(order)} className="text-accent hover:text-accent-dark font-display font-600 transition-colors">Request return approval</button>
                 ) : order.status === "DELIVERED" ? (
                   <span className="text-gray-400 font-display font-600">Return window expired</span>
                 ) : (
@@ -297,28 +304,54 @@ function OrdersPanel({ onReturn, onSupport }: { onReturn: (order: PortalOrder) =
 }
 
 function ReturnsPanel({ onReturn }: { onReturn: (order: PortalOrder) => void }) {
-  const eligibleOrders = PORTAL_ORDERS.filter(canReturn);
+  const ordersWithReturnRecords = new Set([
+    ...PORTAL_PENDING_RETURNS.map((item) => item.orderId),
+    ...PORTAL_RETURNS.map((item) => item.orderId),
+  ]);
+  const eligibleOrders = PORTAL_ORDERS.filter((order) => canReturn(order) && !ordersWithReturnRecords.has(order.id));
   const returnStageIndex = RETURN_STAGES.findIndex((stage) => stage.id === PORTAL_RETURNS[0]?.stage);
 
   return (
     <section>
-      <SectionHeader title="Returns" subtitle="Returns are available within 30 days of confirmed delivery." />
+      <SectionHeader title="Returns" subtitle="Returns are available within 30 days of confirmed delivery. Submitted requests must be approved by admin before the return status flow begins." />
+
+      {PORTAL_PENDING_RETURNS.length > 0 && (
+        <div className="mb-5">
+          <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Awaiting approval</h3>
+          <div className="grid lg:grid-cols-2 gap-4">
+            {PORTAL_PENDING_RETURNS.map((pending) => (
+              <div key={pending.id} className="bg-white border border-amber-200 rounded-xl p-5">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="font-display font-700 text-sm text-navy-950">{pending.item}</p>
+                    <p className="text-gray-400 text-xs mt-1">Order #{pending.orderId} · Requested {formatDate(pending.requestedAt)}</p>
+                  </div>
+                  <span className="badge text-amber-700 bg-amber-50 border-amber-200">Awaiting approval</span>
+                </div>
+                <p className="text-sm text-gray-600">{pending.statusText}</p>
+                <p className="text-[11px] text-gray-400 mt-3">Once admin approves this return, the status flow below will start from “Request submitted”.</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-4 mb-5">
         {eligibleOrders.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No orders are currently eligible for return.</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No additional orders are currently eligible for a new return request.</div>
         ) : (
           eligibleOrders.map((order) => (
             <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-5">
               <p className="font-display font-700 text-sm text-navy-950">{order.item}</p>
               <p className="text-gray-400 text-xs mt-1">Order #{order.id} · {daysUntilReturnDeadline(order)} days left</p>
-              <button onClick={() => onReturn(order)} className="btn-secondary text-xs py-1.5 px-3 mt-4">Return item</button>
+              <button onClick={() => onReturn(order)} className="btn-secondary text-xs py-1.5 px-3 mt-4">Request return approval</button>
             </div>
           ))
         )}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="font-display font-700 text-sm text-navy-950 mb-1">Existing return: {PORTAL_RETURNS[0].id}</p>
+        <p className="font-display font-700 text-sm text-navy-950 mb-1">Existing approved return: {PORTAL_RETURNS[0].id}</p>
         <p className="text-gray-500 text-sm mb-4">{PORTAL_RETURNS[0].statusText}</p>
         <div className="grid sm:grid-cols-5 gap-2">
           {RETURN_STAGES.map((stage, index) => (
