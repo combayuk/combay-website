@@ -1,116 +1,102 @@
 "use client";
-import { useState, useCallback } from "react";
-import Link from "next/link";
-import { Search, SlidersHorizontal, X, ChevronDown } from "lucide-react";
 
-const CATEGORIES = [
-  { label:"All Categories",       slug:"" },
-  { label:"Lab & Scientific",     slug:"lab-scientific" },
-  { label:"Automation & Control", slug:"automation-control" },
-  { label:"Test & Detection",     slug:"test-detection" },
-  { label:"IT & Networking",      slug:"it-networking" },
-  { label:"Display & AV",        slug:"display-av" },
-  { label:"Oil & Gas",            slug:"oil-gas" },
-  { label:"Audio & Broadcast",   slug:"audio-broadcast" },
-  { label:"Manufacturing",        slug:"manufacturing" },
-];
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Search, SlidersHorizontal, X } from "lucide-react";
+import { CATEGORIES, CONDITION_LABELS, PRODUCTS, searchProducts, type CatalogProduct } from "@/lib/catalog";
 
 const CONDITIONS = [
-  { label:"All Conditions",   value:"" },
-  { label:"New",              value:"NEW" },
-  { label:"New (Open Box)",   value:"NEW_OPEN_BOX" },
-  { label:"Used",             value:"USED" },
-  { label:"For Parts",        value:"FOR_PARTS" },
+  { label: "All Conditions", value: "" },
+  { label: "New", value: "NEW" },
+  { label: "New open box", value: "NEW_OPEN_BOX" },
+  { label: "Used tested", value: "USED" },
+  { label: "For parts / repair", value: "FOR_PARTS" },
 ];
 
 const SORT_OPTIONS = [
-  { label:"Newest First",     value:"newest" },
-  { label:"Price: Low–High",  value:"price_asc" },
-  { label:"Price: High–Low",  value:"price_desc" },
-  { label:"Name A–Z",         value:"name_asc" },
+  { label: "Newest first", value: "newest" },
+  { label: "Price: Low–High", value: "price_asc" },
+  { label: "Price: High–Low", value: "price_desc" },
+  { label: "Name A–Z", value: "name_asc" },
 ];
 
-// Demo products — replaced by DB once connected
-const DEMO_PRODUCTS = Array.from({length: 24}, (_, i) => ({
-  id: `prod-${i+1}`,
-  slug: `product-${i+1}`,
-  title: ["Siemens S7-400 PLC Module","Thermo Scientific FT-IR IS5","ABB ACS550 AC Drive 75kW","Tektronix MDO3054 Oscilloscope","GE Fanuc 90-30 PLC","Mitsubishi FR-A800 Drive","Rigel 288+ Safety Analyser","Barco RLM W12 Projector","Cisco Catalyst 3750 Stack","Yamaha DM1000 Mixer","OHAUS Ranger 7000 Scale","Exfo AXS-200/850 OTDR","Honeywell HC900 Controller","Dräger X-am 5000 Detector","Agilent DSO6054A Scope","Siemens S7-300 CPU 315","ABB Robot Controller","Leica TS06 Total Station","Keithley 2401 SMU","Panasonic PT-DZ870 Projector","Emerson DeltaV Controller","Fluke 435-II Power Analyser","Heidenhain TNC 530","Endress+Hauser Promag"][i % 24],
-  brand: ["Siemens","Thermo Scientific","ABB","Tektronix","GE","Mitsubishi","Rigel","Barco","Cisco","Yamaha","OHAUS","EXFO","Honeywell","Dräger","Agilent","Siemens","ABB","Leica","Keithley","Panasonic","Emerson","Fluke","Heidenhain","Endress+Hauser"][i % 24],
-  category: CATEGORIES[1 + (i % 8)].label,
-  categorySlug: CATEGORIES[1 + (i % 8)].slug,
-  condition: ["NEW","USED","NEW_OPEN_BOX","USED","FOR_PARTS","USED","NEW","USED"][i % 8],
-  price: [1240, 2450, 890, 875, 340, 1100, 420, 3200, 435, 1850, 290, 780, 920, 480, 1650, 980, 2100, 4500, 1380, 2900, 3400, 960, 1780, 650][i % 24],
-  priceOnRequest: i % 7 === 0,
-  sku: `CB${String(10000+i).padStart(5,'0')}`,
-  stockQty: Math.max(1, (i % 5)),
-  image: null,
-}));
-
-const CONDITION_BADGE: Record<string,{label:string,color:string}> = {
-  NEW:          {label:"New",           color:"text-green-700 bg-green-50 border-green-200"},
-  NEW_OPEN_BOX: {label:"New (Open Box)",color:"text-blue-700 bg-blue-50 border-blue-200"},
-  USED:         {label:"Used",          color:"text-yellow-700 bg-yellow-50 border-yellow-200"},
-  FOR_PARTS:    {label:"For Parts",     color:"text-red-700 bg-red-50 border-red-200"},
+type ShopClientProps = {
+  initialQuery?: string;
+  initialCategory?: string;
 };
 
-export default function ShopClient() {
-  const [query,     setQuery]     = useState("");
-  const [category,  setCategory]  = useState("");
+export default function ShopClient({ initialQuery = "", initialCategory = "" }: ShopClientProps) {
+  const [query, setQuery] = useState(initialQuery);
+  const [category, setCategory] = useState(initialCategory);
   const [condition, setCondition] = useState("");
-  const [sort,      setSort]      = useState("newest");
+  const [sort, setSort] = useState("newest");
   const [showFilters, setShowFilters] = useState(false);
-  const [priceMin,  setPriceMin]  = useState("");
-  const [priceMax,  setPriceMax]  = useState("");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
 
-  const filtered = DEMO_PRODUCTS.filter(p => {
-    if (query && !p.title.toLowerCase().includes(query.toLowerCase()) && !p.brand.toLowerCase().includes(query.toLowerCase())) return false;
-    if (category && p.categorySlug !== category) return false;
-    if (condition && p.condition !== condition) return false;
-    if (priceMin && !p.priceOnRequest && p.price < parseFloat(priceMin)) return false;
-    if (priceMax && !p.priceOnRequest && p.price > parseFloat(priceMax)) return false;
-    return true;
-  }).sort((a, b) => {
-    if (sort === "price_asc")  return (a.priceOnRequest ? 999999 : a.price) - (b.priceOnRequest ? 999999 : b.price);
-    if (sort === "price_desc") return (b.priceOnRequest ? 0 : b.price) - (a.priceOnRequest ? 0 : a.price);
-    if (sort === "name_asc")   return a.title.localeCompare(b.title);
-    return b.id.localeCompare(a.id);
-  });
+  const filtered = useMemo(() => {
+    const min = priceMin ? Number(priceMin) : null;
+    const max = priceMax ? Number(priceMax) : null;
+    const results = searchProducts({ query, category, condition, priceMin: Number.isFinite(min) ? min : null, priceMax: Number.isFinite(max) ? max : null });
 
-  const clearFilters = () => { setQuery(""); setCategory(""); setCondition(""); setPriceMin(""); setPriceMax(""); };
-  const hasFilters   = query || category || condition || priceMin || priceMax;
+    return [...results].sort((a, b) => {
+      const priceA = a.priceOnRequest || a.price === null ? Number.POSITIVE_INFINITY : a.price;
+      const priceB = b.priceOnRequest || b.price === null ? Number.POSITIVE_INFINITY : b.price;
+      if (sort === "price_asc") return priceA - priceB;
+      if (sort === "price_desc") return (priceB === Number.POSITIVE_INFINITY ? 0 : priceB) - (priceA === Number.POSITIVE_INFINITY ? 0 : priceA);
+      if (sort === "name_asc") return a.title.localeCompare(b.title);
+      return b.sku.localeCompare(a.sku);
+    });
+  }, [category, condition, priceMax, priceMin, query, sort]);
+
+  const clearFilters = () => {
+    setQuery("");
+    setCategory("");
+    setCondition("");
+    setPriceMin("");
+    setPriceMax("");
+  };
+
+  const hasFilters = Boolean(query || category || condition || priceMin || priceMax);
 
   return (
     <div>
-      {/* Shop header */}
       <div className="bg-navy-950 text-white py-10">
         <div className="max-w-7xl mx-auto px-4">
           <p className="font-mono text-xs tracking-widest uppercase text-accent mb-2">Inventory</p>
-          <h1 className="font-display font-900 text-3xl lg:text-4xl mb-3">Browse Equipment</h1>
-          <p className="text-gray-400 text-sm max-w-lg">~10,000 industrial and commercial items. Tested. Warranted. Ready to dispatch.</p>
+          <h1 className="font-display font-900 text-3xl lg:text-4xl mb-3">Browse industrial equipment</h1>
+          <p className="text-gray-400 text-sm max-w-2xl">
+            Search tested automation, laboratory, test, AV, networking and process equipment by SKU, brand, MPN, model or manufacturer.
+          </p>
         </div>
       </div>
 
-      {/* Search bar */}
       <div className="bg-white border-b border-gray-200 py-4 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto px-4 flex gap-3 items-center">
-          <div className="relative flex-1 max-w-lg">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+        <div className="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-3 lg:items-center">
+          <div className="relative flex-1 max-w-2xl">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
-              type="text" value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="Search by product name, brand, model or part number..."
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search SKU, MPN, model, manufacturer, brand or product name..."
               className="input pl-9"
             />
           </div>
-          <select value={sort} onChange={e => setSort(e.target.value)} className="select w-auto">
-            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <select value={sort} onChange={(event) => setSort(event.target.value)} className="select lg:w-auto">
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 border font-display font-600 text-sm px-4 py-2.5 rounded-lg transition-colors ${showFilters ? "bg-navy-900 text-white border-navy-900" : "border-gray-200 text-navy-900 hover:border-navy-900"}`}>
-            <SlidersHorizontal size={14}/> Filters {hasFilters && <span className="bg-accent text-navy-900 text-xs rounded-full w-4 h-4 flex items-center justify-center font-700">!</span>}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center justify-center gap-1.5 border font-display font-600 text-sm px-4 py-2.5 rounded-lg transition-colors ${showFilters ? "bg-navy-900 text-white border-navy-900" : "border-gray-200 text-navy-900 hover:border-navy-900"}`}
+          >
+            <SlidersHorizontal size={14} /> Filters {hasFilters && <span className="bg-accent text-navy-900 text-xs rounded-full w-4 h-4 flex items-center justify-center font-700">!</span>}
           </button>
           {hasFilters && (
-            <button onClick={clearFilters} className="flex items-center gap-1 text-red-500 text-sm font-600 hover:text-red-700">
-              <X size={14}/> Clear
+            <button onClick={clearFilters} className="flex items-center justify-center gap-1 text-red-500 text-sm font-600 hover:text-red-700">
+              <X size={14} /> Clear
             </button>
           )}
         </div>
@@ -118,58 +104,65 @@ export default function ShopClient() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex gap-6">
-
-          {/* Sidebar filters */}
           <aside className={`${showFilters ? "block" : "hidden"} lg:block w-56 flex-shrink-0`}>
             <div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-36 space-y-5">
               <div>
                 <p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Category</p>
                 <div className="space-y-0.5">
-                  {CATEGORIES.map(c => (
-                    <button key={c.slug} onClick={() => setCategory(c.slug)}
-                      className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${category===c.slug ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
-                      {c.label}
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.slug || "all"}
+                      onClick={() => setCategory(cat.slug)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${category === cat.slug ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      {cat.label}
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
                 <p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Condition</p>
                 <div className="space-y-0.5">
-                  {CONDITIONS.map(c => (
-                    <button key={c.value} onClick={() => setCondition(c.value)}
-                      className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${condition===c.value ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
-                      {c.label}
+                  {CONDITIONS.map((cond) => (
+                    <button
+                      key={cond.value || "all"}
+                      onClick={() => setCondition(cond.value)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${condition === cond.value ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      {cond.label}
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
                 <p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Price Range (£)</p>
                 <div className="flex items-center gap-2">
-                  <input type="number" placeholder="Min" value={priceMin} onChange={e=>setPriceMin(e.target.value)} className="input w-full text-sm"/>
+                  <input type="number" placeholder="Min" value={priceMin} onChange={(event) => setPriceMin(event.target.value)} className="input w-full text-sm" />
                   <span className="text-gray-400 flex-shrink-0">–</span>
-                  <input type="number" placeholder="Max" value={priceMax} onChange={e=>setPriceMax(e.target.value)} className="input w-full text-sm"/>
+                  <input type="number" placeholder="Max" value={priceMax} onChange={(event) => setPriceMax(event.target.value)} className="input w-full text-sm" />
                 </div>
               </div>
             </div>
           </aside>
 
-          {/* Product grid */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-5">
-              <p className="text-sm text-gray-500"><span className="font-display font-700 text-navy-900">{filtered.length}</span> items found</p>
+              <p className="text-sm text-gray-500"><span className="font-display font-700 text-navy-900">{filtered.length}</span> of {PRODUCTS.length} items found</p>
+              <p className="hidden md:block text-xs text-gray-400">Structured product catalogue ready for Prisma/eBay sync.</p>
             </div>
+
             {filtered.length === 0 ? (
               <div className="text-center py-20 text-gray-400">
                 <div className="text-4xl mb-3">🔍</div>
                 <p className="font-display font-600 text-navy-900 mb-1">No items found</p>
-                <p className="text-sm mb-4">Try adjusting your search or filters</p>
+                <p className="text-sm mb-4">Try a brand, SKU, MPN, model or category.</p>
                 <button onClick={clearFilters} className="btn-secondary">Clear all filters</button>
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filtered.map(p => <ProductCard key={p.id} product={p}/>)}
+                {filtered.map((product) => <ProductCard key={product.id} product={product} />)}
               </div>
             )}
           </div>
@@ -179,44 +172,42 @@ export default function ShopClient() {
   );
 }
 
-function ProductCard({ product: p }: { product: typeof DEMO_PRODUCTS[0] }) {
-  const cond = CONDITION_BADGE[p.condition] ?? {label:p.condition, color:"text-gray-700 bg-gray-50 border-gray-200"};
+function ProductCard({ product }: { product: CatalogProduct }) {
+  const condition = CONDITION_LABELS[product.condition];
+  const stockCopy = product.stockQty === 0 ? "Out of stock" : product.stockQty === 1 ? "Low stock" : `In stock (${product.stockQty})`;
+
   return (
     <div className="card card-hover flex flex-col">
-      {/* Image */}
       <div className="bg-gray-50 border-b border-gray-100 aspect-[4/3] flex items-center justify-center relative overflow-hidden">
-        {p.image ? (
-          <img src={p.image} alt={p.title} className="object-contain w-full h-full p-4"/>
+        {product.image ? (
+          <img src={product.image} alt={product.title} className="object-contain w-full h-full p-4" />
         ) : (
           <div className="text-gray-300 text-4xl">📦</div>
         )}
-        <span className={`absolute top-2 left-2 badge border ${cond.color}`}>{cond.label}</span>
-        {p.stockQty === 0 && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-            <span className="font-display font-700 text-sm text-gray-500">Out of Stock</span>
-          </div>
-        )}
+        <span className={`absolute top-2 left-2 badge border ${condition.color}`}>{condition.label}</span>
       </div>
-      {/* Content */}
+
       <div className="p-4 flex flex-col flex-1">
-        <p className="font-mono text-xs text-gray-400 mb-1">{p.brand} · {p.category}</p>
-        <h3 className="font-display font-700 text-navy-900 text-sm leading-snug mb-3 flex-1">{p.title}</h3>
+        <p className="font-mono text-[11px] text-gray-400 mb-1">{product.sku} · {product.brand}</p>
+        <h3 className="font-display font-700 text-navy-900 text-sm leading-snug mb-3 flex-1">{product.title}</h3>
+        <div className="space-y-1 text-xs text-gray-500 mb-3">
+          <p><span className="text-gray-400">MPN:</span> {product.mpn}</p>
+          <p><span className="text-gray-400">Category:</span> {product.category}</p>
+        </div>
         <div className="flex items-end justify-between mb-3">
           <div>
-            {p.priceOnRequest ? (
-              <span className="font-display font-700 text-sm text-gray-500">Price on Request</span>
+            {product.priceOnRequest || product.price === null ? (
+              <span className="font-display font-700 text-sm text-gray-600">Price on request</span>
             ) : (
-              <span className="font-display font-800 text-lg text-navy-900">
-                £{p.price.toLocaleString("en-GB")}
-              </span>
+              <span className="font-display font-800 text-lg text-navy-900">£{product.price.toLocaleString("en-GB")}</span>
             )}
-            <p className="text-gray-400 text-xs mt-0.5">SKU: {p.sku}</p>
+            <p className="text-gray-400 text-xs mt-0.5">Excl. VAT · {product.warranty}</p>
           </div>
-          {p.stockQty > 0 && <span className="text-green-600 text-xs font-600">In Stock</span>}
+          <span className={product.stockQty > 0 ? "text-green-700 text-xs font-600" : "text-red-600 text-xs font-600"}>{stockCopy}</span>
         </div>
         <div className="flex gap-2">
-          <Link href={`/shop/${p.slug}`} className="flex-1 text-center btn-secondary text-xs py-2 px-3">View</Link>
-          <Link href={`/contact?type=enquiry&product=${p.sku}`} className="flex-1 text-center btn-primary text-xs py-2 px-3">Enquire</Link>
+          <Link href={`/shop/${product.slug}`} className="flex-1 text-center btn-secondary text-xs py-2 px-3">View</Link>
+          <Link href={`/shop/${product.slug}?quote=1`} className="flex-1 text-center btn-primary text-xs py-2 px-3">Quote</Link>
         </div>
       </div>
     </div>

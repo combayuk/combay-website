@@ -6,15 +6,22 @@ import ShopClient from "@/components/shop/ShopClient";
 
 export const metadata: Metadata = {
   title: "Shop Industrial Equipment",
-  description: "Browse 10,000+ tested industrial and commercial equipment items. PLCs, test gear, lab instruments, drives, IT, displays and more. 30-day warranty.",
+  description: "Browse tested industrial equipment by SKU, MPN, model, brand, manufacturer and category.",
 };
 
-export default function ShopPage() {
+type ShopPageProps = {
+  searchParams?: {
+    q?: string;
+    category?: string;
+  };
+};
+
+export default function ShopPage({ searchParams }: ShopPageProps) {
   return (
     <main>
       <TopBar />
       <Navigation />
-      <ShopClient />
+      <ShopClient initialQuery={searchParams?.q ?? ""} initialCategory={searchParams?.category ?? ""} />
       <Footer />
     </main>
   );
