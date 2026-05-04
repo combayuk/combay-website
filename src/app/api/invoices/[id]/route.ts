@@ -23,6 +23,10 @@ function normalizeInvoice(invoice: any) {
     subtotal: money(invoice.subtotal),
     tax: money(invoice.tax),
     total: money(invoice.total),
+    amountPaid: money(invoice.amountPaid),
+    balanceDue: money(invoice.balanceDue),
+    paymentLink: invoice.paymentLink ?? null,
+    bankDetails: invoice.bankDetails ?? "",
     notes: invoice.notes ?? "",
     paymentTerms: invoice.paymentTerms ?? "",
     sentAt: invoice.sentAt ?? null,
@@ -56,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const body = await request.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
 
-  const allowedStatuses = ["DRAFT", "SENT", "ACCEPTED", "PAID", "VOID"];
+  const allowedStatuses = ["DRAFT", "SENT", "AWAITING_PAYMENT", "ACCEPTED", "PAID", "CANCELLED", "EXPIRED", "VOID"];
   const status = body.status === undefined ? undefined : String(body.status).toUpperCase();
   if (status && !allowedStatuses.includes(status)) return NextResponse.json({ ok: false, error: "Invalid document status" }, { status: 400 });
 
@@ -65,6 +69,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (status === "SENT") data.sentAt = new Date();
   if (body.notes !== undefined) data.notes = String(body.notes ?? "");
   if (body.paymentTerms !== undefined) data.paymentTerms = String(body.paymentTerms ?? "");
+  if (body.paymentLink !== undefined) data.paymentLink = String(body.paymentLink ?? "") || null;
+  if (body.bankDetails !== undefined) data.bankDetails = String(body.bankDetails ?? "") || null;
+  if (body.amountPaid !== undefined) data.amountPaid = money(body.amountPaid);
+  if (body.balanceDue !== undefined) data.balanceDue = money(body.balanceDue);
 
   const dbResult = await withDatabase(async () => prisma.invoice.update({
     where: { id: params.id },

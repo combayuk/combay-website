@@ -100,7 +100,7 @@ export default function AdminOrders() {
     });
   }, [filter, orders, search]);
 
-  async function createInvoiceFromOrder(type: "INVOICE" | "QUOTE") {
+  async function createInvoiceFromOrder(type: "COMMERCIAL_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST") {
     if (!selected) return;
     setCreatingInvoice(true);
     setMessage("");
@@ -260,12 +260,12 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Documents</h3>
-                <p className="text-xs text-gray-500 mb-3">Create an invoice or quote directly from this order. It will be saved in Invoices & Quotes.</p>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Order documents</h3>
+                <p className="text-xs text-gray-500 mb-3">Paid order invoices are commercial/export invoices and should show PAID / Balance Due £0.00. Use additional payment request only for underpaid shipping, extra service fees, or other supplementary charges.</p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("INVOICE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> {creatingInvoice ? "Creating..." : "Create invoice"}</button>
-                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("QUOTE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> Create quote</button>
+                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("COMMERCIAL_INVOICE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> {creatingInvoice ? "Creating..." : "Create commercial invoice"}</button>
+                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("ADDITIONAL_PAYMENT_REQUEST")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> Additional payment request</button>
                 </div>
               </div>
 

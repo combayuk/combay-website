@@ -1,13 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 
-const ALLOWED_TYPES = ["QUOTE", "INVOICE"] as const;
+const ALLOWED_TYPES = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "ADDITIONAL_PAYMENT_REQUEST", "INVOICE"] as const;
 type InvoiceType = (typeof ALLOWED_TYPES)[number];
+
+const ORDER_DOCUMENT_TYPES = ["COMMERCIAL_INVOICE", "ADDITIONAL_PAYMENT_REQUEST", "INVOICE"] as const;
 
 type InputLine = {
   description?: string;
   desc?: string;
   sku?: string;
+  hsCode?: string;
+  origin?: string;
   quantity?: number | string;
   qty?: number | string;
   unitPrice?: number | string;
@@ -20,11 +24,15 @@ function money(value: unknown) {
 }
 
 function makeDocumentNumber(type: InvoiceType) {
-  const prefix = type === "INVOICE" ? "CB-INV" : "CB-QUO";
   const now = new Date();
-  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${prefix}-${ymd}-${Date.now().toString(36).toUpperCase().slice(-5)}${rand}`;
+  const compact = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const prefix =
+    type === "COMMERCIAL_INVOICE" || type === "INVOICE" ? "CMPI" :
+    type === "PROFORMA_INVOICE" ? "CBPI" :
+    type === "ADDITIONAL_PAYMENT_REQUEST" ? "CBAP" :
+    "CBQ";
+  return `${prefix}${compact}${suffix}`;
 }
 
 function normalizeInvoice(invoice: any) {
@@ -44,6 +52,10 @@ function normalizeInvoice(invoice: any) {
     subtotal: money(invoice.subtotal),
     tax: money(invoice.tax),
     total: money(invoice.total),
+    amountPaid: money(invoice.amountPaid),
+    balanceDue: money(invoice.balanceDue),
+    paymentLink: invoice.paymentLink ?? null,
+    bankDetails: invoice.bankDetails ?? "",
     notes: invoice.notes ?? "",
     paymentTerms: invoice.paymentTerms ?? "",
     sentAt: invoice.sentAt ?? null,
@@ -66,7 +78,10 @@ function linesFromInput(input: InputLine[]) {
     .map((line, index) => {
       const quantity = Math.max(money(line.quantity ?? line.qty ?? 1), 0);
       const unitPrice = money(line.unitPrice ?? line.unit ?? 0);
-      const description = String(line.description ?? line.desc ?? "").trim();
+      const bits = [String(line.description ?? line.desc ?? "").trim()];
+      if (line.hsCode) bits.push(`HS Code: ${String(line.hsCode).trim()}`);
+      if (line.origin) bits.push(`Origin: ${String(line.origin).trim()}`);
+      const description = bits.filter(Boolean).join("\n");
       if (!description) return null;
       return {
         description,
@@ -80,18 +95,28 @@ function linesFromInput(input: InputLine[]) {
     .filter(Boolean) as { description: string; sku: string | null; quantity: number; unitPrice: number; lineTotal: number; sortOrder: number }[];
 }
 
+function defaultTerms(type: InvoiceType) {
+  if (type === "QUOTE") return "Quote only. Subject to stock availability, final shipping confirmation, and Combay Limited acceptance.";
+  if (type === "PROFORMA_INVOICE") return "Payment required before dispatch. Pay by card using the payment link where provided, or by bank transfer using the details shown.";
+  if (type === "ADDITIONAL_PAYMENT_REQUEST") return "Supplementary charge linked to an existing order. Payment required before the additional service/dispatch step is completed.";
+  return "Paid order invoice. Balance due is £0.00 unless explicitly stated otherwise.";
+}
+
 export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get("type");
   const status = request.nextUrl.searchParams.get("status");
+  const area = request.nextUrl.searchParams.get("area");
 
   const dbResult = await withDatabase(async () => {
     const where: any = {};
     if (type && ALLOWED_TYPES.includes(type as InvoiceType)) where.type = type;
+    if (area === "quotes") where.type = { in: ["QUOTE", "PROFORMA_INVOICE", "ADDITIONAL_PAYMENT_REQUEST"] };
+    if (area === "orders") where.type = { in: [...ORDER_DOCUMENT_TYPES] };
     if (status) where.status = status;
     return prisma.invoice.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 150,
       include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
     });
   });
@@ -118,14 +143,19 @@ export async function POST(request: NextRequest) {
       const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
       if (!order) throw new Error("Order not found");
 
-      const subtotal = money(order.subtotal);
-      const tax = money(order.tax);
-      const total = money(order.total);
+      const orderDocType: InvoiceType = type === "ADDITIONAL_PAYMENT_REQUEST" ? "ADDITIONAL_PAYMENT_REQUEST" : "COMMERCIAL_INVOICE";
+      const subtotal = money(body.subtotalOverride ?? order.subtotal);
+      const tax = money(body.taxOverride ?? order.tax);
+      const total = money(body.totalOverride ?? order.total);
+      const paid = orderDocType === "COMMERCIAL_INVOICE" && order.paymentStatus === "PAID" ? total : money(body.amountPaid ?? 0);
+      const balanceDue = Math.max(money(total - paid), 0);
+      const status = orderDocType === "COMMERCIAL_INVOICE" && balanceDue === 0 ? "PAID" : "AWAITING_PAYMENT";
+
       return prisma.invoice.create({
         data: {
-          documentNumber: makeDocumentNumber(type),
-          type,
-          status: "DRAFT",
+          documentNumber: makeDocumentNumber(orderDocType),
+          type: orderDocType,
+          status,
           orderId: order.id,
           customerName: order.customerName,
           customerEmail: order.customerEmail,
@@ -136,17 +166,23 @@ export async function POST(request: NextRequest) {
           subtotal,
           tax,
           total,
-          notes: body.notes ?? `Created from order ${order.orderNumber}.`,
-          paymentTerms: body.paymentTerms ?? (type === "INVOICE" ? "Payment received via Stripe checkout unless stated otherwise." : "Quote valid for 7 days unless stated otherwise."),
+          amountPaid: paid,
+          balanceDue,
+          paymentLink: String(body.paymentLink ?? "").trim() || null,
+          bankDetails: String(body.bankDetails ?? "").trim() || null,
+          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from paid order ${order.orderNumber}.` : `Additional payment request linked to order ${order.orderNumber}.`),
+          paymentTerms: body.paymentTerms ?? defaultTerms(orderDocType),
           lines: {
-            create: order.items.map((item, index) => ({
-              description: item.title,
-              sku: item.sku,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              lineTotal: item.lineTotal,
-              sortOrder: index,
-            })),
+            create: orderDocType === "ADDITIONAL_PAYMENT_REQUEST" && Array.isArray(body.lines) && body.lines.length
+              ? linesFromInput(body.lines)
+              : order.items.map((item, index) => ({
+                  description: item.title,
+                  sku: item.sku,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  lineTotal: item.lineTotal,
+                  sortOrder: index,
+                })),
           },
         },
         include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
@@ -160,16 +196,20 @@ export async function POST(request: NextRequest) {
     const taxRate = body.taxRate === undefined ? 0.2 : money(body.taxRate);
     const tax = money(subtotal * taxRate);
     const total = money(subtotal + tax);
+    const amountPaid = money(body.amountPaid ?? 0);
+    const balanceDue = Math.max(money(total - amountPaid), 0);
 
     const customerName = String(body.customerName ?? body.name ?? "").trim();
     const customerEmail = String(body.customerEmail ?? body.email ?? "").trim();
     if (!customerName || !customerEmail) throw new Error("Customer name and email are required");
 
+    const initialStatus = type === "QUOTE" ? "DRAFT" : balanceDue === 0 && amountPaid > 0 ? "PAID" : "AWAITING_PAYMENT";
+
     return prisma.invoice.create({
       data: {
         documentNumber: makeDocumentNumber(type),
         type,
-        status: "DRAFT",
+        status: initialStatus,
         customerName,
         customerEmail,
         customerPhone: String(body.customerPhone ?? body.phone ?? "").trim() || null,
@@ -179,8 +219,12 @@ export async function POST(request: NextRequest) {
         subtotal,
         tax,
         total,
+        amountPaid,
+        balanceDue,
+        paymentLink: String(body.paymentLink ?? "").trim() || null,
+        bankDetails: String(body.bankDetails ?? "").trim() || null,
         notes: String(body.notes ?? "").trim() || null,
-        paymentTerms: String(body.paymentTerms ?? "").trim() || null,
+        paymentTerms: String(body.paymentTerms ?? "").trim() || defaultTerms(type),
         lines: { create: lines },
       },
       include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },

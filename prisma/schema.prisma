@@ -261,6 +261,10 @@ model Invoice {
   subtotal        Decimal       @db.Decimal(10, 2)
   tax             Decimal       @db.Decimal(10, 2) @default(0)
   total           Decimal       @db.Decimal(10, 2)
+  amountPaid      Decimal       @db.Decimal(10, 2) @default(0)
+  balanceDue      Decimal       @db.Decimal(10, 2) @default(0)
+  paymentLink     String?
+  bankDetails     String?       @db.Text
   notes           String?       @db.Text
   paymentTerms    String?       @db.Text
   sentAt          DateTime?
@@ -283,14 +287,20 @@ model InvoiceLine {
 
 enum InvoiceType {
   QUOTE
+  PROFORMA_INVOICE
+  COMMERCIAL_INVOICE
+  ADDITIONAL_PAYMENT_REQUEST
   INVOICE
 }
 
 enum InvoiceStatus {
   DRAFT
   SENT
+  AWAITING_PAYMENT
   ACCEPTED
   PAID
+  CANCELLED
+  EXPIRED
   VOID
 }
 
