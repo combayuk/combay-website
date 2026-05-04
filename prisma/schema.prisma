@@ -223,6 +223,7 @@ model Order {
   dispatchedAt    DateTime?
   items           OrderItem[]
   returns         Return[]
+  invoices        Invoice[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 }
@@ -241,6 +242,56 @@ model OrderItem {
   addonWarranty Boolean  @default(false)
   addonInstall  Boolean  @default(false)
   lineTotal     Decimal  @db.Decimal(10, 2)
+}
+
+
+model Invoice {
+  id              String        @id @default(cuid())
+  documentNumber  String        @unique
+  type            InvoiceType
+  status          InvoiceStatus @default(DRAFT)
+  orderId         String?
+  order           Order?        @relation(fields: [orderId], references: [id])
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  company         String?
+  billingAddress  String?       @db.Text
+  currency        String        @default("GBP")
+  subtotal        Decimal       @db.Decimal(10, 2)
+  tax             Decimal       @db.Decimal(10, 2) @default(0)
+  total           Decimal       @db.Decimal(10, 2)
+  notes           String?       @db.Text
+  paymentTerms    String?       @db.Text
+  sentAt          DateTime?
+  lines           InvoiceLine[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model InvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  sku         String?
+  quantity    Decimal  @db.Decimal(10, 2)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  lineTotal   Decimal  @db.Decimal(10, 2)
+  sortOrder   Int      @default(0)
+}
+
+enum InvoiceType {
+  QUOTE
+  INVOICE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  PAID
+  VOID
 }
 
 model Return {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Search, X } from "lucide-react";
+import { ExternalLink, FileText, Search, X } from "lucide-react";
 
 const COURIERS: Record<string, string> = {
   "Royal Mail": "https://www.royalmail.com/track-your-item#/tracking-results/",
@@ -74,6 +74,7 @@ export default function AdminOrders() {
   const [selected, setSelected] = useState<Order | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
 
   function loadOrders() {
     setLoading(true);
@@ -98,6 +99,28 @@ export default function AdminOrders() {
       return matchesFilter && matchesSearch;
     });
   }, [filter, orders, search]);
+
+  async function createInvoiceFromOrder(type: "INVOICE" | "QUOTE") {
+    if (!selected) return;
+    setCreatingInvoice(true);
+    setMessage("");
+
+    const response = await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: selected.id, type }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setCreatingInvoice(false);
+
+    if (!response.ok || !data.ok) {
+      setMessage(data.error || data.reason || "Could not create document from order.");
+      return;
+    }
+
+    setMessage(`${data.document.documentNumber} created.`);
+    window.open(`/api/invoices/${data.document.id}/html`, "_blank", "noopener,noreferrer");
+  }
 
   async function saveOrderUpdate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -234,6 +257,15 @@ export default function AdminOrders() {
                 <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Items</h3>
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
                   {(selected.items ?? []).map((item) => <div key={`${item.sku}-${item.title}`} className="flex items-center justify-between gap-4 px-4 py-3 border-b last:border-b-0 text-sm"><span>{item.quantity}× {item.title}</span><span className="font-mono text-xs text-gray-500">{item.sku}</span></div>)}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Documents</h3>
+                <p className="text-xs text-gray-500 mb-3">Create an invoice or quote directly from this order. It will be saved in Invoices & Quotes.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("INVOICE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> {creatingInvoice ? "Creating..." : "Create invoice"}</button>
+                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("QUOTE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> Create quote</button>
                 </div>
               </div>
 
