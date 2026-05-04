@@ -48,6 +48,7 @@ export default function AdminRequests() {
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedRequest, setSelectedRequest] = useState<RequestRow | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -134,7 +135,7 @@ export default function AdminRequests() {
                   </td>
                   <td>
                     <a href={`mailto:${r.email}`} className="text-xs text-accent hover:text-accent-dark font-600 mr-2">Reply</a>
-                    <button className="text-xs text-gray-400 hover:text-navy-900 font-600" type="button">View</button>
+                    <button onClick={() => setSelectedRequest(r)} className="text-xs text-gray-400 hover:text-navy-900 font-600" type="button">View</button>
                   </td>
                 </tr>
               ))}
@@ -142,6 +143,85 @@ export default function AdminRequests() {
           </table>
         )}
       </div>
+
+      {selectedRequest && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
+              <div>
+                <p className="font-mono text-[11px] text-accent tracking-wider uppercase">{selectedRequest.id}</p>
+                <h2 className="font-display font-800 text-xl text-navy-950 mt-1">
+                  {selectedRequest.subject || selectedRequest.productSku || selectedRequest.equipment || selectedRequest.service || "Request details"}
+                </h2>
+                <p className="text-xs text-gray-400 mt-1">{selectedRequest.date} · {TAB_LABELS[selectedRequest.type]}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRequest(null)}
+                className="text-gray-400 hover:text-navy-900 text-xl leading-none"
+                aria-label="Close request details"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <DetailBlock label="Customer" value={selectedRequest.name} />
+                <DetailBlock label="Email" value={selectedRequest.email} href={`mailto:${selectedRequest.email}`} />
+                {selectedRequest.company && <DetailBlock label="Company" value={selectedRequest.company} />}
+                <DetailBlock label="Status" value={selectedRequest.status.replace(/_/g, " ")} />
+              </div>
+
+              {(selectedRequest.productSku || selectedRequest.productTitle) && (
+                <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <h3 className="font-display font-800 text-sm text-navy-950 mb-2">Product context</h3>
+                  {selectedRequest.productSku && <DetailBlock label="SKU" value={selectedRequest.productSku} />}
+                  {selectedRequest.productTitle && <DetailBlock label="Product" value={selectedRequest.productTitle} />}
+                </div>
+              )}
+
+              {(selectedRequest.equipment || selectedRequest.service) && (
+                <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <h3 className="font-display font-800 text-sm text-navy-950 mb-2">Service context</h3>
+                  {selectedRequest.equipment && <DetailBlock label="Equipment" value={selectedRequest.equipment} />}
+                  {selectedRequest.service && <DetailBlock label="Service" value={selectedRequest.service} />}
+                </div>
+              )}
+
+              <div>
+                <h3 className="font-display font-800 text-sm text-navy-950 mb-2">Message</h3>
+                <div className="border border-gray-200 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-line bg-white">
+                  {selectedRequest.message || "No message supplied."}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-end border-t border-gray-100 pt-4">
+                <a href={`mailto:${selectedRequest.email}?subject=Re: ${encodeURIComponent(selectedRequest.id)}`} className="btn-primary">
+                  Reply by email
+                </a>
+                <button type="button" onClick={() => setSelectedRequest(null)} className="btn-secondary">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function DetailBlock({ label, value, href }: { label: string; value: string; href?: string }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-gray-400 font-display font-700 mb-1">{label}</p>
+      {href ? (
+        <a href={href} className="text-sm text-accent hover:text-accent-dark break-words">{value}</a>
+      ) : (
+        <p className="text-sm text-navy-950 break-words">{value}</p>
+      )}
     </div>
   );
 }
