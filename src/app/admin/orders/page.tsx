@@ -100,7 +100,7 @@ export default function AdminOrders() {
     });
   }, [filter, orders, search]);
 
-  async function createInvoiceFromOrder(type: "COMMERCIAL_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST") {
+  async function createInvoiceFromOrder(type: "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST") {
     if (!selected) return;
     setCreatingInvoice(true);
     setMessage("");
@@ -262,9 +262,10 @@ export default function AdminOrders() {
 
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Order documents</h3>
-                <p className="text-xs text-gray-500 mb-3">Paid order invoices are commercial/export invoices and should show PAID / Balance Due £0.00. Use additional payment request only for underpaid shipping, extra service fees, or other supplementary charges.</p>
+                <p className="text-xs text-gray-500 mb-3">Create a commercial/export invoice for customs, a paid invoice/receipt for accounts, or an additional payment request only for underpaid shipping, extra service fees, or other supplementary charges.</p>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("COMMERCIAL_INVOICE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> {creatingInvoice ? "Creating..." : "Create commercial invoice"}</button>
+                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("PAID_INVOICE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> Create paid invoice</button>
                   <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("ADDITIONAL_PAYMENT_REQUEST")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> Additional payment request</button>
                 </div>
               </div>

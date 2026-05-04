@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ExternalLink, FileText, Plus, Search, Send } from "lucide-react";
 
 type DocLine = { id: string; description: string; sku?: string | null; quantity: number; unitPrice: number; lineTotal: number };
-type DocType = "QUOTE" | "PROFORMA_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST" | "COMMERCIAL_INVOICE" | "INVOICE";
+type DocType = "QUOTE" | "PROFORMA_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST" | "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "INVOICE";
 type Doc = {
   id: string;
   documentNumber: string;

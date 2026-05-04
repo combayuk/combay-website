@@ -22,6 +22,8 @@ function normalizeInvoice(invoice: any) {
     currency: invoice.currency ?? "GBP",
     subtotal: money(invoice.subtotal),
     tax: money(invoice.tax),
+    shippingCountry: invoice.shippingCountry ?? null,
+    shippingCost: money(invoice.shippingCost),
     total: money(invoice.total),
     amountPaid: money(invoice.amountPaid),
     balanceDue: money(invoice.balanceDue),
@@ -71,6 +73,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.paymentTerms !== undefined) data.paymentTerms = String(body.paymentTerms ?? "");
   if (body.paymentLink !== undefined) data.paymentLink = String(body.paymentLink ?? "") || null;
   if (body.bankDetails !== undefined) data.bankDetails = String(body.bankDetails ?? "") || null;
+  if (body.shippingCountry !== undefined) data.shippingCountry = String(body.shippingCountry ?? "") || null;
+  if (body.shippingCost !== undefined) data.shippingCost = money(body.shippingCost);
   if (body.amountPaid !== undefined) data.amountPaid = money(body.amountPaid);
   if (body.balanceDue !== undefined) data.balanceDue = money(body.balanceDue);
 

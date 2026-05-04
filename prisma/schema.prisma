@@ -265,6 +265,8 @@ model Invoice {
   balanceDue      Decimal       @db.Decimal(10, 2) @default(0)
   paymentLink     String?
   bankDetails     String?       @db.Text
+  shippingCountry String?
+  shippingCost    Decimal       @db.Decimal(10, 2) @default(0)
   notes           String?       @db.Text
   paymentTerms    String?       @db.Text
   sentAt          DateTime?
@@ -290,6 +292,7 @@ enum InvoiceType {
   PROFORMA_INVOICE
   COMMERCIAL_INVOICE
   ADDITIONAL_PAYMENT_REQUEST
+  PAID_INVOICE
   INVOICE
 }
 
