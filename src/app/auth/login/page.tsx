@@ -20,9 +20,7 @@ function LoginForm() {
     const res = await signIn("credentials", { email, password, redirect: false });
     setLoading(false);
     if (res?.ok) {
-      // Redirect admin to dashboard, customer to portal
-      const isAdmin = email === (process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "admin@combay.co.uk");
-      router.push(isAdmin ? "/admin" : callbackUrl.startsWith("/admin") ? "/portal" : callbackUrl);
+      router.push(callbackUrl);
     } else {
       setError("Incorrect credentials. Use the test accounts below.");
     }
@@ -50,16 +48,16 @@ function LoginForm() {
             Preview Mode — Test Accounts
           </p>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => fill("admin@combay.co.uk","combay-admin-2024")}
+            <button onClick={() => fill("test@combay.co.uk","Test12345")}
               className="bg-white/8 border border-white/10 rounded-xl px-3 py-3 text-left hover:border-accent/50 hover:bg-white/12 transition-all group">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-display font-700 text-white text-xs">Admin</span>
                 <span className="text-[9px] bg-red-500/20 text-red-300 border border-red-500/30 rounded px-1.5 py-0.5 font-mono">ADMIN</span>
               </div>
-              <p className="font-mono text-[10px] text-white/40">admin@combay.co.uk</p>
+              <p className="font-mono text-[10px] text-white/40">test@combay.co.uk</p>
               <p className="font-mono text-[10px] text-accent/60 mt-0.5 group-hover:text-accent transition-colors">Click to fill →</p>
             </button>
-            <button onClick={() => fill("test@combay.co.uk","Test1234")}
+            <button onClick={() => fill("test@combay.co.uk","Test12345")}
               className="bg-white/8 border border-white/10 rounded-xl px-3 py-3 text-left hover:border-accent/50 hover:bg-white/12 transition-all group">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-display font-700 text-white text-xs">Customer</span>

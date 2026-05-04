@@ -10,12 +10,13 @@ import CredentialsProvider from "next-auth/providers/credentials";
 // FUTURE: import bcrypt from "bcryptjs";
 
 // Single shared test credential per master instruction
-const TEST_EMAIL    = process.env.TEST_USER_EMAIL    ?? "test@combay.co.uk";
-const TEST_PASSWORD = process.env.TEST_USER_PASSWORD ?? "Test1234";
+const MOCK_AUTH_ENABLED = process.env.MOCK_AUTH_ENABLED !== "false";
+const TEST_EMAIL = process.env.MOCK_AUTH_EMAIL ?? process.env.TEST_USER_EMAIL ?? "test@combay.co.uk";
+const TEST_PASSWORD = process.env.MOCK_AUTH_PASSWORD ?? process.env.TEST_USER_PASSWORD ?? "Test12345";
 
 // Admin credential (separate for admin portal access)
-const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    ?? "admin@combay.co.uk";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "combay-admin-2024";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? TEST_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? TEST_PASSWORD;
 
 export const authOptions: NextAuthOptions = {
   // FUTURE DB: adapter: PrismaAdapter(prisma) as any,
@@ -30,6 +31,7 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null;
 
         // MOCK AUTH — replace this entire block with DB lookup when ready
+        if (!MOCK_AUTH_ENABLED) return null;
         if (credentials.email === ADMIN_EMAIL && credentials.password === ADMIN_PASSWORD) {
           return { id: "admin-001", email: ADMIN_EMAIL, name: "Combay Admin", role: "ADMIN" };
         }
@@ -71,4 +73,5 @@ export const authOptions: NextAuthOptions = {
     signOut: "/auth/login",
     error:   "/auth/login",
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };
