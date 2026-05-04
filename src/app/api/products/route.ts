@@ -1,11 +1,12 @@
-import { getProductsFromRepository } from "@/lib/productRepository";
-import { prisma, withDatabase } from "@/lib/db";
+import { getProductsFromRepository, saveProductToRepository } from "@/lib/productRepository";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
   const category = searchParams.get("category") ?? "";
   const condition = searchParams.get("condition") ?? "";
+  const status = searchParams.get("status") ?? "";
+  const admin = searchParams.get("admin") === "1";
   const priceMinRaw = searchParams.get("priceMin");
   const priceMaxRaw = searchParams.get("priceMax");
   const priceMin = priceMinRaw ? Number(priceMinRaw) : null;
@@ -15,6 +16,8 @@ export async function GET(req: Request) {
     query: q,
     category,
     condition,
+    status,
+    includeArchived: admin,
     priceMin: Number.isFinite(priceMin) ? priceMin : null,
     priceMax: Number.isFinite(priceMax) ? priceMax : null,
   });
@@ -33,69 +36,11 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null) as any;
 
-  if (!body?.title || !body?.sku) {
-    return Response.json({ ok: false, error: "Product title and SKU are required." }, { status: 400 });
+  if (!body?.title) {
+    return Response.json({ ok: false, error: "Product title is required." }, { status: 400 });
   }
 
-  const dbResult = await withDatabase(async () => {
-    let categoryId: string | undefined;
-    if (body.category || body.categorySlug) {
-      const category = await prisma.category.upsert({
-        where: { slug: body.categorySlug || String(body.category).toLowerCase().replace(/[^a-z0-9]+/g, "-") },
-        update: { name: body.category || body.categorySlug },
-        create: { name: body.category || body.categorySlug, slug: body.categorySlug || String(body.category).toLowerCase().replace(/[^a-z0-9]+/g, "-") },
-      });
-      categoryId = category.id;
-    }
-
-    return prisma.product.upsert({
-      where: { sku: body.sku },
-      update: {
-        title: body.title,
-        brand: body.brand ?? null,
-        manufacturer: body.manufacturer ?? null,
-        model: body.model ?? null,
-        mpn: body.mpn ?? null,
-        categoryId,
-        condition: body.condition ?? "USED",
-        status: body.status ?? "DRAFT",
-        price: body.price === null || body.price === undefined || body.price === "" ? null : Number(body.price),
-        priceOnRequest: Boolean(body.priceOnRequest),
-        stockQty: Number(body.stockQty ?? 0),
-        description: body.description ?? null,
-        productOverview: body.productOverview ?? null,
-        dispatchNote: body.dispatchNote ?? null,
-        leadTime: body.leadTime ?? null,
-        warranty: body.warranty ?? null,
-        locationBin: body.locationBin ?? null,
-        hsCode: body.hsCode ?? null,
-        source: body.source ?? "admin",
-      },
-      create: {
-        title: body.title,
-        slug: body.slug || String(body.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-        sku: body.sku,
-        brand: body.brand ?? null,
-        manufacturer: body.manufacturer ?? null,
-        model: body.model ?? null,
-        mpn: body.mpn ?? null,
-        categoryId,
-        condition: body.condition ?? "USED",
-        status: body.status ?? "DRAFT",
-        price: body.price === null || body.price === undefined || body.price === "" ? null : Number(body.price),
-        priceOnRequest: Boolean(body.priceOnRequest),
-        stockQty: Number(body.stockQty ?? 0),
-        description: body.description ?? null,
-        productOverview: body.productOverview ?? null,
-        dispatchNote: body.dispatchNote ?? null,
-        leadTime: body.leadTime ?? null,
-        warranty: body.warranty ?? null,
-        locationBin: body.locationBin ?? null,
-        hsCode: body.hsCode ?? null,
-        source: body.source ?? "admin",
-      },
-    });
-  });
+  const dbResult = await saveProductToRepository(body);
 
   if (!dbResult.ok) {
     return Response.json({

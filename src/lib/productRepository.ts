@@ -1,11 +1,37 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { CATEGORIES, PRODUCTS, searchProducts, type CatalogProduct, type ConditionCode, type StockStatus } from "@/lib/catalog";
 
-type ProductWithRelations = Awaited<ReturnType<typeof prisma.product.findMany>>[number] & {
-  category?: { name: string; slug: string } | null;
-  images?: { url: string; isPrimary: boolean; sortOrder: number }[];
-  documents?: { name: string; url: string; fileType: string | null }[];
+export type ProductWriteInput = Partial<CatalogProduct> & {
+  id?: string;
+  status?: "PUBLISHED" | "DRAFT" | "ARCHIVED";
+  source?: string;
+  locationBin?: string;
+  hsCode?: string;
+  weightKg?: string;
+  dimensionsCm?: string;
+  adminNotes?: string;
+  image?: string | null;
+  images?: { url: string; alt?: string; isPrimary?: boolean; sortOrder?: number }[];
+  specs?: { label: string; value: string }[];
+  documents?: { name: string; url: string; fileType?: string }[];
 };
+
+type DbProduct = Awaited<ReturnType<typeof prisma.product.findMany>>[number] & {
+  category?: { name: string; slug: string } | null;
+  images?: { url: string; alt: string | null; isPrimary: boolean; sortOrder: number }[];
+  documents?: { name: string; url: string; fileType: string | null }[];
+  specs?: { label: string; value: string; sortOrder: number }[];
+  tags?: { name: string }[];
+};
+
+function slugify(value: string, fallback = "product") {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return slug || fallback;
+}
 
 function stockStatus(stockQty: number, priceOnRequest: boolean): StockStatus {
   if (priceOnRequest) return "POA";
@@ -14,9 +40,13 @@ function stockStatus(stockQty: number, priceOnRequest: boolean): StockStatus {
   return "IN_STOCK";
 }
 
-function mapDbProduct(product: ProductWithRelations): CatalogProduct {
+export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string, unknown> {
   const price = product.price === null || product.price === undefined ? null : Number(product.price);
-  const primaryImage = product.images?.find((image) => image.isPrimary)?.url ?? product.images?.[0]?.url ?? null;
+  const productImages = (product.images ?? []) as Array<{ url: string; alt: string | null; isPrimary: boolean; sortOrder: number }>;
+  const productSpecs = (product.specs ?? []) as Array<{ label: string; value: string; sortOrder: number }>;
+  const productDocs = (product.documents ?? []) as Array<{ name: string; url: string; fileType: string | null }>;
+  const productTags = (product.tags ?? []) as Array<{ name: string }>;
+  const primaryImage = productImages.find((image) => image.isPrimary)?.url ?? productImages[0]?.url ?? null;
 
   return {
     id: product.id,
@@ -40,13 +70,75 @@ function mapDbProduct(product: ProductWithRelations): CatalogProduct {
     image: primaryImage,
     description: product.description ?? "",
     productOverview: product.productOverview ?? product.description ?? "",
-    specs: [],
-    documents: (product.documents ?? []).map((document) => ({
+    specs: productSpecs
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((spec) => ({ label: spec.label, value: spec.value })),
+    documents: productDocs.map((document) => ({
       name: document.name,
       url: document.url,
       fileType: document.fileType ?? "Document",
     })),
-    tags: [product.sku, product.brand, product.manufacturer, product.model, product.mpn].filter(Boolean) as string[],
+    tags: productTags.length ? productTags.map((tag) => tag.name) : [product.sku, product.brand, product.manufacturer, product.model, product.mpn].filter(Boolean) as string[],
+    status: product.status,
+    source: product.source ?? "database",
+    createdAt: product.createdAt?.toISOString?.() ?? "",
+    updatedAt: product.updatedAt?.toISOString?.() ?? "",
+    locationBin: product.locationBin ?? "",
+    hsCode: product.hsCode ?? "",
+    dimensionsCm: product.dimensions ?? "",
+    weightKg: product.weight === null || product.weight === undefined ? "" : String(product.weight),
+  };
+}
+
+async function getCategoryId(input?: { category?: string; categorySlug?: string }) {
+  const label = input?.category?.trim() || "Uncategorised";
+  const slug = input?.categorySlug?.trim() || slugify(label, "uncategorised");
+  const category = await prisma.category.upsert({
+    where: { slug },
+    update: { name: label },
+    create: { name: label, slug },
+  });
+  return category.id;
+}
+
+async function nextSku() {
+  const latest = await prisma.product.findMany({
+    where: { sku: { startsWith: "CBUK" } },
+    select: { sku: true },
+    orderBy: { sku: "desc" },
+    take: 50,
+  });
+  const max = (latest as Array<{ sku: string }>).reduce((highest: number, item: { sku: string }) => {
+    const match = item.sku.match(/^CBUK(\d{5})$/i);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  return `CBUK${String(max + 1).padStart(5, "0")}`;
+}
+
+function relationPayload(input: ProductWriteInput) {
+  const images = input.images?.length
+    ? input.images
+    : input.image
+      ? [{ url: input.image, alt: input.title, isPrimary: true, sortOrder: 0 }]
+      : [];
+
+  return {
+    images: images.map((image, index) => ({
+      url: image.url,
+      alt: image.alt ?? input.title ?? null,
+      isPrimary: image.isPrimary ?? index === 0,
+      sortOrder: image.sortOrder ?? index,
+    })),
+    specs: (input.specs ?? []).filter((spec) => spec.label && spec.value).map((spec, index) => ({
+      label: spec.label,
+      value: spec.value,
+      sortOrder: index,
+    })),
+    documents: (input.documents ?? []).filter((doc) => doc.name && doc.url).map((doc) => ({
+      name: doc.name,
+      url: doc.url,
+      fileType: doc.fileType ?? "Document",
+    })),
   };
 }
 
@@ -54,29 +146,21 @@ export async function getProductsFromRepository(params: {
   query?: string;
   category?: string;
   condition?: string;
+  status?: string;
+  includeArchived?: boolean;
   priceMin?: number | null;
   priceMax?: number | null;
 }) {
   const dbResult = await withDatabase(async () => {
-    const where: any = {
-      status: "PUBLISHED",
-    };
+    const where: any = {};
 
-    if (params.category) {
-      where.category = { slug: params.category };
-    }
+    if (params.status) where.status = params.status;
+    else if (!params.includeArchived) where.status = "PUBLISHED";
 
-    if (params.condition) {
-      where.condition = params.condition;
-    }
-
-    if (params.priceMin !== null && params.priceMin !== undefined) {
-      where.price = { ...(where.price ?? {}), gte: params.priceMin };
-    }
-
-    if (params.priceMax !== null && params.priceMax !== undefined) {
-      where.price = { ...(where.price ?? {}), lte: params.priceMax };
-    }
+    if (params.category) where.category = { slug: params.category };
+    if (params.condition) where.condition = params.condition;
+    if (params.priceMin !== null && params.priceMin !== undefined) where.price = { ...(where.price ?? {}), gte: params.priceMin };
+    if (params.priceMax !== null && params.priceMax !== undefined) where.price = { ...(where.price ?? {}), lte: params.priceMax };
 
     if (params.query) {
       where.OR = [
@@ -87,6 +171,7 @@ export async function getProductsFromRepository(params: {
         { model: { contains: params.query, mode: "insensitive" } },
         { mpn: { contains: params.query, mode: "insensitive" } },
         { description: { contains: params.query, mode: "insensitive" } },
+        { specs: { some: { OR: [{ label: { contains: params.query, mode: "insensitive" } }, { value: { contains: params.query, mode: "insensitive" } }] } } },
       ];
     }
 
@@ -96,9 +181,11 @@ export async function getProductsFromRepository(params: {
         category: true,
         images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] },
         documents: true,
+        specs: { orderBy: { sortOrder: "asc" } },
+        tags: true,
       },
       orderBy: { sku: "asc" },
-      take: 100,
+      take: 5000,
     });
 
     return products.map(mapDbProduct);
@@ -135,7 +222,7 @@ export async function getProductByIdFromRepository(id: string) {
   const dbResult = await withDatabase(async () => {
     const product = await prisma.product.findFirst({
       where: { OR: [{ id }, { sku: id }, { slug: id }] },
-      include: { category: true, images: true, documents: true },
+      include: { category: true, images: true, documents: true, specs: true, tags: true },
     });
     return product ? mapDbProduct(product) : null;
   });
@@ -146,4 +233,80 @@ export async function getProductByIdFromRepository(id: string) {
     source: "catalog-fallback",
     product: PRODUCTS.find((product) => product.id === id || product.sku === id || product.slug === id) ?? null,
   };
+}
+
+export async function saveProductToRepository(input: ProductWriteInput) {
+  return withDatabase(async () => {
+    const sku = input.sku?.trim() || await nextSku();
+    const title = input.title?.trim() || "Untitled product";
+    const slug = slugify(input.slug || title, sku.toLowerCase());
+    const categoryId = await getCategoryId({ category: input.category, categorySlug: input.categorySlug });
+    const relations = relationPayload(input);
+    const existing = input.id
+      ? await prisma.product.findFirst({ where: { OR: [{ id: input.id }, { sku }, { slug }] } })
+      : await prisma.product.findUnique({ where: { sku } });
+
+    const data: any = {
+      title,
+      slug,
+      sku,
+      brand: input.brand ?? null,
+      manufacturer: input.manufacturer ?? null,
+      model: input.model ?? null,
+      mpn: input.mpn ?? null,
+      categoryId,
+      condition: input.condition ?? "USED",
+      status: input.status ?? "DRAFT",
+      price: input.priceOnRequest || input.price === null || input.price === undefined ? null : Number(input.price),
+      priceOnRequest: Boolean(input.priceOnRequest),
+      stockQty: Number(input.stockQty ?? 0),
+      description: input.description ?? null,
+      productOverview: input.productOverview ?? null,
+      dispatchNote: input.dispatchNote ?? null,
+      leadTime: input.leadTime ?? null,
+      warranty: input.warranty ?? null,
+      locationBin: input.locationBin ?? null,
+      hsCode: input.hsCode ?? null,
+      dimensions: input.dimensionsCm ?? null,
+      weight: input.weightKg ? Number(input.weightKg) : null,
+      source: input.source ?? "admin",
+      seoTitle: (input as any).seoTitle ?? null,
+      seoDescription: (input as any).seoDescription ?? null,
+      seoKeywords: Array.isArray(input.tags) ? input.tags.join(", ") : null,
+    };
+
+    const product = existing
+      ? await prisma.product.update({ where: { id: existing.id }, data })
+      : await prisma.product.create({ data });
+
+    await prisma.productImage.deleteMany({ where: { productId: product.id } });
+    if (relations.images.length) {
+      await prisma.productImage.createMany({ data: relations.images.map((image) => ({ ...image, productId: product.id })) });
+    }
+
+    await prisma.productSpec.deleteMany({ where: { productId: product.id } });
+    if (relations.specs.length) {
+      await prisma.productSpec.createMany({ data: relations.specs.map((spec) => ({ ...spec, productId: product.id })) });
+    }
+
+    await prisma.productDocument.deleteMany({ where: { productId: product.id } });
+    if (relations.documents.length) {
+      await prisma.productDocument.createMany({ data: relations.documents.map((document) => ({ ...document, productId: product.id })) });
+    }
+
+    const saved = await prisma.product.findUnique({
+      where: { id: product.id },
+      include: { category: true, images: true, documents: true, specs: true, tags: true },
+    });
+
+    return saved ? mapDbProduct(saved) : product;
+  });
+}
+
+export async function archiveProductInRepository(id: string) {
+  return withDatabase(async () => {
+    const existing = await prisma.product.findFirst({ where: { OR: [{ id }, { sku: id }, { slug: id }] } });
+    if (!existing) throw new Error("Product not found.");
+    return prisma.product.update({ where: { id: existing.id }, data: { status: "ARCHIVED" } });
+  });
 }
