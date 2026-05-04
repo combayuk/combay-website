@@ -1,4 +1,4 @@
-import { PRODUCTS, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
+import { CATEGORIES, PRODUCTS, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 
 export type AdminProductStatus = "PUBLISHED" | "DRAFT" | "ARCHIVED";
 
@@ -148,6 +148,163 @@ export function createBlankAdminProduct(): AdminProduct {
     updatedAt: nowIso(),
     source: "admin",
   };
+}
+
+function normaliseCategory(label: string) {
+  const trimmed = label.trim() || "Automation & Control";
+  const match = CATEGORIES.find((category) => category.label.toLowerCase() === trimmed.toLowerCase());
+  if (match && match.slug) return { label: match.label, slug: match.slug };
+  return { label: trimmed, slug: slugifyProductTitle(trimmed, "category") };
+}
+
+function normaliseCondition(value: string): ConditionCode {
+  const cleaned = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (["NEW", "NEW_OPEN_BOX", "USED", "FOR_PARTS"].includes(cleaned)) return cleaned as ConditionCode;
+  if (cleaned.includes("OPEN")) return "NEW_OPEN_BOX";
+  if (cleaned.includes("PART") || cleaned.includes("REPAIR")) return "FOR_PARTS";
+  return "USED";
+}
+
+function parseBoolean(value: string | undefined) {
+  return ["true", "yes", "y", "1", "poa"].includes(String(value ?? "").trim().toLowerCase());
+}
+
+function csvSplitLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let insideQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+
+    if (char === '"' && insideQuotes && next === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      insideQuotes = !insideQuotes;
+      continue;
+    }
+
+    if (char === "," && !insideQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
+function nextSkuFromProducts(products: AdminProduct[]) {
+  const max = products.reduce((highest, product) => {
+    const match = product.sku.match(/^CBUK(\d{5})$/i);
+    if (!match) return highest;
+    return Math.max(highest, Number(match[1]));
+  }, 0);
+  return `CBUK${String(max + 1).padStart(5, "0")}`;
+}
+
+export function importAdminProductsFromCsv(csvText: string) {
+  const lines = csvText
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return { imported: 0, updated: 0, errors: ["CSV must include a header row and at least one product row."] };
+  }
+
+  const headers = csvSplitLine(lines[0]).map((header) => header.trim().toLowerCase());
+  const requiredHeaders = ["title", "brand", "mpn", "category"];
+  const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
+
+  if (missingHeaders.length) {
+    return { imported: 0, updated: 0, errors: [`Missing required columns: ${missingHeaders.join(", ")}.`] };
+  }
+
+  const currentProducts = getAllAdminProducts();
+  const bySku = new Map(currentProducts.map((product) => [product.sku.toLowerCase(), product]));
+  const nextProducts = [...getStoredAdminProducts()];
+  const nextById = new Map(nextProducts.map((product) => [product.id, product]));
+  const errors: string[] = [];
+  let imported = 0;
+  let updated = 0;
+
+  for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+    const values = csvSplitLine(lines[lineIndex]);
+    const row = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+
+    const title = row.title?.trim();
+    if (!title) {
+      errors.push(`Row ${lineIndex + 1}: missing title.`);
+      continue;
+    }
+
+    const suppliedSku = row.sku?.trim();
+    const existing = suppliedSku ? bySku.get(suppliedSku.toLowerCase()) : undefined;
+    const sku = suppliedSku || nextSkuFromProducts([...currentProducts, ...Array.from(nextById.values())]);
+    const category = normaliseCategory(row.category ?? "Automation & Control");
+    const priceOnRequest = parseBoolean(row.price_on_request);
+    const price = priceOnRequest ? null : row.price ? Number(row.price) : null;
+    const stockQty = Number(row.stock_qty || row.quantity || 0);
+    const image = row.item_pic_url || row.image_url || row.image || null;
+    const condition = normaliseCondition(row.condition ?? "USED");
+    const id = existing?.id ?? `prod-${sku.toLowerCase()}`;
+    const slug = existing?.slug ?? slugifyProductTitle(title, sku);
+
+    const product: AdminProduct = {
+      ...(existing ?? createBlankAdminProduct()),
+      id,
+      slug,
+      sku,
+      title,
+      brand: row.brand ?? "",
+      manufacturer: row.manufacturer || row.brand || "",
+      model: row.model ?? "",
+      mpn: row.mpn ?? "",
+      category: category.label,
+      categorySlug: category.slug,
+      condition,
+      price: Number.isFinite(price as number) ? price : null,
+      priceOnRequest,
+      stockQty: Number.isFinite(stockQty) ? stockQty : 0,
+      stockStatus: stockQty <= 0 ? "OUT_OF_STOCK" : stockQty <= 2 ? "LOW_STOCK" : "IN_STOCK",
+      leadTime: row.lead_time || "UK dispatch normally within 1–2 working days after cleared payment.",
+      warranty: row.warranty || "30-day return-to-base warranty unless otherwise stated.",
+      dispatchNote: row.dispatch_note || "Packed for courier dispatch with serial number recorded before shipment.",
+      image: image || null,
+      description: row.description || title,
+      productOverview: row.product_overview || row.description || title,
+      specs: existing?.specs ?? [],
+      documents: existing?.documents ?? [],
+      tags: [row.brand, row.manufacturer, row.model, row.mpn, row.category].filter(Boolean),
+      status: (row.status?.toUpperCase() as AdminProductStatus) || "PUBLISHED",
+      source: "csv",
+      createdAt: existing?.createdAt ?? nowIso(),
+      updatedAt: nowIso(),
+      locationBin: row.location_bin || existing?.locationBin,
+      hsCode: row.hs_code || existing?.hsCode,
+      weightKg: row.weight_kg || existing?.weightKg,
+      dimensionsCm: row.dimensions_cm || existing?.dimensionsCm,
+      adminNotes: row.admin_notes || existing?.adminNotes,
+    };
+
+    nextById.set(product.id, product);
+    bySku.set(product.sku.toLowerCase(), product);
+    if (existing) updated += 1;
+    else imported += 1;
+  }
+
+  saveStoredAdminProducts(Array.from(nextById.values()));
+  return { imported, updated, errors };
 }
 
 export const CONDITION_OPTIONS: { value: ConditionCode; label: string }[] = [

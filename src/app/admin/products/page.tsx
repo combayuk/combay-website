@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Copy, Download, Edit, Eye, Package, Plus, Search, Trash2 } from "lucide-react";
+import { Copy, Download, Edit, Eye, Package, Plus, Search, Trash2, Upload } from "lucide-react";
 import { CATEGORIES, CONDITION_LABELS } from "@/lib/catalog";
-import { deleteAdminProduct, duplicateAdminProduct, getAllAdminProducts, type AdminProduct } from "@/lib/adminCatalog";
+import { deleteAdminProduct, duplicateAdminProduct, getAllAdminProducts, importAdminProductsFromCsv, type AdminProduct } from "@/lib/adminCatalog";
 
 function priceLabel(product: AdminProduct) {
   if (product.priceOnRequest || product.price === null) return "POA";
@@ -16,6 +16,8 @@ export default function AdminProducts() {
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [importMessage, setImportMessage] = useState("");
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const products = useMemo(() => getAllAdminProducts(), [refreshKey]);
 
@@ -32,19 +34,32 @@ export default function AdminProducts() {
     ].join(" ").toLowerCase();
     const matchesSearch = !search || haystack.includes(search.toLowerCase());
     const matchesCategory = !category || product.categorySlug === category;
-    const matchesStatus = !status || product.status === status;
+    const matchesStatus = status ? product.status === status : product.status !== "ARCHIVED";
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
   function removeProduct(product: AdminProduct) {
-    if (!confirm(`Archive/delete ${product.sku}?`)) return;
+    if (!confirm(`Archive ${product.sku}? It will be hidden from the active list but can still be viewed with the Archived filter.`)) return;
     deleteAdminProduct(product.id);
+    setImportMessage(`${product.sku} archived. Use the Archived status filter to view it.`);
     setRefreshKey((key) => key + 1);
   }
 
   function duplicateProduct(product: AdminProduct) {
-    duplicateAdminProduct(product.id);
+    const duplicate = duplicateAdminProduct(product.id);
+    setImportMessage(duplicate ? `${product.sku} duplicated as ${duplicate.sku}.` : `Could not duplicate ${product.sku}.`);
     setRefreshKey((key) => key + 1);
+  }
+
+  async function handleCsvUpload(file: File | null) {
+    if (!file) return;
+    const text = await file.text();
+    const result = importAdminProductsFromCsv(text);
+    const baseMessage = `CSV import complete: ${result.imported} imported, ${result.updated} updated.`;
+    const errorMessage = result.errors.length ? ` Errors: ${result.errors.join(" ")}` : "";
+    setImportMessage(baseMessage + errorMessage);
+    setRefreshKey((key) => key + 1);
+    if (csvInputRef.current) csvInputRef.current.value = "";
   }
 
   return (
@@ -55,10 +70,14 @@ export default function AdminProducts() {
           <p className="text-gray-400 text-sm mt-0.5">Manage catalogue items, SKUs, stock status, documents and listing data.</p>
         </div>
         <div className="flex gap-2">
+          <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => handleCsvUpload(event.target.files?.[0] ?? null)} />
+          <button type="button" onClick={() => csvInputRef.current?.click()} className="btn-secondary text-sm py-2"><Upload size={14} /> Upload CSV</button>
           <a href="/stock-list-template.csv" download className="btn-secondary text-sm py-2"><Download size={14} /> CSV Template</a>
           <Link href="/admin/products/new" className="btn-primary text-sm py-2"><Plus size={14} /> Add Product</Link>
         </div>
       </div>
+
+      {importMessage && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-sm">{importMessage}</div>}
 
       <div className="grid sm:grid-cols-4 gap-3">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -90,7 +109,7 @@ export default function AdminProducts() {
             {CATEGORIES.filter((item) => item.slug).map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
           </select>
           <select value={status} onChange={(event) => setStatus(event.target.value)} className="input py-2 text-sm">
-            <option value="">All statuses</option>
+            <option value="">Active statuses</option>
             <option value="PUBLISHED">Published</option>
             <option value="DRAFT">Draft</option>
             <option value="ARCHIVED">Archived</option>
