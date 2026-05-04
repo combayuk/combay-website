@@ -1,60 +1,74 @@
+// ─── AUTH CONFIGURATION ───────────────────────────────────────────────────────
+// PRE-LAUNCH: Mock credentials via env vars — zero database dependency.
+// FUTURE DB SWAP: Replace the authorize() body with prisma lookup + bcrypt.compare
+// and add: adapter: PrismaAdapter(prisma), session: { strategy: "database" }
+// ─────────────────────────────────────────────────────────────────────────────
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+// FUTURE: import { PrismaAdapter } from "@auth/prisma-adapter";
+// FUTURE: import { prisma } from "./prisma";
+// FUTURE: import bcrypt from "bcryptjs";
+
+// Single shared test credential per master instruction
+const TEST_EMAIL    = process.env.TEST_USER_EMAIL    ?? "test@combay.co.uk";
+const TEST_PASSWORD = process.env.TEST_USER_PASSWORD ?? "Test1234";
+
+// Admin credential (separate for admin portal access)
+const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    ?? "admin@combay.co.uk";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "combay-admin-2024";
 
 export const authOptions: NextAuthOptions = {
+  // FUTURE DB: adapter: PrismaAdapter(prisma) as any,
   providers: [
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email:    { label: "Email",    type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const testEmail = process.env.MOCK_AUTH_EMAIL || "test@combay.co.uk";
-        const testPassword = process.env.MOCK_AUTH_PASSWORD || "Test12345";
+        if (!credentials?.email || !credentials?.password) return null;
 
-        if (
-          credentials?.email === testEmail &&
-          credentials?.password === testPassword
-        ) {
-          return {
-            id: "mock-user-1",
-            email: testEmail,
-            name: "Combay Test User",
-            role: "ADMIN",
-          };
+        // MOCK AUTH — replace this entire block with DB lookup when ready
+        if (credentials.email === ADMIN_EMAIL && credentials.password === ADMIN_PASSWORD) {
+          return { id: "admin-001", email: ADMIN_EMAIL, name: "Combay Admin", role: "ADMIN" };
         }
+        if (credentials.email === TEST_EMAIL && credentials.password === TEST_PASSWORD) {
+          return { id: "user-001", email: TEST_EMAIL, name: "Test User", role: "CUSTOMER" };
+        }
+        // END MOCK AUTH
+
+        // FUTURE DB AUTH:
+        // const user = await prisma.user.findUnique({ where: { email: credentials.email } });
+        // if (!user?.passwordHash) return null;
+        // const valid = await bcrypt.compare(credentials.password, user.passwordHash);
+        // if (!valid) return null;
+        // return { id: user.id, email: user.email, name: user.name, role: user.role };
 
         return null;
       },
     }),
   ],
-
   session: { strategy: "jwt" },
-
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as any).role;
-        token.id = user.id;
+        token.id   = user.id;
       }
       return token;
     },
-
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).role = token.role;
-        (session.user as any).id = token.id;
+        (session.user as any).id   = token.id;
       }
       return session;
     },
   },
-
   pages: {
-    signIn: "/auth/login",
+    signIn:  "/auth/login",
     signOut: "/auth/login",
-    error: "/auth/login",
+    error:   "/auth/login",
   },
-
-  secret: process.env.NEXTAUTH_SECRET,
 };

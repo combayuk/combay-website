@@ -1,17 +1,15 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminGuard from "@/components/admin/AdminGuard";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== "ADMIN") redirect("/auth/login");
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 overflow-auto">
-        <div className="p-6">{children}</div>
+    <AdminGuard>
+      <div className="flex h-screen bg-gray-100">
+        <AdminSidebar />
+        <div className="flex-1 overflow-auto">
+          <div className="p-6">{children}</div>
+        </div>
       </div>
-    </div>
+    </AdminGuard>
   );
 }
