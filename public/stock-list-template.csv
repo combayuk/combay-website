@@ -1,0 +1,2 @@
+sku,title,brand,manufacturer,model,mpn,category,condition,price,price_on_request,stock_qty,lead_time,warranty,description
+CBUK00001,Siemens SIMATIC S7-400 CPU 412-2 PLC Module,Siemens,Siemens AG,CPU 412-2,6ES7412-2XJ05-0AB0,Automation & Control,USED,1240,false,2,1-2 working days,30-day RTB warranty,Example stock list row

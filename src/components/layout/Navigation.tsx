@@ -1,8 +1,9 @@
 "use client";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { ChevronDown, Menu, X, ShoppingCart } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { readCartLines } from "@/lib/cart";
 
 const SHOP_CATS = [
   { name:"Lab & Scientific",     slug:"lab-scientific",    icon:"🔬",
@@ -27,7 +28,19 @@ export default function Navigation() {
   const { data: session } = useSession();
   const [mob, setMob]       = useState(false);
   const [shop, setShop]     = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const shopTimer           = useRef<ReturnType<typeof setTimeout>|null>(null);
+
+  useEffect(() => {
+    const syncCart = () => setCartCount(readCartLines().reduce((sum, line) => sum + line.qty, 0));
+    syncCart();
+    window.addEventListener("storage", syncCart);
+    window.addEventListener("combay-cart-updated", syncCart as EventListener);
+    return () => {
+      window.removeEventListener("storage", syncCart);
+      window.removeEventListener("combay-cart-updated", syncCart as EventListener);
+    };
+  }, []);
 
   const openShop  = () => { if (shopTimer.current) clearTimeout(shopTimer.current); setShop(true); };
   const closeShop = () => { shopTimer.current = setTimeout(() => setShop(false), 150); };
@@ -106,6 +119,9 @@ export default function Navigation() {
           <div className="hidden lg:flex items-center gap-2">
             <Link href="/cart" className="relative p-2 text-gray-500 hover:text-navy-950 transition-colors">
               <ShoppingCart size={18}/>
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-accent text-navy-950 text-[10px] font-display font-800 rounded-full min-w-4 h-4 px-1 flex items-center justify-center">{cartCount}</span>
+              )}
             </Link>
             <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? "447340383334"}`}
               target="_blank" rel="noopener noreferrer"

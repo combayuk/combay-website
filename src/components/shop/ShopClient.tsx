@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, X, ShoppingCart } from "lucide-react";
 import { CATEGORIES, CONDITION_LABELS, PRODUCTS, searchProducts, type CatalogProduct } from "@/lib/catalog";
+import { addCartItem } from "@/lib/cart";
 
 const CONDITIONS = [
   { label: "All Conditions", value: "" },
@@ -205,9 +206,18 @@ function ProductCard({ product }: { product: CatalogProduct }) {
           </div>
           <span className={product.stockQty > 0 ? "text-green-700 text-xs font-600" : "text-red-600 text-xs font-600"}>{stockCopy}</span>
         </div>
-        <div className="flex gap-2">
-          <Link href={`/shop/${product.slug}`} className="flex-1 text-center btn-secondary text-xs py-2 px-3">View</Link>
-          <Link href={`/shop/${product.slug}?quote=1`} className="flex-1 text-center btn-primary text-xs py-2 px-3">Quote</Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={`/shop/${product.slug}`} className="text-center btn-secondary text-xs py-2 px-3">View</Link>
+          <Link href={`/shop/${product.slug}?quote=1`} className="text-center btn-primary text-xs py-2 px-3">Quote</Link>
+          {!product.priceOnRequest && product.price !== null && product.stockQty > 0 && (
+            <button
+              type="button"
+              onClick={() => addCartItem(product.sku, 1)}
+              className="col-span-2 btn-secondary text-xs py-2 px-3"
+            >
+              <ShoppingCart size={13} /> Add to cart
+            </button>
+          )}
         </div>
       </div>
     </div>
