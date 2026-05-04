@@ -1,0 +1,21 @@
+[Unit]
+Description=Combay Upload Receiver
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/combay-upload-receiver
+Environment=UPLOAD_RECEIVER_HOST=127.0.0.1
+Environment=UPLOAD_RECEIVER_PORT=8787
+Environment=UPLOAD_ROOT_DIR=/var/www/combay-uploads
+Environment=UPLOAD_BASE_URL=https://assets.combay.co.uk
+Environment=UPLOAD_MAX_FILE_MB=50
+Environment=UPLOAD_RECEIVER_SECRET=CHANGE_THIS_TO_A_LONG_RANDOM_SECRET
+ExecStart=/usr/bin/node /opt/combay-upload-receiver/server.js
+Restart=always
+RestartSec=5
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
