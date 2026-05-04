@@ -192,6 +192,8 @@ export async function POST(request: NextRequest) {
       if (!order) throw new Error("Order not found");
 
       const orderDocType: InvoiceType = type === "ADDITIONAL_PAYMENT_REQUEST" ? "ADDITIONAL_PAYMENT_REQUEST" : type === "PAID_INVOICE" ? "PAID_INVOICE" : "COMMERCIAL_INVOICE";
+      const mandatoryHsCode = String(body.hsCode ?? "").trim();
+      if (orderDocType === "COMMERCIAL_INVOICE" && !mandatoryHsCode) throw new Error("HS code is mandatory before creating a commercial invoice");
       const subtotal = money(body.subtotalOverride ?? order.subtotal);
       const tax = money(body.taxOverride ?? order.tax);
       const shippingCost = money(body.shippingCost ?? 0);
@@ -222,13 +224,13 @@ export async function POST(request: NextRequest) {
           balanceDue,
           paymentLink: String(body.paymentLink ?? "").trim() || null,
           bankDetails: String(body.bankDetails ?? "").trim() || defaultBankDetails(),
-          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : `Additional payment request linked to order ${order.orderNumber}.`),
+          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}. No loose batteries.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : `Additional payment request linked to order ${order.orderNumber}.`),
           paymentTerms: body.paymentTerms ?? defaultTerms(orderDocType),
           lines: {
             create: orderDocType === "ADDITIONAL_PAYMENT_REQUEST" && Array.isArray(body.lines) && body.lines.length
               ? linesFromInput(body.lines)
               : order.items.map((item, index) => ({
-                  description: item.title,
+                  description: orderDocType === "COMMERCIAL_INVOICE" ? `${item.title}\nHS Code: ${mandatoryHsCode}\nNo loose batteries` : item.title,
                   sku: item.sku,
                   quantity: item.quantity,
                   unitPrice: item.unitPrice,

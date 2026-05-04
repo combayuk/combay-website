@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Download, Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 
-type DocType = "QUOTE" | "PROFORMA_INVOICE";
+type DocType = "QUOTE" | "PROFORMA_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST";
 const newLine = () => ({ description: "", sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: 0 });
 type LineItem = ReturnType<typeof newLine>;
 
@@ -30,12 +31,32 @@ function label(value: string) {
 }
 
 export default function InvoiceGenerator() {
-  const [type, setType] = useState<DocType>("QUOTE");
-  const [customer, setCustomer] = useState({ customerName: "", company: "", customerEmail: "", customerPhone: "", billingAddress: "" });
-  const [lines, setLines] = useState<LineItem[]>([newLine()]);
+  const params = useSearchParams();
+  const requestedType = params.get("type") as DocType | null;
+  const initialType: DocType = requestedType === "ADDITIONAL_PAYMENT_REQUEST" ? "ADDITIONAL_PAYMENT_REQUEST" : requestedType === "PROFORMA_INVOICE" ? "PROFORMA_INVOICE" : "QUOTE";
+  const orderTotal = Number(params.get("orderTotal") ?? 0);
+  const orderNumber = params.get("orderNumber") ?? "";
+
+  const [type, setType] = useState<DocType>(initialType);
+  const [customer, setCustomer] = useState({
+    customerName: params.get("customerName") ?? "",
+    company: params.get("company") ?? "",
+    customerEmail: params.get("customerEmail") ?? "",
+    customerPhone: params.get("customerPhone") ?? "",
+    billingAddress: "",
+  });
+  const [lines, setLines] = useState<LineItem[]>(() => {
+    if (initialType === "ADDITIONAL_PAYMENT_REQUEST" && orderNumber) {
+      return [
+        { ...newLine(), description: `Already paid - order ${orderNumber}`, quantity: 1, unitPrice: orderTotal },
+        { ...newLine(), description: "Additional item / accessory / shipping adjustment", quantity: 1, unitPrice: 0 },
+      ];
+    }
+    return [newLine()];
+  });
   const [shippingCountry, setShippingCountry] = useState("");
   const [shippingCost, setShippingCost] = useState(0);
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(initialType === "ADDITIONAL_PAYMENT_REQUEST" && orderNumber ? `Additional payment request linked to order ${orderNumber}.` : "");
   const [paymentTerms, setPaymentTerms] = useState(DEFAULT_TERMS);
   const [paymentLink, setPaymentLink] = useState("");
   const [autoGeneratePaymentLink, setAutoGeneratePaymentLink] = useState(true);
@@ -44,10 +65,14 @@ export default function InvoiceGenerator() {
   const [message, setMessage] = useState("");
   const [createdId, setCreatedId] = useState("");
 
-  const subtotal = lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0);
-  const tax = subtotal * 0.2;
+  const paidCredit = type === "ADDITIONAL_PAYMENT_REQUEST" ? orderTotal : 0;
+  const subtotal = useMemo(() => lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines]);
+  const taxableSubtotal = Math.max(subtotal - paidCredit, 0);
+  const tax = taxableSubtotal * 0.2;
   const total = subtotal + tax + Number(shippingCost || 0);
-  const isProforma = type === "PROFORMA_INVOICE";
+  const amountPaid = type === "ADDITIONAL_PAYMENT_REQUEST" ? paidCredit : 0;
+  const balanceDue = Math.max(total - amountPaid, 0);
+  const isPayable = type === "PROFORMA_INVOICE" || type === "ADDITIONAL_PAYMENT_REQUEST";
 
   function setDocType(next: DocType) {
     setType(next);
@@ -76,7 +101,8 @@ export default function InvoiceGenerator() {
         bankDetails,
         shippingCountry,
         shippingCost,
-        autoGeneratePaymentLink: isProforma && autoGeneratePaymentLink,
+        amountPaid,
+        autoGeneratePaymentLink: isPayable && autoGeneratePaymentLink,
         taxRate: 0.2,
       }),
     });
@@ -99,16 +125,16 @@ export default function InvoiceGenerator() {
         <Link href="/admin/invoices" className="text-gray-400 hover:text-navy-950 transition-colors p-1"><ArrowLeft size={18}/></Link>
         <div>
           <h1 className="font-display font-800 text-navy-950 text-2xl">New {label(type)}</h1>
-          <p className="text-xs text-gray-400 mt-1">Quotes show price/terms. Proformas include card payment link and bank transfer details.</p>
+          <p className="text-xs text-gray-400 mt-1">Quotes show price/terms. Proformas and additional payment requests include payment links and bank details.</p>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">
           <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
               <p className="font-display font-700 text-sm text-navy-950">Document type:</p>
-              {(["QUOTE", "PROFORMA_INVOICE"] as const).map((item) => (
+              {(["QUOTE", "PROFORMA_INVOICE", "ADDITIONAL_PAYMENT_REQUEST"] as const).map((item) => (
                 <button key={item} onClick={() => setDocType(item)} className={`font-display font-600 text-sm px-4 py-1.5 rounded-md border transition-colors ${type === item ? "bg-navy-950 text-white border-navy-950" : "border-gray-200 text-gray-600 hover:border-navy-950"}`}>{label(item)}</button>
               ))}
             </div>
@@ -120,6 +146,8 @@ export default function InvoiceGenerator() {
               <div className="sm:col-span-2"><label className="label text-xs">Customer / delivery address</label><textarea className="textarea text-sm" rows={2} value={customer.billingAddress} onChange={(e) => setCustomer((c) => ({ ...c, billingAddress: e.target.value }))}/></div>
             </div>
           </div>
+
+          {type === "ADDITIONAL_PAYMENT_REQUEST" && orderNumber && <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">This request is linked to paid order <strong>{orderNumber}</strong>. The first line represents the already-paid amount and is treated as paid credit. Add the supplementary charge on the next line.</div>}
 
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h2 className="font-display font-700 text-navy-950 mb-4">Line Items</h2>
@@ -150,10 +178,10 @@ export default function InvoiceGenerator() {
             </div>
           </div>
 
-          {isProforma && <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          {isPayable && <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
             <h2 className="font-display font-700 text-navy-950">Payment options</h2>
             <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={autoGeneratePaymentLink} onChange={(e) => setAutoGeneratePaymentLink(e.target.checked)} className="mt-1" /> Auto-generate Stripe payment link for the final balance due using the configured Stripe API key.</label>
-            <div><label className="label">Stripe payment link</label><input className="input text-sm" value={paymentLink} onChange={(e) => { setPaymentLink(e.target.value); if (e.target.value) setAutoGeneratePaymentLink(false); }} placeholder="Auto-generated after save, or paste manual Stripe link"/><p className="text-xs text-gray-400 mt-1">Leave blank to auto-generate for proformas, or paste a manual link to override.</p></div>
+            <div><label className="label">Stripe payment link</label><input className="input text-sm" value={paymentLink} onChange={(e) => { setPaymentLink(e.target.value); if (e.target.value) setAutoGeneratePaymentLink(false); }} placeholder="Auto-generated after save, or paste manual Stripe link"/></div>
             <div><label className="label">Bank transfer details</label><textarea className="textarea text-sm" rows={7} value={bankDetails} onChange={(e) => setBankDetails(e.target.value)} /></div>
           </div>}
 
@@ -168,16 +196,17 @@ export default function InvoiceGenerator() {
             <h2 className="font-display font-700 text-navy-950 mb-4">Totals</h2>
             <div className="space-y-2 text-sm mb-5">
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span className="font-600">{fmt(subtotal)}</span></div>
+              {amountPaid > 0 && <div className="flex justify-between text-green-700"><span>Paid / credit</span><span className="font-600">-{fmt(amountPaid)}</span></div>}
               <div className="flex justify-between text-gray-600"><span>VAT 20%</span><span className="font-600">{fmt(tax)}</span></div>
               <div className="flex justify-between text-gray-600"><span>Shipping</span><span className="font-600">{fmt(Number(shippingCost || 0))}</span></div>
-              <div className="flex justify-between font-display font-800 text-navy-950 text-lg border-t border-gray-200 pt-2"><span>Total</span><span>{fmt(total)}</span></div>
+              <div className="flex justify-between font-display font-800 text-navy-950 text-lg border-t border-gray-200 pt-2"><span>Balance due</span><span>{fmt(balanceDue)}</span></div>
             </div>
             <div className="space-y-2">
               <button onClick={saveDocument} disabled={saving || !customer.customerName || !customer.customerEmail} className="btn-primary w-full py-3"><Save size={14}/> {saving ? "Saving..." : "Save Document"}</button>
               {createdId && <a href={`/api/invoices/${createdId}/html`} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full py-2.5 flex items-center justify-center gap-2"><Download size={14}/> View / Print</a>}
             </div>
             {message && <p className={`text-xs mt-3 ${createdId ? "text-green-700" : "text-red-600"}`}>{message}</p>}
-            {isProforma && <p className="text-xs text-gray-400 text-center mt-2">For proformas, Stripe payment link is generated from the final balance due when Stripe keys are configured.</p>}
+            {isPayable && <p className="text-xs text-gray-400 text-center mt-2">Payment links are generated from the balance due when Stripe keys are configured.</p>}
             {(!customer.customerEmail || !customer.customerName) && <p className="text-xs text-gray-400 text-center mt-2">Fill in customer name and email to save</p>}
           </div>
         </div>

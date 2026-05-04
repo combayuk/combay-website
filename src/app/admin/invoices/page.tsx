@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, FileText, Plus, Search, Send } from "lucide-react";
+import { CheckCircle, ExternalLink, FileText, Mail, Plus, Search, Send } from "lucide-react";
 
 type DocLine = { id: string; description: string; sku?: string | null; quantity: number; unitPrice: number; lineTotal: number };
 type DocType = "QUOTE" | "PROFORMA_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST" | "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "INVOICE";
@@ -39,6 +39,7 @@ const STATUS_COLOUR: Record<string, string> = {
   AWAITING_PAYMENT: "text-yellow-700 bg-yellow-50 border-yellow-200",
   ACCEPTED: "text-green-700 bg-green-50 border-green-200",
   PAID: "text-green-700 bg-green-50 border-green-200",
+  RECEIVED: "text-green-700 bg-green-50 border-green-200",
   CANCELLED: "text-red-700 bg-red-50 border-red-200",
   EXPIRED: "text-gray-700 bg-gray-50 border-gray-200",
   VOID: "text-red-700 bg-red-50 border-red-200",
@@ -83,7 +84,7 @@ export default function InvoicesPage() {
     const response = await fetch(`/api/invoices/${doc.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: doc.type === "QUOTE" ? "SENT" : doc.status === "PAID" ? "PAID" : "AWAITING_PAYMENT" }),
+      body: JSON.stringify({ status: "SENT" }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) {
@@ -91,7 +92,29 @@ export default function InvoicesPage() {
       return;
     }
     setDocs((current) => current.map((item) => (item.id === doc.id ? data.document : item)));
-    setMessage(`${doc.documentNumber} updated. Email sending is handled in the email phase.`);
+    setMessage(`${doc.documentNumber} marked as sent.`);
+  }
+
+  async function markReceived(doc: Doc) {
+    setMessage("");
+    const response = await fetch(`/api/invoices/${doc.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "RECEIVED" }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      setMessage(data.error || "Could not mark as received.");
+      return;
+    }
+    setDocs((current) => current.map((item) => (item.id === doc.id ? data.document : item)));
+    setMessage(`${doc.documentNumber} marked as received and is now visible in Orders for tracking/dispatch management.`);
+  }
+
+  function emailHref(doc: Doc) {
+    const subject = encodeURIComponent(`${label(doc.type)} ${doc.documentNumber} from Combay`);
+    const body = encodeURIComponent(`Dear ${doc.customerName},\n\nPlease find your ${label(doc.type).toLowerCase()} here:\n${window.location.origin}/api/invoices/${doc.id}/html\n\nRegards,\nCombay Limited`);
+    return `mailto:${doc.customerEmail}?subject=${subject}&body=${body}`;
   }
 
   return (
@@ -132,7 +155,9 @@ export default function InvoicesPage() {
                   <td>
                     <div className="flex flex-wrap gap-2">
                       <a href={`/api/invoices/${doc.id}/html`} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><FileText size={12}/> View</a>
+                      <a href={emailHref(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><Mail size={12}/> Send by email</a>
                       <button onClick={() => markSent(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><Send size={12}/> Mark sent</button>
+                      <button onClick={() => markReceived(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><CheckCircle size={12}/> Mark received</button>
                       <a href={`/api/invoices/${doc.id}/html`} target="_blank" rel="noopener noreferrer" className="text-accent hover:text-accent-dark px-2 py-1.5"><ExternalLink size={14}/></a>
                     </div>
                   </td>

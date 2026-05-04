@@ -102,13 +102,38 @@ export default function AdminOrders() {
 
   async function createInvoiceFromOrder(type: "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST") {
     if (!selected) return;
+
+    if (type === "ADDITIONAL_PAYMENT_REQUEST") {
+      const params = new URLSearchParams({
+        type: "ADDITIONAL_PAYMENT_REQUEST",
+        orderId: selected.id,
+        orderNumber: selected.orderNumber,
+        customerName: selected.customerName,
+        customerEmail: selected.customerEmail,
+        customerPhone: selected.customerPhone ?? "",
+        company: selected.company ?? "",
+        orderTotal: String(selected.total ?? 0),
+      });
+      window.location.href = `/admin/invoices/new?${params.toString()}`;
+      return;
+    }
+
+    let hsCode = "";
+    if (type === "COMMERCIAL_INVOICE") {
+      hsCode = window.prompt("Enter HS code for this commercial invoice. This is mandatory.", "")?.trim() ?? "";
+      if (!hsCode) {
+        setMessage("HS code is mandatory before creating a commercial invoice.");
+        return;
+      }
+    }
+
     setCreatingInvoice(true);
     setMessage("");
 
     const response = await fetch("/api/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId: selected.id, type }),
+      body: JSON.stringify({ orderId: selected.id, type, hsCode }),
     });
     const data = await response.json().catch(() => ({}));
     setCreatingInvoice(false);

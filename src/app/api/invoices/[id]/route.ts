@@ -62,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const body = await request.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
 
-  const allowedStatuses = ["DRAFT", "SENT", "AWAITING_PAYMENT", "ACCEPTED", "PAID", "CANCELLED", "EXPIRED", "VOID"];
+  const allowedStatuses = ["DRAFT", "SENT", "AWAITING_PAYMENT", "ACCEPTED", "PAID", "RECEIVED", "CANCELLED", "EXPIRED", "VOID"];
   const status = body.status === undefined ? undefined : String(body.status).toUpperCase();
   if (status && !allowedStatuses.includes(status)) return NextResponse.json({ ok: false, error: "Invalid document status" }, { status: 400 });
 
@@ -78,11 +78,41 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.amountPaid !== undefined) data.amountPaid = money(body.amountPaid);
   if (body.balanceDue !== undefined) data.balanceDue = money(body.balanceDue);
 
-  const dbResult = await withDatabase(async () => prisma.invoice.update({
-    where: { id: params.id },
-    data,
-    include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
-  }));
+  const dbResult = await withDatabase(async () => {
+    let updated = await prisma.invoice.update({
+      where: { id: params.id },
+      data,
+      include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
+    });
+
+    if (status === "RECEIVED" && !updated.orderId) {
+      const order = await prisma.order.create({
+        data: {
+          orderNumber: `CB-DOC-${updated.documentNumber}`,
+          customerName: updated.customerName,
+          customerEmail: updated.customerEmail,
+          customerPhone: updated.customerPhone,
+          company: updated.company,
+          status: "PAYMENT_RECEIVED",
+          paymentStatus: "PAID",
+          subtotal: updated.subtotal,
+          shipping: updated.shippingCost,
+          tax: updated.tax,
+          total: updated.total,
+          currency: updated.currency,
+          notes: `Created when ${updated.documentNumber} was marked as received.`,
+          shippingAddress: updated.billingAddress ? { address: updated.billingAddress } : undefined,
+        },
+      });
+      updated = await prisma.invoice.update({
+        where: { id: params.id },
+        data: { orderId: order.id, amountPaid: updated.total, balanceDue: 0 },
+        include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
+      });
+    }
+
+    return updated;
+  });
 
   if (!dbResult.ok) return NextResponse.json({ ok: false, error: "Could not update document", reason: dbResult.reason }, { status: 500 });
   const document = normalizeInvoice(dbResult.data);
