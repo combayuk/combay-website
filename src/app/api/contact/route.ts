@@ -1,11 +1,10 @@
+import { prisma, withDatabase } from "@/lib/db";
 import { DEMO_REQUESTS, generateReference, getEmailStatus, readFormBody, todayLabel } from "@/lib/requests";
 
 export async function GET() {
-  return Response.json({
-    ok: true,
-    mode: "preview",
-    data: DEMO_REQUESTS.filter((request) => request.type === "contact"),
-  });
+  const dbResult = await withDatabase(async () => prisma.contactRequest.findMany({ orderBy: { createdAt: "desc" }, take: 100 }));
+  if (dbResult.ok) return Response.json({ ok: true, mode: "database", data: dbResult.data });
+  return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: DEMO_REQUESTS.filter((request) => request.type === "contact") });
 }
 
 export async function POST(req: Request) {
@@ -30,7 +29,28 @@ export async function POST(req: Request) {
     source: "contact-page",
   };
 
+  const dbResult = await withDatabase(async () => prisma.contactRequest.create({
+    data: {
+      reference,
+      name: record.name,
+      email: record.email,
+      phone: record.phone,
+      company: record.company,
+      subject: record.subject,
+      message: record.message,
+    },
+  }));
+
   console.info("[contact-request]", record);
 
-  return Response.json({ ok: true, reference, message: "Contact message received.", email: getEmailStatus(), request: record });
+  return Response.json({
+    ok: true,
+    reference,
+    mode: dbResult.ok ? "database" : "preview",
+    persistence: dbResult.ok ? "saved" : "not-saved",
+    persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
+    message: "Contact message received.",
+    email: getEmailStatus(),
+    request: dbResult.ok ? dbResult.data : record,
+  });
 }

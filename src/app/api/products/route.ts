@@ -1,4 +1,5 @@
-import { CATEGORIES, PRODUCTS, searchProducts } from "@/lib/catalog";
+import { getProductsFromRepository } from "@/lib/productRepository";
+import { prisma, withDatabase } from "@/lib/db";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   const priceMin = priceMinRaw ? Number(priceMinRaw) : null;
   const priceMax = priceMaxRaw ? Number(priceMaxRaw) : null;
 
-  const products = searchProducts({
+  const result = await getProductsFromRepository({
     query: q,
     category,
     condition,
@@ -20,30 +21,91 @@ export async function GET(req: Request) {
 
   return Response.json({
     ok: true,
-    source: "phase2-catalog-fallback",
-    message: "Product API is DB-ready. It currently serves the structured Phase 2 catalogue until PostgreSQL is connected.",
-    count: products.length,
-    total: PRODUCTS.length,
-    categories: CATEGORIES,
-    products,
+    source: result.source,
+    message: result.message,
+    count: result.products.length,
+    total: result.total,
+    categories: result.categories,
+    products: result.products,
   });
 }
 
 export async function POST(req: Request) {
-  let body: unknown = null;
-  try {
-    body = await req.json();
-  } catch {
-    body = null;
+  const body = await req.json().catch(() => null) as any;
+
+  if (!body?.title || !body?.sku) {
+    return Response.json({ ok: false, error: "Product title and SKU are required." }, { status: 400 });
   }
 
-  return Response.json(
-    {
+  const dbResult = await withDatabase(async () => {
+    let categoryId: string | undefined;
+    if (body.category || body.categorySlug) {
+      const category = await prisma.category.upsert({
+        where: { slug: body.categorySlug || String(body.category).toLowerCase().replace(/[^a-z0-9]+/g, "-") },
+        update: { name: body.category || body.categorySlug },
+        create: { name: body.category || body.categorySlug, slug: body.categorySlug || String(body.category).toLowerCase().replace(/[^a-z0-9]+/g, "-") },
+      });
+      categoryId = category.id;
+    }
+
+    return prisma.product.upsert({
+      where: { sku: body.sku },
+      update: {
+        title: body.title,
+        brand: body.brand ?? null,
+        manufacturer: body.manufacturer ?? null,
+        model: body.model ?? null,
+        mpn: body.mpn ?? null,
+        categoryId,
+        condition: body.condition ?? "USED",
+        status: body.status ?? "DRAFT",
+        price: body.price === null || body.price === undefined || body.price === "" ? null : Number(body.price),
+        priceOnRequest: Boolean(body.priceOnRequest),
+        stockQty: Number(body.stockQty ?? 0),
+        description: body.description ?? null,
+        productOverview: body.productOverview ?? null,
+        dispatchNote: body.dispatchNote ?? null,
+        leadTime: body.leadTime ?? null,
+        warranty: body.warranty ?? null,
+        locationBin: body.locationBin ?? null,
+        hsCode: body.hsCode ?? null,
+        source: body.source ?? "admin",
+      },
+      create: {
+        title: body.title,
+        slug: body.slug || String(body.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+        sku: body.sku,
+        brand: body.brand ?? null,
+        manufacturer: body.manufacturer ?? null,
+        model: body.model ?? null,
+        mpn: body.mpn ?? null,
+        categoryId,
+        condition: body.condition ?? "USED",
+        status: body.status ?? "DRAFT",
+        price: body.price === null || body.price === undefined || body.price === "" ? null : Number(body.price),
+        priceOnRequest: Boolean(body.priceOnRequest),
+        stockQty: Number(body.stockQty ?? 0),
+        description: body.description ?? null,
+        productOverview: body.productOverview ?? null,
+        dispatchNote: body.dispatchNote ?? null,
+        leadTime: body.leadTime ?? null,
+        warranty: body.warranty ?? null,
+        locationBin: body.locationBin ?? null,
+        hsCode: body.hsCode ?? null,
+        source: body.source ?? "admin",
+      },
+    });
+  });
+
+  if (!dbResult.ok) {
+    return Response.json({
       ok: false,
-      source: "phase2-catalog-fallback",
-      message: "Product creation requires PostgreSQL/Prisma connection in Phase 3 admin CRUD. Request body received for validation.",
+      mode: "preview",
+      message: "Product received but not persisted because PostgreSQL is not connected.",
+      reason: dbResult.reason,
       received: body,
-    },
-    { status: 501 },
-  );
+    }, { status: 202 });
+  }
+
+  return Response.json({ ok: true, source: "database", product: dbResult.data });
 }

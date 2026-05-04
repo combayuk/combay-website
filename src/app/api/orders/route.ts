@@ -1,18 +1,12 @@
+import { prisma, withDatabase } from "@/lib/db";
+
+const DEMO_ORDERS = [
+  { orderNumber: "CB1ACB2F", status: "DELIVERED", paymentStatus: "PAID", total: 1240, createdAt: "2026-04-28" },
+  { orderNumber: "CB0D9E1A", status: "DELIVERED", paymentStatus: "PAID", total: 890, createdAt: "2026-03-05" },
+];
+
 export async function GET() {
-  return Response.json({ ok: true, message: "Order API skeleton. Phase 5 will connect checkout/orders." });
-}
-
-export async function POST(req: Request) {
-  let body: unknown = null;
-  try {
-    body = await req.json();
-  } catch {
-    body = null;
-  }
-
-  return Response.json({
-    ok: true,
-    message: "Order API skeleton. Phase 5 will connect checkout/orders.",
-    received: body,
-  });
+  const dbResult = await withDatabase(async () => prisma.order.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { items: true, returns: true } }));
+  if (dbResult.ok) return Response.json({ ok: true, mode: "database", data: dbResult.data });
+  return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: DEMO_ORDERS });
 }

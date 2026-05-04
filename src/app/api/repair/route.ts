@@ -1,11 +1,10 @@
+import { prisma, withDatabase } from "@/lib/db";
 import { DEMO_REQUESTS, generateReference, getEmailStatus, readFormBody, todayLabel } from "@/lib/requests";
 
 export async function GET() {
-  return Response.json({
-    ok: true,
-    mode: "preview",
-    data: DEMO_REQUESTS.filter((request) => request.type === "repair"),
-  });
+  const dbResult = await withDatabase(async () => prisma.repairRequest.findMany({ orderBy: { createdAt: "desc" }, take: 100 }));
+  if (dbResult.ok) return Response.json({ ok: true, mode: "database", data: dbResult.data });
+  return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: DEMO_REQUESTS.filter((request) => request.type === "repair") });
 }
 
 export async function POST(req: Request) {
@@ -31,7 +30,32 @@ export async function POST(req: Request) {
     source: "repair-page",
   };
 
+  const dbResult = await withDatabase(async () => prisma.repairRequest.create({
+    data: {
+      reference,
+      firstName: String(body.firstName),
+      lastName: String(body.lastName),
+      email: record.email,
+      phone: record.phone,
+      company: record.company,
+      serviceType: record.service,
+      equipmentType: record.equipment,
+      manufacturer: body.manufacturer ? String(body.manufacturer) : undefined,
+      model: body.model ? String(body.model) : undefined,
+      faultDesc: record.message,
+    },
+  }));
+
   console.info("[repair-request]", record);
 
-  return Response.json({ ok: true, reference, message: "Repair request received.", email: getEmailStatus(), request: record });
+  return Response.json({
+    ok: true,
+    reference,
+    mode: dbResult.ok ? "database" : "preview",
+    persistence: dbResult.ok ? "saved" : "not-saved",
+    persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
+    message: "Repair request received.",
+    email: getEmailStatus(),
+    request: dbResult.ok ? dbResult.data : record,
+  });
 }

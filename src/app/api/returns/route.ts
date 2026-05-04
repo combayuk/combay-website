@@ -1,3 +1,4 @@
+import { prisma, withDatabase } from "@/lib/db";
 import { generateReference, getEmailStatus, readJsonBody, todayLabel } from "@/lib/requests";
 
 const DEMO_RETURNS = [
@@ -12,7 +13,9 @@ const DEMO_RETURNS = [
 ];
 
 export async function GET() {
-  return Response.json({ ok: true, mode: "preview", data: DEMO_RETURNS });
+  const dbResult = await withDatabase(async () => prisma.return.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { order: true } }));
+  if (dbResult.ok) return Response.json({ ok: true, mode: "database", data: dbResult.data });
+  return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: DEMO_RETURNS });
 }
 
 export async function POST(req: Request) {
@@ -36,13 +39,28 @@ export async function POST(req: Request) {
     source: String(body.source || "customer-portal"),
   };
 
+  const dbResult = await withDatabase(async () => {
+    const order = body.orderId ? await prisma.order.findUnique({ where: { orderNumber: String(body.orderId) } }) : null;
+    if (!order) throw new Error("Order not found in database. Return recorded in preview mode only until order persistence is active.");
+    return prisma.return.create({
+      data: {
+        orderId: order.id,
+        reason: record.reason,
+        notes: `${record.message}\nReference: ${reference}`,
+      },
+    });
+  });
+
   console.info("[return-request]", record);
 
   return Response.json({
     ok: true,
     reference,
+    mode: dbResult.ok ? "database" : "preview",
+    persistence: dbResult.ok ? "saved" : "not-saved",
+    persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
     message: "Return request received. Collection/inspection status will update in the customer portal once returns storage is connected.",
     email: getEmailStatus(),
-    request: record,
+    request: dbResult.ok ? dbResult.data : record,
   });
 }

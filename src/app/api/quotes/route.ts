@@ -1,11 +1,10 @@
+import { prisma, withDatabase } from "@/lib/db";
 import { DEMO_REQUESTS, generateReference, getEmailStatus, readJsonBody, todayLabel } from "@/lib/requests";
 
 export async function GET() {
-  return Response.json({
-    ok: true,
-    mode: "preview",
-    data: DEMO_REQUESTS.filter((request) => request.type === "quote"),
-  });
+  const dbResult = await withDatabase(async () => prisma.quoteRequest.findMany({ orderBy: { createdAt: "desc" }, take: 100 }));
+  if (dbResult.ok) return Response.json({ ok: true, mode: "database", data: dbResult.data });
+  return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: DEMO_REQUESTS.filter((request) => request.type === "quote") });
 }
 
 export async function POST(req: Request) {
@@ -32,13 +31,32 @@ export async function POST(req: Request) {
     source: String(body.source || "website"),
   };
 
+  const dbResult = await withDatabase(async () => prisma.quoteRequest.create({
+    data: {
+      reference,
+      name: record.name,
+      email: record.email,
+      phone: record.phone,
+      company: record.company,
+      description: record.message,
+      quantity: Number(body.quantity || 1),
+      productSku: record.productSku,
+      productTitle: record.productTitle,
+      productUrl: product.slug ? `/shop/${product.slug}` : body.productUrl,
+      source: record.source,
+    },
+  }));
+
   console.info("[quote-request]", record);
 
   return Response.json({
     ok: true,
     reference,
+    mode: dbResult.ok ? "database" : "preview",
+    persistence: dbResult.ok ? "saved" : "not-saved",
+    persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
     message: "Quote request received.",
     email: getEmailStatus(),
-    request: record,
+    request: dbResult.ok ? dbResult.data : record,
   });
 }

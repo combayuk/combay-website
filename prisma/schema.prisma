@@ -112,6 +112,14 @@ model Product {
   manufacturerUrl  String?
   weight           Decimal?      @db.Decimal(8, 3)
   dimensions       String?
+  dispatchNote     String?
+  leadTime         String?
+  warranty         String?
+  locationBin      String?
+  hsCode           String?
+  source           String?        @default("manual")
+  ebayItemId       String?        @unique
+  syncExcluded     Boolean       @default(false)
 
   // SEO
   seoTitle         String?
@@ -126,6 +134,7 @@ model Product {
   images           ProductImage[]
   faqs             ProductFaq[]
   documents        ProductDocument[]
+  specs            ProductSpec[]
   orderItems       OrderItem[]
   tags             Tag[]
 
@@ -158,6 +167,15 @@ model ProductDocument {
   name      String
   url       String
   fileType  String?
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductSpec {
+  id        String  @id @default(cuid())
+  productId String
+  label     String
+  value     String
+  sortOrder Int     @default(0)
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
@@ -267,6 +285,7 @@ enum ReturnStatus {
 // ─── REQUESTS ──────────────────────────────────────────
 model RepairRequest {
   id           String        @id @default(cuid())
+  reference    String?       @unique
   firstName    String
   lastName     String
   email        String
@@ -287,6 +306,7 @@ model RepairRequest {
 
 model AssetRecoveryRequest {
   id          String        @id @default(cuid())
+  reference   String?       @unique
   firstName   String
   lastName    String
   email       String
@@ -304,6 +324,7 @@ model AssetRecoveryRequest {
 
 model ContactRequest {
   id        String        @id @default(cuid())
+  reference String?       @unique
   name      String
   email     String
   phone     String?
@@ -316,11 +337,15 @@ model ContactRequest {
 
 model QuoteRequest {
   id          String        @id @default(cuid())
+  reference   String?       @unique
   name        String
   email       String
   phone       String?
   company     String?
   productUrl  String?
+  productSku  String?
+  productTitle String?
+  source      String?
   description String        @db.Text
   quantity    Int           @default(1)
   status      RequestStatus @default(NEW)
@@ -330,11 +355,17 @@ model QuoteRequest {
 
 model SupportTicket {
   id        String        @id @default(cuid())
+  reference String?       @unique
   userId    String?
   user      User?         @relation(fields: [userId], references: [id])
   name      String
   email     String
   orderId   String?
+  phone     String?
+  company   String?
+  productSku String?
+  productTitle String?
+  source    String?
   subject   String
   message   String        @db.Text
   status    RequestStatus @default(NEW)
