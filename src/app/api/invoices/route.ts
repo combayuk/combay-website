@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 
-const ALLOWED_TYPES = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "ADDITIONAL_PAYMENT_REQUEST", "PAID_INVOICE", "INVOICE"] as const;
+const ALLOWED_TYPES = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "ADDITIONAL_PAYMENT_REQUEST", "PAID_INVOICE", "PACKING_LIST", "INVOICE"] as const;
 type InvoiceType = (typeof ALLOWED_TYPES)[number];
 
-const ORDER_DOCUMENT_TYPES = ["COMMERCIAL_INVOICE", "PAID_INVOICE", "ADDITIONAL_PAYMENT_REQUEST", "INVOICE"] as const;
+const ORDER_DOCUMENT_TYPES = ["COMMERCIAL_INVOICE", "PAID_INVOICE", "PACKING_LIST", "ADDITIONAL_PAYMENT_REQUEST", "INVOICE"] as const;
 
 const DEFAULT_BANK_DETAILS = `Combay Limited
 Acc. # 37213788
@@ -43,6 +43,7 @@ function makeDocumentNumber(type: InvoiceType) {
   const prefix =
     type === "COMMERCIAL_INVOICE" ? "CMCI" :
     type === "PAID_INVOICE" || type === "INVOICE" ? "CMPI" :
+    type === "PACKING_LIST" ? "CMPL" :
     type === "PROFORMA_INVOICE" ? "CBPI" :
     type === "ADDITIONAL_PAYMENT_REQUEST" ? "CBAP" :
     "CBQ";
@@ -191,17 +192,22 @@ export async function POST(request: NextRequest) {
       const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
       if (!order) throw new Error("Order not found");
 
-      const orderDocType: InvoiceType = type === "ADDITIONAL_PAYMENT_REQUEST" ? "ADDITIONAL_PAYMENT_REQUEST" : type === "PAID_INVOICE" ? "PAID_INVOICE" : "COMMERCIAL_INVOICE";
+      const orderDocType: InvoiceType =
+        type === "ADDITIONAL_PAYMENT_REQUEST" ? "ADDITIONAL_PAYMENT_REQUEST" :
+        type === "PAID_INVOICE" ? "PAID_INVOICE" :
+        type === "PACKING_LIST" ? "PACKING_LIST" :
+        "COMMERCIAL_INVOICE";
       const mandatoryHsCode = String(body.hsCode ?? "").trim();
       if (orderDocType === "COMMERCIAL_INVOICE" && !mandatoryHsCode) throw new Error("HS code is mandatory before creating a commercial invoice");
-      const subtotal = money(body.subtotalOverride ?? order.subtotal);
-      const tax = money(body.taxOverride ?? order.tax);
-      const shippingCost = money(body.shippingCost ?? 0);
-      const total = money(body.totalOverride ?? (subtotal + tax + shippingCost));
+      const isPackingList = orderDocType === "PACKING_LIST";
+      const subtotal = isPackingList ? 0 : money(body.subtotalOverride ?? order.subtotal);
+      const tax = isPackingList ? 0 : money(body.taxOverride ?? order.tax);
+      const shippingCost = isPackingList ? 0 : money(body.shippingCost ?? 0);
+      const total = isPackingList ? 0 : money(body.totalOverride ?? (subtotal + tax + shippingCost));
       const isPaidDoc = ["COMMERCIAL_INVOICE", "PAID_INVOICE"].includes(orderDocType) && order.paymentStatus === "PAID";
       const paid = isPaidDoc ? total : money(body.amountPaid ?? 0);
       const balanceDue = Math.max(money(total - paid), 0);
-      const status = isPaidDoc && balanceDue === 0 ? "PAID" : "AWAITING_PAYMENT";
+      const status = isPackingList ? "DRAFT" : isPaidDoc && balanceDue === 0 ? "PAID" : "AWAITING_PAYMENT";
 
       let invoice = await prisma.invoice.create({
         data: {
@@ -224,7 +230,7 @@ export async function POST(request: NextRequest) {
           balanceDue,
           paymentLink: String(body.paymentLink ?? "").trim() || null,
           bankDetails: String(body.bankDetails ?? "").trim() || defaultBankDetails(),
-          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}. No loose batteries.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : `Additional payment request linked to order ${order.orderNumber}.`),
+          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}. No loose batteries.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : orderDocType === "PACKING_LIST" ? `Packing list generated from order ${order.orderNumber}.` : `Additional payment request linked to order ${order.orderNumber}.`),
           paymentTerms: body.paymentTerms ?? defaultTerms(orderDocType),
           lines: {
             create: orderDocType === "ADDITIONAL_PAYMENT_REQUEST" && Array.isArray(body.lines) && body.lines.length
