@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound, MessageSquare } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { href:"/admin/invoices",   label:"Invoices & Quotes", icon:<Receipt size={15}/> },
   { href:"/admin/leads",      label:"Leads",             icon:<UsersRound size={15}/> },
   { href:"/admin/requests",   label:"Requests",          icon:<Wrench size={15}/> },
+  { href:"/admin/support",    label:"Support",           icon:<MessageSquare size={15}/> },
   { href:"/admin/returns",    label:"Returns",           icon:<RotateCcw size={15}/> },
   { href:"/admin/content",    label:"Content",           icon:<FileText size={15}/> },
   { href:"/admin/promotions", label:"Promotions",        icon:<Tag size={15}/> },

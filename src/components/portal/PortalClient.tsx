@@ -68,6 +68,29 @@ type PortalReturnRow = {
   updatedAt: string;
 };
 
+
+type PortalSupportMessage = {
+  id: string;
+  authorType: "ADMIN" | "CUSTOMER" | "SYSTEM";
+  authorName?: string;
+  message: string;
+  isCustomerVisible: boolean;
+  createdAt: string;
+};
+
+type PortalSupportTicket = {
+  id: string;
+  subject: string;
+  status: string;
+  orderId?: string;
+  productSku?: string;
+  productTitle?: string;
+  message: string;
+  createdAt?: string;
+  updatedAt?: string;
+  messages?: PortalSupportMessage[];
+};
+
 type AddressDraft = Omit<Address, "id" | "isDefault">;
 
 const NAV: { id: Section; label: string; icon: ReactNode }[] = [
@@ -515,9 +538,25 @@ function TrackingPanel({ orders, loading }: { orders: PortalOrder[]; loading: bo
 }
 
 function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[]; orderId: string; onOrderChange: (value: string) => void }) {
+  const { data: session } = useSession();
   const [sent, setSent] = useState<SubmitState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [tickets, setTickets] = useState<PortalSupportTicket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+
+  function loadTickets() {
+    const email = session?.user?.email || "";
+    if (!email) return;
+    setTicketsLoading(true);
+    fetch(`/api/support?portal=1&email=${encodeURIComponent(email)}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => setTickets(Array.isArray(data.tickets) ? data.tickets : Array.isArray(data.data) ? data.data : []))
+      .catch(() => setTickets([]))
+      .finally(() => setTicketsLoading(false));
+  }
+
+  useEffect(() => { loadTickets(); }, [session?.user?.email]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -538,16 +577,20 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
       return;
     }
 
-    setSent({ reference: result.reference, message: result.email?.message || "Support ticket logged." });
+    setSent({ reference: result.reference, message: result.email?.customer?.sent ? "Support ticket logged. A confirmation email has been sent." : "Support ticket logged." });
+    loadTickets();
   }
 
   return (
     <section>
-      <SectionHeader title="Support" subtitle="Send a message linked to an order, return or repair request." />
+      <SectionHeader title="Support" subtitle="Send a message linked to an order, return or repair request and view ticket updates." />
       {sent ? (
-        <SuccessBox title="Ticket submitted" reference={sent.reference} message={sent.message} />
+        <div className="mb-5">
+          <SuccessBox title="Ticket submitted" reference={sent.reference} message={sent.message} />
+          <button type="button" onClick={() => setSent(null)} className="btn-secondary text-sm mt-3">Open another ticket</button>
+        </div>
       ) : (
-        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 mb-6">
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Subject">
               <select name="subject" required className="input">
@@ -566,15 +609,52 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
               </select>
             </Field>
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Name"><input name="name" required className="input" placeholder="Your full name" /></Field>
-            <Field label="Email"><input name="email" required type="email" className="input" placeholder="you@company.com" /></Field>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Field label="Name"><input name="name" required className="input" placeholder="Your full name" defaultValue={session?.user?.name || ""} /></Field>
+            <Field label="Email"><input name="email" required type="email" className="input" placeholder="you@company.com" defaultValue={session?.user?.email || ""} /></Field>
+            <Field label="Country"><select name="country" required className="input">{COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}</select></Field>
           </div>
           <Field label="Message"><textarea name="message" required className="input min-h-[120px]" placeholder="Describe your issue in detail..." /></Field>
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
           <button disabled={loading} type="submit" className="btn-primary">{loading ? "Submitting..." : "Submit ticket →"}</button>
         </form>
       )}
+
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-display font-800 text-lg text-navy-950">Your support tickets</h3>
+            <p className="text-sm text-gray-500">Customer-visible replies from Combay appear here.</p>
+          </div>
+          <button type="button" onClick={loadTickets} className="btn-secondary text-sm py-2">Refresh</button>
+        </div>
+        {ticketsLoading ? <p className="text-sm text-gray-500">Loading tickets…</p> : tickets.length === 0 ? <p className="text-sm text-gray-500">No support tickets found.</p> : (
+          <div className="space-y-3">
+            {tickets.map((ticket) => (
+              <div key={ticket.id} className="border border-gray-200 rounded-xl p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p className="font-display font-800 text-sm text-navy-950">{ticket.subject}</p>
+                    <p className="text-xs text-gray-400">{ticket.id}{ticket.orderId ? ` · Order ${ticket.orderId}` : ""}</p>
+                  </div>
+                  <span className="badge bg-gray-50 text-gray-700 border-gray-200">{ticket.status.replace(/_/g, " ")}</span>
+                </div>
+                <div className="space-y-2">
+                  {(ticket.messages || []).filter((item) => item.isCustomerVisible !== false).map((item) => (
+                    <div key={item.id} className={`rounded-lg border px-3 py-2 ${item.authorType === "ADMIN" ? "bg-blue-50 border-blue-100" : "bg-gray-50 border-gray-100"}`}>
+                      <div className="flex justify-between gap-2 mb-1">
+                        <span className="text-[11px] font-display font-800 text-navy-950">{item.authorType === "ADMIN" ? "Combay" : item.authorName || "You"}</span>
+                        <span className="text-[11px] text-gray-400">{new Date(item.createdAt).toLocaleString("en-GB")}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 whitespace-pre-line">{item.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
