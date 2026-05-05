@@ -131,7 +131,6 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
   const [returnLoading, setReturnLoading] = useState(false);
   const [accountType, setAccountType] = useState<"individual" | "company">("individual");
   const [accountNotice, setAccountNotice] = useState("");
-  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [addingAddress, setAddingAddress] = useState(false);
   const [addressDraft, setAddressDraft] = useState<AddressDraft>(EMPTY_ADDRESS);
@@ -276,8 +275,6 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
               <AccountPanel
                 accountType={accountType}
                 onAccountTypeChange={setAccountType}
-                emailVerificationSent={emailVerificationSent}
-                onSendVerification={() => setEmailVerificationSent(true)}
                 notice={accountNotice}
                 onSave={(message) => setAccountNotice(message)}
                 userEmail={session.user?.email || "test@combay.co.uk"}
@@ -662,8 +659,6 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
 function AccountPanel({
   accountType,
   onAccountTypeChange,
-  emailVerificationSent,
-  onSendVerification,
   notice,
   onSave,
   userEmail,
@@ -671,13 +666,78 @@ function AccountPanel({
 }: {
   accountType: "individual" | "company";
   onAccountTypeChange: (type: "individual" | "company") => void;
-  emailVerificationSent: boolean;
-  onSendVerification: () => void;
   notice: string;
   onSave: (message: string) => void;
   userEmail: string;
   userName: string;
 }) {
+  const [form, setForm] = useState({
+    name: userName,
+    email: userEmail,
+    phoneCode: "+44",
+    phone: "",
+    company: "",
+    companyNumber: "",
+    vatNumber: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setForm((current) => ({ ...current, name: userName, email: userEmail }));
+  }, [userEmail, userName]);
+
+  function updateField(field: keyof typeof form, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function submitAccountSettings() {
+    setError("");
+
+    const emailChanged = form.email.trim().toLowerCase() !== userEmail.trim().toLowerCase();
+    const passwordChangeRequested = Boolean(form.newPassword || form.confirmPassword);
+
+    if (passwordChangeRequested && form.newPassword !== form.confirmPassword) {
+      setError("New password and confirmation password do not match.");
+      return;
+    }
+
+    if ((emailChanged || passwordChangeRequested) && !form.currentPassword) {
+      setError("Enter your current password to change your email address or password.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch("/api/account/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountType,
+          name: form.name,
+          email: form.email,
+          phone: `${form.phoneCode} ${form.phone}`.trim(),
+          company: accountType === "company" ? form.company : "",
+          companyNumber: accountType === "company" ? form.companyNumber : "",
+          vatNumber: accountType === "company" ? form.vatNumber : "",
+          currentPassword: form.currentPassword,
+          newPassword: form.newPassword,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Account settings could not be saved.");
+      onSave(data.message || "Account settings saved.");
+      setForm((current) => ({ ...current, currentPassword: "", newPassword: "", confirmPassword: "" }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Account settings could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section>
       <SectionHeader title="Account Settings" subtitle="Update contact details, company profile and security settings." />
@@ -691,19 +751,19 @@ function AccountPanel({
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Full name"><input className="input" defaultValue={userName} /></Field>
-          <Field label="Email address" hint="Changing email requires verification."><input className="input" type="email" defaultValue={userEmail} /></Field>
+          <Field label="Full name"><input className="input" value={form.name} onChange={(event) => updateField("name", event.target.value)} /></Field>
+          <Field label="Email address" hint="Changing email requires your current password."><input className="input" type="email" value={form.email} onChange={(event) => updateField("email", event.target.value)} /></Field>
           <Field label="Phone number">
             <div className="flex">
-              <select className="input rounded-r-none w-56 flex-shrink-0 border-r-0">
+              <select className="input rounded-r-none w-56 flex-shrink-0 border-r-0" value={form.phoneCode} onChange={(event) => updateField("phoneCode", event.target.value)}>
                 {PHONE_CODES.map((item) => <option key={`${item.country}-${item.code}`} value={item.code}>{item.label}</option>)}
               </select>
-              <input className="input rounded-l-none" type="tel" placeholder="7xxx xxxxxx" />
+              <input className="input rounded-l-none" type="tel" placeholder="7xxx xxxxxx" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
             </div>
           </Field>
-          {accountType === "company" && <Field label="Company name"><input className="input" placeholder="Company Ltd" /></Field>}
-          {accountType === "company" && <Field label="Company number"><input className="input" placeholder="12345678" /></Field>}
-          {accountType === "company" && <Field label="VAT number"><input className="input" placeholder="GB123456789" /></Field>}
+          {accountType === "company" && <Field label="Company name"><input className="input" placeholder="Company Ltd" value={form.company} onChange={(event) => updateField("company", event.target.value)} /></Field>}
+          {accountType === "company" && <Field label="Company number"><input className="input" placeholder="12345678" value={form.companyNumber} onChange={(event) => updateField("companyNumber", event.target.value)} /></Field>}
+          {accountType === "company" && <Field label="VAT number"><input className="input" placeholder="GB123456789" value={form.vatNumber} onChange={(event) => updateField("vatNumber", event.target.value)} /></Field>}
         </div>
 
         {accountType === "company" && (
@@ -712,24 +772,26 @@ function AccountPanel({
             <label className="border-2 border-dashed border-gray-200 rounded-xl p-5 text-center cursor-pointer hover:border-accent hover:bg-accent/5 transition-all block">
               <FileUp size={22} className="mx-auto text-gray-400 mb-2" />
               <p className="font-display font-600 text-sm text-gray-600">Upload incorporation certificate or verification document</p>
-              <p className="text-gray-400 text-xs mt-1">PDF/JPG/PNG — preview only until storage is connected</p>
+              <p className="text-gray-400 text-xs mt-1">PDF/JPG/PNG — document review workflow will be connected in the compliance phase</p>
               <input type="file" className="hidden" />
             </label>
           </div>
         )}
 
         <div className="border-t border-gray-100 pt-5 space-y-3">
-          <p className="font-display font-700 text-sm text-navy-950">Security changes</p>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <Field label="Verification code"><input className="input" placeholder="Enter code" disabled={!emailVerificationSent} /></Field>
-            <Field label="Old password"><input className="input" type="password" placeholder="Required" /></Field>
-            <Field label="New password"><input className="input" type="password" minLength={8} /></Field>
+          <div>
+            <p className="font-display font-700 text-sm text-navy-950">Email and password</p>
+            <p className="text-xs text-gray-500 mt-1">Change your email, password, or both. Your current password is only required if changing email or password. Email verification codes are no longer used.</p>
           </div>
-          <button type="button" onClick={onSendVerification} className="btn-secondary text-sm">Send email verification code</button>
-          {emailVerificationSent && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">Preview mode: verification email is not sent until email transport is configured.</p>}
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Field label="Current password"><input className="input" type="password" value={form.currentPassword} onChange={(event) => updateField("currentPassword", event.target.value)} placeholder="Required for email/password changes" autoComplete="current-password" /></Field>
+            <Field label="New password"><input className="input" type="password" minLength={8} value={form.newPassword} onChange={(event) => updateField("newPassword", event.target.value)} placeholder="Leave blank to keep current" autoComplete="new-password" /></Field>
+            <Field label="Confirm new password"><input className="input" type="password" minLength={8} value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></Field>
+          </div>
         </div>
 
-        <button onClick={() => onSave("Account settings saved in preview state. Database persistence will be connected in the DB phase.")} className="btn-primary">Save changes →</button>
+        <button disabled={saving} onClick={submitAccountSettings} className="btn-primary">{saving ? "Saving..." : "Save changes →"}</button>
+        {error && <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
         {notice && <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{notice}</p>}
       </div>
     </section>
