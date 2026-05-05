@@ -73,6 +73,7 @@ export default function EbayAdminPage() {
   }
 
   const connected = config.refreshTokenConfigured;
+  const accountDeletionEndpoint = typeof window !== "undefined" ? `${window.location.origin}/api/ebay/account-deletion` : "/api/ebay/account-deletion";
 
   return (
     <div className="space-y-6">
@@ -87,6 +88,24 @@ export default function EbayAdminPage() {
       </div>
 
       {message && <div className={`rounded-xl px-4 py-3 text-sm border ${message.toLowerCase().includes("fail") || message.toLowerCase().includes("could not") ? "bg-red-50 border-red-200 text-red-700" : "bg-green-50 border-green-200 text-green-800"}`}>{message}</div>}
+
+      <section className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-700 mt-0.5 shrink-0" />
+          <div className="space-y-2">
+            <h2 className="font-display font-800 text-amber-950">Production keyset compliance</h2>
+            <p className="text-sm text-amber-900 leading-relaxed">
+              eBay may keep production keys disabled until Marketplace Account Deletion/Closure Notifications are configured.
+              Use the endpoint below in eBay Developer notifications, then add the same verification token to Vercel as <span className="font-mono">EBAY_ACCOUNT_DELETION_VERIFICATION_TOKEN</span>.
+            </p>
+            <div className="bg-white border border-amber-200 rounded-lg p-3 text-xs">
+              <p className="text-gray-500 mb-1">Notification endpoint URL</p>
+              <code className="font-mono text-navy-950 break-all">{accountDeletionEndpoint}</code>
+            </div>
+            <p className="text-xs text-amber-800">The verification token must be 32-80 characters and use only letters, numbers, underscore or hyphen.</p>
+          </div>
+        </div>
+      </section>
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-5">
         <section className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">

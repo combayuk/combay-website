@@ -557,6 +557,28 @@ model EbaySyncConfig {
   updatedAt    DateTime @updatedAt
 }
 
+
+model EbayAccountDeletionNotification {
+  id             String   @id @default(cuid())
+  notificationId String?  @unique
+  topic          String?
+  username       String?
+  ebayUserId     String?
+  eventDate      DateTime?
+  publishDate    DateTime?
+  payload        Json
+  headers        Json?
+  receivedAt     DateTime @default(now())
+  processedAt    DateTime?
+  status         String   @default("RECEIVED")
+  notes          String?  @db.Text
+
+  @@index([topic])
+  @@index([username])
+  @@index([ebayUserId])
+  @@index([receivedAt])
+}
+
 model EbaySyncRun {
   id          String   @id @default(cuid())
   status      String
