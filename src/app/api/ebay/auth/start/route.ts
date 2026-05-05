@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { buildEbayConsentUrl, getEbayConfig } from "@/lib/ebay";
 
 export async function GET(req: Request) {
