@@ -12,6 +12,8 @@ export type AdminProduct = CatalogProduct & {
   dimensionsCm?: string;
   locationBin?: string;
   hsCode?: string;
+  ebayItemId?: string;
+  syncExcluded?: boolean;
 };
 
 const STORAGE_KEY = "combay_admin_products_v1";

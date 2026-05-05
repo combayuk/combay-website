@@ -7,6 +7,8 @@ export type ProductWriteInput = Partial<CatalogProduct> & {
   source?: string;
   locationBin?: string;
   hsCode?: string;
+  ebayItemId?: string;
+  syncExcluded?: boolean;
   weightKg?: string;
   dimensionsCm?: string;
   adminNotes?: string;
@@ -85,6 +87,8 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     updatedAt: product.updatedAt?.toISOString?.() ?? "",
     locationBin: product.locationBin ?? "",
     hsCode: product.hsCode ?? "",
+    ebayItemId: product.ebayItemId ?? "",
+    syncExcluded: product.syncExcluded ?? false,
     dimensionsCm: product.dimensions ?? "",
     weightKg: product.weight === null || product.weight === undefined ? "" : String(product.weight),
   };
@@ -273,6 +277,8 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       seoTitle: (input as any).seoTitle ?? null,
       seoDescription: (input as any).seoDescription ?? null,
       seoKeywords: Array.isArray(input.tags) ? input.tags.join(", ") : null,
+      ebayItemId: (input as any).ebayItemId ?? null,
+      syncExcluded: Boolean((input as any).syncExcluded),
     };
 
     const product = existing

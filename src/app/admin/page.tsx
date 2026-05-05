@@ -35,10 +35,11 @@ export default function AdminDashboard() {
   };
 
   const triggerSync = async () => {
-    setSyncing(true); setSyncMsg("Connecting to eBay API...");
-    await new Promise(r=>setTimeout(r,800));  setSyncMsg("Fetching active listings...");
-    await new Promise(r=>setTimeout(r,1000)); setSyncMsg("Updating inventory database...");
-    await new Promise(r=>setTimeout(r,800));  setSyncMsg("✓ Sync complete — 0 listings updated (connect eBay API key to enable)");
+    setSyncing(true); setSyncMsg("Running eBay inventory sync...");
+    const response = await fetch("/api/ebay/sync", { method: "POST" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) setSyncMsg(result.errors?.join(" ") || "eBay sync failed. Configure eBay in Admin → eBay Sync.");
+    else setSyncMsg(`✓ Sync complete — ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped`);
     setSyncing(false);
   };
 
@@ -134,6 +135,7 @@ export default function AdminDashboard() {
             {syncMsg && <p className="text-xs text-gray-500 font-mono bg-gray-50 rounded px-3 py-2">{syncMsg}</p>}
           </div>
           <div className="border-t border-gray-100 pt-4">
+            <Link href="/admin/ebay" className="btn-secondary text-xs py-2 mb-3 inline-flex">Open eBay Sync Settings →</Link>
             <p className="font-display font-700 text-sm text-navy-950 mb-2">CSV Upload</p>
             <p className="text-gray-400 text-xs mb-3">Upload a product CSV to bulk-import inventory. Use the template below.</p>
             <div className="flex gap-2">
