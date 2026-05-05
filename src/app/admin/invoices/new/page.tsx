@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Download, Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 
-type DocType = "QUOTE" | "PROFORMA_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST";
+type DocType = "QUOTE" | "PROFORMA_INVOICE" | "PACKING_LIST";
 const newLine = () => ({ description: "", sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: 0 });
 type LineItem = ReturnType<typeof newLine>;
 
@@ -33,7 +33,7 @@ function label(value: string) {
 export default function InvoiceGenerator() {
   const params = useSearchParams();
   const requestedType = params.get("type") as DocType | null;
-  const initialType: DocType = requestedType === "ADDITIONAL_PAYMENT_REQUEST" ? "ADDITIONAL_PAYMENT_REQUEST" : requestedType === "PROFORMA_INVOICE" ? "PROFORMA_INVOICE" : "QUOTE";
+  const initialType: DocType = requestedType === "PACKING_LIST" ? "PACKING_LIST" : requestedType === "PROFORMA_INVOICE" ? "PROFORMA_INVOICE" : "QUOTE";
   const orderTotal = Number(params.get("orderTotal") ?? 0);
   const orderNumber = params.get("orderNumber") ?? "";
 
@@ -45,18 +45,10 @@ export default function InvoiceGenerator() {
     customerPhone: params.get("customerPhone") ?? "",
     billingAddress: "",
   });
-  const [lines, setLines] = useState<LineItem[]>(() => {
-    if (initialType === "ADDITIONAL_PAYMENT_REQUEST" && orderNumber) {
-      return [
-        { ...newLine(), description: `Already paid - order ${orderNumber}`, quantity: 1, unitPrice: orderTotal },
-        { ...newLine(), description: "Additional item / accessory / shipping adjustment", quantity: 1, unitPrice: 0 },
-      ];
-    }
-    return [newLine()];
-  });
+  const [lines, setLines] = useState<LineItem[]>(() => [newLine()]);
   const [shippingCountry, setShippingCountry] = useState("");
   const [shippingCost, setShippingCost] = useState(0);
-  const [notes, setNotes] = useState(initialType === "ADDITIONAL_PAYMENT_REQUEST" && orderNumber ? `Additional payment request linked to order ${orderNumber}.` : "");
+  const [notes, setNotes] = useState("");
   const [paymentTerms, setPaymentTerms] = useState(DEFAULT_TERMS);
   const [paymentLink, setPaymentLink] = useState("");
   const [autoGeneratePaymentLink, setAutoGeneratePaymentLink] = useState(true);
@@ -65,14 +57,13 @@ export default function InvoiceGenerator() {
   const [message, setMessage] = useState("");
   const [createdId, setCreatedId] = useState("");
 
-  const paidCredit = type === "ADDITIONAL_PAYMENT_REQUEST" ? orderTotal : 0;
-  const subtotal = useMemo(() => lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines]);
-  const taxableSubtotal = Math.max(subtotal - paidCredit, 0);
-  const tax = taxableSubtotal * 0.2;
-  const total = subtotal + tax + Number(shippingCost || 0);
-  const amountPaid = type === "ADDITIONAL_PAYMENT_REQUEST" ? paidCredit : 0;
-  const balanceDue = Math.max(total - amountPaid, 0);
-  const isPayable = type === "PROFORMA_INVOICE" || type === "ADDITIONAL_PAYMENT_REQUEST";
+  const isPackingList = type === "PACKING_LIST";
+  const subtotal = useMemo(() => isPackingList ? 0 : lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines, isPackingList]);
+  const tax = isPackingList ? 0 : subtotal * 0.2;
+  const total = isPackingList ? 0 : subtotal + tax + Number(shippingCost || 0);
+  const amountPaid = 0;
+  const balanceDue = isPackingList ? 0 : Math.max(total - amountPaid, 0);
+  const isPayable = type === "PROFORMA_INVOICE";
 
   function setDocType(next: DocType) {
     setType(next);
@@ -125,7 +116,7 @@ export default function InvoiceGenerator() {
         <Link href="/admin/invoices" className="text-gray-400 hover:text-navy-950 transition-colors p-1"><ArrowLeft size={18}/></Link>
         <div>
           <h1 className="font-display font-800 text-navy-950 text-2xl">New {label(type)}</h1>
-          <p className="text-xs text-gray-400 mt-1">Quotes show price/terms. Proformas and additional payment requests include payment links and bank details.</p>
+          <p className="text-xs text-gray-400 mt-1">Quotes show price/terms. Proformas include payment links and bank details. Packing lists show package/item details only.</p>
         </div>
       </div>
 
@@ -134,7 +125,7 @@ export default function InvoiceGenerator() {
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <p className="font-display font-700 text-sm text-navy-950">Document type:</p>
-              {(["QUOTE", "PROFORMA_INVOICE", "ADDITIONAL_PAYMENT_REQUEST"] as const).map((item) => (
+              {(["QUOTE", "PROFORMA_INVOICE", "PACKING_LIST"] as const).map((item) => (
                 <button key={item} onClick={() => setDocType(item)} className={`font-display font-600 text-sm px-4 py-1.5 rounded-md border transition-colors ${type === item ? "bg-navy-950 text-white border-navy-950" : "border-gray-200 text-gray-600 hover:border-navy-950"}`}>{label(item)}</button>
               ))}
             </div>
@@ -147,13 +138,11 @@ export default function InvoiceGenerator() {
             </div>
           </div>
 
-          {type === "ADDITIONAL_PAYMENT_REQUEST" && orderNumber && <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">This request is linked to paid order <strong>{orderNumber}</strong>. The first line represents the already-paid amount and is treated as paid credit. Add the supplementary charge on the next line.</div>}
-
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h2 className="font-display font-700 text-navy-950 mb-4">Line Items</h2>
             <div className="space-y-2 mb-3 overflow-x-auto">
               <div className="hidden sm:grid grid-cols-[1fr_90px_90px_72px_100px_85px_28px] gap-2 px-1 min-w-[760px]">
-                {["Description", "SKU", "HS Code", "Qty", "Unit (£)", "Total", ""].map((heading) => <p key={heading} className="font-display font-700 text-[10px] text-gray-400 uppercase tracking-wider">{heading}</p>)}
+                {(isPackingList ? ["Description", "SKU", "HS Code", "Qty", "Unit", "Total", ""] : ["Description", "SKU", "HS Code", "Qty", "Unit (£)", "Total", ""]).map((heading) => <p key={heading} className="font-display font-700 text-[10px] text-gray-400 uppercase tracking-wider">{heading}</p>)}
               </div>
               {lines.map((line, index) => (
                 <div key={index} className="grid grid-cols-[1fr_90px_90px_72px_100px_85px_28px] gap-2 items-center min-w-[760px]">
@@ -161,8 +150,8 @@ export default function InvoiceGenerator() {
                   <input className="input text-sm py-2" value={line.sku} onChange={(e) => setLine(index, "sku", e.target.value)} placeholder="SKU"/>
                   <input className="input text-sm py-2" value={line.hsCode} onChange={(e) => setLine(index, "hsCode", e.target.value)} placeholder="9027.30.00"/>
                   <input type="number" className="input text-sm py-2 text-center" value={line.quantity} min="0" step="1" onChange={(e) => setLine(index, "quantity", Number(e.target.value))}/>
-                  <input type="number" className="input text-sm py-2" value={line.unitPrice || ""} step="0.01" min="0" onChange={(e) => setLine(index, "unitPrice", Number(e.target.value))} placeholder="0.00"/>
-                  <div className="font-display font-700 text-navy-950 text-sm text-right whitespace-nowrap">{fmt(Number(line.quantity || 0) * Number(line.unitPrice || 0))}</div>
+                  <input type="number" className="input text-sm py-2" value={isPackingList ? "" : line.unitPrice || ""} step="0.01" min="0" disabled={isPackingList} onChange={(e) => setLine(index, "unitPrice", Number(e.target.value))} placeholder={isPackingList ? "N/A" : "0.00"}/>
+                  <div className="font-display font-700 text-navy-950 text-sm text-right whitespace-nowrap">{isPackingList ? "—" : fmt(Number(line.quantity || 0) * Number(line.unitPrice || 0))}</div>
                   <button onClick={() => setLines((current) => current.filter((_, i) => i !== index))} className="text-red-400 hover:text-red-600 p-1 transition-colors" disabled={lines.length === 1}><Trash2 size={13}/></button>
                 </div>
               ))}
@@ -170,13 +159,13 @@ export default function InvoiceGenerator() {
             <button onClick={() => setLines((current) => [...current, newLine()])} className="flex items-center gap-1.5 text-accent font-display font-600 text-sm hover:text-accent-dark transition-colors"><Plus size={14}/> Add Line</button>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          {!isPackingList && <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h2 className="font-display font-700 text-navy-950 mb-4">Shipping</h2>
             <div className="grid sm:grid-cols-2 gap-3">
               <div><label className="label">Shipping to country</label><input className="input text-sm" value={shippingCountry} onChange={(e) => setShippingCountry(e.target.value)} placeholder="e.g. United Kingdom / China / UAE" /></div>
               <div><label className="label">Shipping cost</label><input type="number" min="0" step="0.01" className="input text-sm" value={shippingCost || ""} onChange={(e) => setShippingCost(Number(e.target.value))} placeholder="0.00" /></div>
             </div>
-          </div>
+          </div>}
 
           {isPayable && <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
             <h2 className="font-display font-700 text-navy-950">Payment options</h2>
@@ -195,11 +184,13 @@ export default function InvoiceGenerator() {
           <div className="bg-white border border-gray-200 rounded-xl p-5 sticky top-20">
             <h2 className="font-display font-700 text-navy-950 mb-4">Totals</h2>
             <div className="space-y-2 text-sm mb-5">
+              {isPackingList ? <div className="text-gray-600 text-sm">Packing lists do not show invoice totals, payment links or balances.</div> : <>
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span className="font-600">{fmt(subtotal)}</span></div>
               {amountPaid > 0 && <div className="flex justify-between text-green-700"><span>Paid / credit</span><span className="font-600">-{fmt(amountPaid)}</span></div>}
               <div className="flex justify-between text-gray-600"><span>VAT 20%</span><span className="font-600">{fmt(tax)}</span></div>
               <div className="flex justify-between text-gray-600"><span>Shipping</span><span className="font-600">{fmt(Number(shippingCost || 0))}</span></div>
               <div className="flex justify-between font-display font-800 text-navy-950 text-lg border-t border-gray-200 pt-2"><span>Balance due</span><span>{fmt(balanceDue)}</span></div>
+              </>}
             </div>
             <div className="space-y-2">
               <button onClick={saveDocument} disabled={saving || !customer.customerName || !customer.customerEmail} className="btn-primary w-full py-3"><Save size={14}/> {saving ? "Saving..." : "Save Document"}</button>

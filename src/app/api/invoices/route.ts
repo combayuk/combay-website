@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 
-const ALLOWED_TYPES = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "ADDITIONAL_PAYMENT_REQUEST", "PAID_INVOICE", "PACKING_LIST", "INVOICE"] as const;
+const ALLOWED_TYPES = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "PAID_INVOICE", "PACKING_LIST", "INVOICE"] as const;
 type InvoiceType = (typeof ALLOWED_TYPES)[number];
 
-const ORDER_DOCUMENT_TYPES = ["COMMERCIAL_INVOICE", "PAID_INVOICE", "PACKING_LIST", "ADDITIONAL_PAYMENT_REQUEST", "INVOICE"] as const;
+const ORDER_DOCUMENT_TYPES = ["COMMERCIAL_INVOICE", "PAID_INVOICE", "PACKING_LIST", "INVOICE"] as const;
 
 const DEFAULT_BANK_DETAILS = `Combay Limited
 Acc. # 37213788
@@ -45,7 +45,6 @@ function makeDocumentNumber(type: InvoiceType) {
     type === "PAID_INVOICE" || type === "INVOICE" ? "CMPI" :
     type === "PACKING_LIST" ? "CMPL" :
     type === "PROFORMA_INVOICE" ? "CBPI" :
-    type === "ADDITIONAL_PAYMENT_REQUEST" ? "CBAP" :
     "CBQ";
   return `${prefix}${compact}${suffix}`;
 }
@@ -160,7 +159,7 @@ export async function GET(request: NextRequest) {
   const dbResult = await withDatabase(async () => {
     const where: any = {};
     if (type && ALLOWED_TYPES.includes(type as InvoiceType)) where.type = type;
-    if (area === "quotes") where.type = { in: ["QUOTE", "PROFORMA_INVOICE", "ADDITIONAL_PAYMENT_REQUEST"] };
+    if (area === "quotes") where.type = { in: ["QUOTE", "PROFORMA_INVOICE", "PACKING_LIST"] };
     if (area === "orders") where.type = { in: [...ORDER_DOCUMENT_TYPES] };
     if (status) where.status = status;
     return prisma.invoice.findMany({
@@ -193,7 +192,6 @@ export async function POST(request: NextRequest) {
       if (!order) throw new Error("Order not found");
 
       const orderDocType: InvoiceType =
-        type === "ADDITIONAL_PAYMENT_REQUEST" ? "ADDITIONAL_PAYMENT_REQUEST" :
         type === "PAID_INVOICE" ? "PAID_INVOICE" :
         type === "PACKING_LIST" ? "PACKING_LIST" :
         "COMMERCIAL_INVOICE";
@@ -230,47 +228,53 @@ export async function POST(request: NextRequest) {
           balanceDue,
           paymentLink: String(body.paymentLink ?? "").trim() || null,
           bankDetails: String(body.bankDetails ?? "").trim() || defaultBankDetails(),
-          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}. No loose batteries.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : orderDocType === "PACKING_LIST" ? `Packing list generated from order ${order.orderNumber}.` : `Additional payment request linked to order ${order.orderNumber}.`),
+          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}. No loose batteries.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : orderDocType === "PACKING_LIST" ? `Packing list generated from order ${order.orderNumber}. No loose batteries.` : `Document generated from order ${order.orderNumber}.`),
           paymentTerms: body.paymentTerms ?? defaultTerms(orderDocType),
           lines: {
-            create: orderDocType === "ADDITIONAL_PAYMENT_REQUEST" && Array.isArray(body.lines) && body.lines.length
-              ? linesFromInput(body.lines)
-              : order.items.map((item, index) => ({
-                  description: orderDocType === "COMMERCIAL_INVOICE" ? `${item.title}\nHS Code: ${mandatoryHsCode}\nNo loose batteries` : item.title,
-                  sku: item.sku,
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice,
-                  lineTotal: item.lineTotal,
-                  sortOrder: index,
-                })),
+            create: order.items.map((item, index) => {
+              const itemTitle = String(item.title || item.sku || `Order item ${index + 1}`).trim();
+              const description = orderDocType === "COMMERCIAL_INVOICE"
+                ? `${itemTitle}
+HS Code: ${mandatoryHsCode}
+No loose batteries`
+                : orderDocType === "PACKING_LIST"
+                  ? `${itemTitle}
+No loose batteries`
+                  : itemTitle;
+              return {
+                description,
+                sku: item.sku,
+                quantity: item.quantity,
+                unitPrice: isPackingList ? 0 : item.unitPrice,
+                lineTotal: isPackingList ? 0 : item.lineTotal,
+                sortOrder: index,
+              };
+            }),
           },
         },
         include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
       });
 
-      if (orderDocType === "ADDITIONAL_PAYMENT_REQUEST" && shouldGenerateLink && invoice.balanceDue && !invoice.paymentLink) {
-        const paymentLink = await createStripeCheckoutLink({ documentId: invoice.id, documentNumber: invoice.documentNumber, customerEmail: invoice.customerEmail, total: money(invoice.balanceDue), description: invoice.documentNumber, baseUrl: baseUrl(request) });
-        if (paymentLink) invoice = await prisma.invoice.update({ where: { id: invoice.id }, data: { paymentLink }, include: { lines: { orderBy: { sortOrder: "asc" } }, order: true } });
-      }
       return invoice;
     }
 
     const lines = linesFromInput(body.lines ?? []);
     if (!lines.length) throw new Error("At least one line item is required");
 
-    const subtotal = money(lines.reduce((sum, line) => sum + line.lineTotal, 0));
+    const isManualPackingList = type === "PACKING_LIST";
+    const subtotal = isManualPackingList ? 0 : money(lines.reduce((sum, line) => sum + line.lineTotal, 0));
     const taxRate = body.taxRate === undefined ? 0.2 : money(body.taxRate);
-    const tax = money(subtotal * taxRate);
-    const shippingCost = money(body.shippingCost ?? 0);
-    const total = money(subtotal + tax + shippingCost);
-    const amountPaid = money(body.amountPaid ?? 0);
-    const balanceDue = Math.max(money(total - amountPaid), 0);
+    const tax = isManualPackingList ? 0 : money(subtotal * taxRate);
+    const shippingCost = isManualPackingList ? 0 : money(body.shippingCost ?? 0);
+    const total = isManualPackingList ? 0 : money(subtotal + tax + shippingCost);
+    const amountPaid = isManualPackingList ? 0 : money(body.amountPaid ?? 0);
+    const balanceDue = isManualPackingList ? 0 : Math.max(money(total - amountPaid), 0);
 
     const customerName = String(body.customerName ?? body.name ?? "").trim();
     const customerEmail = String(body.customerEmail ?? body.email ?? "").trim();
     if (!customerName || !customerEmail) throw new Error("Customer name and email are required");
 
-    const initialStatus = type === "QUOTE" ? "DRAFT" : balanceDue === 0 && amountPaid > 0 ? "PAID" : "AWAITING_PAYMENT";
+    const initialStatus = type === "QUOTE" || type === "PACKING_LIST" ? "DRAFT" : balanceDue === 0 && amountPaid > 0 ? "PAID" : "AWAITING_PAYMENT";
 
     let invoice = await prisma.invoice.create({
       data: {
@@ -294,12 +298,12 @@ export async function POST(request: NextRequest) {
         bankDetails: String(body.bankDetails ?? "").trim() || defaultBankDetails(),
         notes: String(body.notes ?? "").trim() || null,
         paymentTerms: String(body.paymentTerms ?? "").trim() || defaultTerms(type),
-        lines: { create: lines },
+        lines: { create: isManualPackingList ? lines.map((line) => ({ ...line, unitPrice: 0, lineTotal: 0 })) : lines },
       },
       include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
     });
 
-    if (["PROFORMA_INVOICE", "ADDITIONAL_PAYMENT_REQUEST"].includes(type) && shouldGenerateLink && balanceDue > 0 && !invoice.paymentLink) {
+    if (type === "PROFORMA_INVOICE" && shouldGenerateLink && balanceDue > 0 && !invoice.paymentLink) {
       const paymentLink = await createStripeCheckoutLink({ documentId: invoice.id, documentNumber: invoice.documentNumber, customerEmail: invoice.customerEmail, total: balanceDue, description: invoice.documentNumber, baseUrl: baseUrl(request) });
       if (paymentLink) invoice = await prisma.invoice.update({ where: { id: invoice.id }, data: { paymentLink }, include: { lines: { orderBy: { sortOrder: "asc" } }, order: true } });
     }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CheckCircle, ExternalLink, FileText, Mail, Plus, Search, Send } from "lucide-react";
 
 type DocLine = { id: string; description: string; sku?: string | null; quantity: number; unitPrice: number; lineTotal: number };
-type DocType = "QUOTE" | "PROFORMA_INVOICE" | "ADDITIONAL_PAYMENT_REQUEST" | "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "INVOICE";
+type DocType = "QUOTE" | "PROFORMA_INVOICE" | "PACKING_LIST" | "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "INVOICE";
 type Doc = {
   id: string;
   documentNumber: string;
@@ -45,7 +45,7 @@ const STATUS_COLOUR: Record<string, string> = {
   VOID: "text-red-700 bg-red-50 border-red-200",
 };
 
-const VISIBLE_TYPES: DocType[] = ["QUOTE", "PROFORMA_INVOICE", "ADDITIONAL_PAYMENT_REQUEST"];
+const VISIBLE_TYPES: DocType[] = ["QUOTE", "PROFORMA_INVOICE", "PACKING_LIST"];
 
 export default function InvoicesPage() {
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -121,17 +121,17 @@ export default function InvoicesPage() {
     <div>
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display font-800 text-navy-950 text-2xl">Quotes / Proformas</h1>
-          <p className="text-xs text-gray-400 mt-1">Source: {source || "database"}{loading ? " · loading…" : ""}. Paid commercial invoices are managed from Orders.</p>
+          <h1 className="font-display font-800 text-navy-950 text-2xl">Quotes / Proformas / Packing Lists</h1>
+          <p className="text-xs text-gray-400 mt-1">Source: {source || "database"}{loading ? " · loading…" : ""}. Paid commercial invoices are managed from Orders. Packing lists can be created here or from an order.</p>
         </div>
-        <Link href="/admin/invoices/new" className="btn-primary text-sm py-2 flex items-center gap-1.5"><Plus size={14}/> Create Quote / Proforma</Link>
+        <Link href="/admin/invoices/new" className="btn-primary text-sm py-2 flex items-center gap-1.5"><Plus size={14}/> Create Quote / Proforma / Packing List</Link>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
           <div className="relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search quote, proforma, customer, email..." className="input pl-9 py-2 text-xs w-80" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search quote, proforma, packing list, customer, email..." className="input pl-9 py-2 text-xs w-80" />
           </div>
           {(["ALL", ...VISIBLE_TYPES] as const).map((item) => <button key={item} onClick={() => setType(item)} className={`text-xs font-display font-600 px-3 py-1.5 rounded-md border transition-colors ${type === item ? "bg-navy-950 text-white border-navy-950" : "text-gray-600 border-gray-200 hover:border-navy-950"}`}>{item === "ALL" ? "All" : label(item)}</button>)}
         </div>
@@ -163,7 +163,7 @@ export default function InvoicesPage() {
                   </td>
                 </tr>
               ))}
-              {!loading && filtered.length === 0 && <tr><td colSpan={9} className="text-center text-sm text-gray-400 py-8">No quotes or proformas found.</td></tr>}
+              {!loading && filtered.length === 0 && <tr><td colSpan={9} className="text-center text-sm text-gray-400 py-8">No quotes, proformas or packing lists found.</td></tr>}
             </tbody>
           </table>
         </div>
