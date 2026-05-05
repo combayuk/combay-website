@@ -1,4 +1,5 @@
 import { prisma, withDatabase } from "@/lib/db";
+import { captureLead } from "@/lib/leads";
 import { DEMO_REQUESTS, generateReference, readJsonBody, todayLabel } from "@/lib/requests";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 
@@ -47,6 +48,18 @@ export async function POST(req: Request) {
       source: record.source,
     },
   }));
+
+  await captureLead({
+    name: record.name,
+    email: record.email,
+    phone: record.phone,
+    company: record.company,
+    source: record.source.includes("product") ? "web form (product question)" : "web form (support)",
+    sourceRef: reference,
+    productSku: record.productSku,
+    productTitle: record.productTitle,
+    notes: `${record.subject}: ${record.message}`,
+  });
 
 
   const email = {

@@ -162,6 +162,7 @@ export default function InvoicesPage() {
                   <td>
                     <div className="flex flex-wrap gap-2">
                       <a href={`/api/invoices/${doc.id}/html`} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><FileText size={12}/> View</a>
+                      <Link href={`/admin/invoices/${doc.id}/edit`} className="btn-secondary px-3 py-1.5 text-xs">Edit</Link>
                       <button onClick={() => sendDocument(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><Mail size={12}/> Send by email</button>
                       <button onClick={() => markSent(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><Send size={12}/> Mark sent</button>
                       <button onClick={() => markReceived(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><CheckCircle size={12}/> Mark received</button>

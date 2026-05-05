@@ -1,4 +1,5 @@
 import { prisma, withDatabase } from "@/lib/db";
+import { captureLead } from "@/lib/leads";
 import { DEMO_REQUESTS, generateReference, readFormBody, todayLabel } from "@/lib/requests";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 
@@ -46,6 +47,17 @@ export async function POST(req: Request) {
       faultDesc: record.message,
     },
   }));
+
+  await captureLead({
+    name: record.name,
+    email: record.email,
+    phone: record.phone,
+    company: record.company,
+    source: "web form (Repair)",
+    sourceRef: reference,
+    productTitle: record.equipment,
+    notes: record.message,
+  });
 
 
   const email = {

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 const NAV = [
@@ -9,6 +9,7 @@ const NAV = [
   { href:"/admin/products",   label:"Products",          icon:<Package size={15}/> },
   { href:"/admin/orders",     label:"Orders",            icon:<ShoppingCart size={15}/> },
   { href:"/admin/invoices",   label:"Invoices & Quotes", icon:<Receipt size={15}/> },
+  { href:"/admin/leads",      label:"Leads",             icon:<UsersRound size={15}/> },
   { href:"/admin/requests",   label:"Requests",          icon:<Wrench size={15}/> },
   { href:"/admin/returns",    label:"Returns",           icon:<RotateCcw size={15}/> },
   { href:"/admin/content",    label:"Content",           icon:<FileText size={15}/> },

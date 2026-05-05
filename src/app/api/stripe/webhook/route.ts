@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { prisma, withDatabase } from "@/lib/db";
 import { isStripeConfigured, verifyStripeWebhookSignature } from "@/lib/stripe";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
+import { captureLead } from "@/lib/leads";
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -41,6 +42,19 @@ export async function POST(request: Request) {
           title: "Paid order received",
           message: `Stripe confirmed payment for order ${order.orderNumber}.`,
           rows: [["Order", order.orderNumber], ["Customer", order.customerName], ["Email", order.customerEmail], ["Total", `£${Number(order.total).toFixed(2)}`], ["Items", order.items.map((item: any) => `${item.quantity} x ${item.sku}`).join(", ")]],
+        });
+        await captureLead({
+          name: order.customerName,
+          email: order.customerEmail,
+          phone: order.customerPhone,
+          company: order.company,
+          country: order.shippingAddress?.country,
+          source: "paid stripe order",
+          sourceRef: order.orderNumber,
+          productSku: order.items?.[0]?.sku,
+          productTitle: order.items?.[0]?.title,
+          orderId: order.id,
+          notes: `Paid Stripe order ${order.orderNumber}. Items: ${order.items.map((item: any) => `${item.quantity} x ${item.sku}`).join(", ")}`,
         });
       }
     }

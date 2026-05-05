@@ -447,6 +447,31 @@ enum RequestStatus {
   CLOSED
 }
 
+
+
+model Lead {
+  id           String   @id @default(cuid())
+  name         String?
+  email        String
+  phone        String?
+  country      String?
+  company      String?
+  source       String
+  sourceRef    String?
+  productSku   String?
+  productTitle String?
+  orderId      String?
+  invoiceId    String?
+  notes        String?   @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([source])
+  @@index([productSku])
+  @@index([createdAt])
+}
+
 // ─── CONTENT ───────────────────────────────────────────
 model Promotion {
   id          String    @id @default(cuid())
