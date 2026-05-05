@@ -48,6 +48,10 @@ export function siteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk";
 }
 
+export function emailLogoUrl() {
+  return process.env.EMAIL_LOGO_URL || `${siteUrl().replace(/\/$/, "")}/images/combay-doc-logo.png`;
+}
+
 export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -103,8 +107,20 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
   }
 }
 
-export function htmlShell(title: string, content: string) {
-  return `<!doctype html><html><body style="margin:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#111827;"><div style="max-width:680px;margin:0 auto;padding:24px;"><div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;"><div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;"><div style="font-size:13px;color:#6b7280;margin-bottom:4px;">Combay Limited</div><h1 style="margin:0;font-size:20px;color:#0f172a;">${escapeHtml(title)}</h1></div><div style="padding:24px;font-size:14px;line-height:1.55;">${content}</div><div style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">Combay Limited · 2B Erick Avenue, Chelmsford, Essex, CM1 7BX<br/>sales@combay.co.uk · +44 7340 383334</div></div></div></body></html>`;
+export function emailButton(url: string, label: string, variant: "primary" | "secondary" = "primary") {
+  const styles = variant === "primary"
+    ? "background:#f59e0b;color:#111827;border:1px solid #d97706;"
+    : "background:#111827;color:#ffffff;border:1px solid #111827;";
+  return `<p style="margin:24px 0 0;"><a href="${escapeHtml(url)}" style="display:inline-block;${styles}text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:700;font-size:14px;">${escapeHtml(label)}</a></p>`;
+}
+
+export function htmlShell(title: string, content: string, preheader?: string) {
+  const logo = emailLogoUrl();
+  const hiddenPreheader = preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;">${escapeHtml(preheader)}</div>`
+    : "";
+
+  return `<!doctype html><html><head><meta charSet="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#111827;">${hiddenPreheader}<div style="max-width:680px;margin:0 auto;padding:24px;"><div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;"><div style="padding:22px 24px 18px;border-bottom:1px solid #e5e7eb;background:#ffffff;"><img src="${escapeHtml(logo)}" alt="Combay" width="170" style="display:block;max-width:170px;height:auto;margin:0 0 14px;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Sourcing · Stock · Supply</div><h1 style="margin:0;font-size:21px;line-height:1.25;color:#0f172a;">${escapeHtml(title)}</h1></div><div style="padding:24px;font-size:14px;line-height:1.6;color:#1f2937;">${content}</div><div style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.55;color:#6b7280;"><strong style="color:#374151;">Combay Limited</strong><br/>2B Erick Avenue, Chelmsford, Essex, CM1 7BX<br/>sales@combay.co.uk · +44 7340 383334<br/><span style="color:#9ca3af;">This email relates to your enquiry, order, quote or document with Combay. Please reply to this email if anything needs correcting.</span></div></div></div></body></html>`;
 }
 
 export function escapeHtml(value: unknown) {
@@ -126,16 +142,28 @@ export function htmlToText(html: string) {
     .trim();
 }
 
+function detailTable(rows: Array<[string, unknown]>) {
+  const rowsHtml = rows
+    .filter(([, value]) => String(value ?? "").trim())
+    .map(([label, value]) => `<tr><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;color:#6b7280;width:170px;vertical-align:top;font-weight:700;">${escapeHtml(label)}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;color:#111827;vertical-align:top;">${escapeHtml(value)}</td></tr>`)
+    .join("");
+  return `<table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">${rowsHtml}</table>`;
+}
+
 export async function sendAdminNotification(args: { subject: string; title: string; rows: Array<[string, unknown]>; message?: string; }) {
   const admin = process.env.ADMIN_EMAIL || "sales@combay.co.uk";
-  const rowsHtml = args.rows.map(([label, value]) => `<tr><td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;color:#6b7280;width:160px;">${escapeHtml(label)}</td><td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;">${escapeHtml(value)}</td></tr>`).join("");
-  const html = htmlShell(args.title, `${args.message ? `<p>${escapeHtml(args.message)}</p>` : ""}<table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;">${rowsHtml}</table>`);
+  const intro = args.message ? `<p style="margin-top:0;">${escapeHtml(args.message)}</p>` : "";
+  const html = htmlShell(args.title, `${intro}${detailTable(args.rows)}`, args.subject);
   return sendEmail({ to: admin, subject: args.subject, html });
 }
 
 export async function sendCustomerAcknowledgement(args: { to: string; name?: string; subject: string; title: string; reference?: string; body: string; ctaUrl?: string; ctaLabel?: string; }) {
-  const cta = args.ctaUrl ? `<p style="margin:24px 0 0;"><a href="${escapeHtml(args.ctaUrl)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;">${escapeHtml(args.ctaLabel || "View details")}</a></p>` : "";
-  const ref = args.reference ? `<p style="padding:10px 12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;"><strong>Reference:</strong> ${escapeHtml(args.reference)}</p>` : "";
-  const html = htmlShell(args.title, `<p>Dear ${escapeHtml(args.name || "Customer")},</p><p>${escapeHtml(args.body)}</p>${ref}${cta}<p>Regards,<br/>Combay Limited</p>`);
+  const cta = args.ctaUrl ? emailButton(args.ctaUrl, args.ctaLabel || "View details") : "";
+  const ref = args.reference ? `<div style="margin:18px 0;padding:12px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Reference</div><strong style="font-size:16px;color:#111827;">${escapeHtml(args.reference)}</strong></div>` : "";
+  const html = htmlShell(
+    args.title,
+    `<p style="margin-top:0;">Dear ${escapeHtml(args.name || "Customer")},</p><p>${escapeHtml(args.body)}</p>${ref}<p>Our team will review the details and respond with the next step as soon as possible. If any information above is incorrect, or if you need to add documents, photos, delivery details or urgency notes, please reply directly to this email.</p>${cta}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong><br/><span style="color:#6b7280;">Industrial automation, scientific equipment, repairs and asset recovery</span></p>`,
+    args.body,
+  );
   return sendEmail({ to: args.to, subject: args.subject, html });
 }

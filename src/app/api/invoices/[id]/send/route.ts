@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
-import { escapeHtml, sendEmail, siteUrl } from "@/lib/mailer";
+import { emailButton, escapeHtml, htmlShell, sendEmail, siteUrl } from "@/lib/mailer";
 
 function label(value: string) {
   return value.replace(/_/g, " ").toLowerCase();
@@ -26,8 +26,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const url = `${origin}/api/invoices/${doc.id}/html`;
   const docTitle = title(doc.type);
   const subject = `Combay ${docTitle} ${doc.documentNumber}`;
-  const payLine = doc.paymentLink ? `<p><a href="${escapeHtml(doc.paymentLink)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;">Pay securely by card</a></p>` : "";
-  const html = `<!doctype html><html><body style="margin:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#111827;"><div style="max-width:680px;margin:0 auto;padding:24px;"><div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;"><div style="padding:22px 24px;border-bottom:1px solid #e5e7eb;"><p style="margin:0 0 5px;color:#6b7280;font-size:13px;">Combay Limited</p><h1 style="margin:0;font-size:20px;color:#0f172a;">${escapeHtml(docTitle)} ${escapeHtml(doc.documentNumber)}</h1></div><div style="padding:24px;font-size:14px;line-height:1.55;"><p>Dear ${escapeHtml(doc.customerName || "Customer")},</p><p>Please find your ${escapeHtml(docTitle.toLowerCase())} below.</p><p><a href="${escapeHtml(url)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;">Open / print document</a></p>${payLine}<p>Regards,<br/>Combay Limited</p></div><div style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">sales@combay.co.uk · +44 7340 383334</div></div></div></body></html>`;
+  const introByType = doc.type === "QUOTE"
+    ? "Please find your quotation below. It summarises the products, pricing and any notes currently available. This is not a payment request unless a proforma invoice is issued separately."
+    : doc.type === "PROFORMA_INVOICE"
+      ? "Please find your proforma invoice below. Payment is required before shipment. You may pay securely by card where a payment link is provided, or by bank transfer using the details shown on the document."
+      : doc.type === "PACKING_LIST"
+        ? "Please find the packing list for your order below. This document summarises the items and package details for dispatch/reference purposes."
+        : doc.type === "COMMERCIAL_INVOICE"
+          ? "Please find the commercial invoice below. This document is intended for customs/export and shipment documentation."
+          : "Please find your paid invoice below for your records.";
+  const payLine = doc.paymentLink ? emailButton(doc.paymentLink, "Pay securely by card") : "";
+  const html = htmlShell(
+    `${docTitle} ${doc.documentNumber}`,
+    `<p style="margin-top:0;">Dear ${escapeHtml(doc.customerName || "Customer")},</p><p>${escapeHtml(introByType)}</p><div style="margin:18px 0;padding:12px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Document reference</div><strong style="font-size:16px;color:#111827;">${escapeHtml(doc.documentNumber)}</strong></div>${emailButton(url, "Open / print document", "secondary")}${payLine}<p>Please review the document carefully, including product details, shipping details, payment status and any terms shown. If anything needs correcting before dispatch or payment, reply directly to this email.</p><p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>`,
+    `${docTitle} ${doc.documentNumber}`,
+  );
 
   const email = await sendEmail({ to: doc.customerEmail, subject, html });
 
