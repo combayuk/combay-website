@@ -17,7 +17,14 @@ model User {
   passwordHash   String?
   role           Role      @default(CUSTOMER)
   phone          String?
+  phoneCode      String?
+  accountType    String?   @default("individual")
   company        String?
+  companyNumber  String?
+  vatNumber      String?
+  stripeCustomerId String? @unique
+  twoStepEnabled Boolean  @default(false)
+  twoStepMethod  String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

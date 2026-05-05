@@ -98,3 +98,47 @@ export function verifyStripeWebhookSignature(payload: string, signatureHeader: s
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
 }
+
+export async function createStripeCustomer(input: { email: string; name?: string | null; phone?: string | null }) {
+  const params = new URLSearchParams();
+  params.set("email", input.email);
+  if (input.name) params.set("name", input.name);
+  if (input.phone) params.set("phone", input.phone);
+
+  const response = await fetch("https://api.stripe.com/v1/customers", {
+    method: "POST",
+    headers: { Authorization: stripeAuthHeader(), "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message || "Stripe customer could not be created.");
+  return data as { id: string; email?: string; name?: string };
+}
+
+export async function createStripeSetupSession(input: { customerId: string; successUrl: string; cancelUrl: string }) {
+  const params = new URLSearchParams();
+  params.set("mode", "setup");
+  params.set("customer", input.customerId);
+  params.set("success_url", input.successUrl);
+  params.set("cancel_url", input.cancelUrl);
+  params.set("payment_method_types[0]", "card");
+
+  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: { Authorization: stripeAuthHeader(), "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message || "Stripe setup session could not be created.");
+  return data as StripeCheckoutSession;
+}
+
+export async function listStripePaymentMethods(customerId: string) {
+  const url = new URL("https://api.stripe.com/v1/payment_methods");
+  url.searchParams.set("customer", customerId);
+  url.searchParams.set("type", "card");
+  const response = await fetch(url.toString(), { headers: { Authorization: stripeAuthHeader() }, cache: "no-store" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message || "Stripe payment methods could not be loaded.");
+  return data as { data: Array<{ id: string; card?: { brand?: string; last4?: string; exp_month?: number; exp_year?: number } }> };
+}

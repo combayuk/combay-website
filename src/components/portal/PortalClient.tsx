@@ -152,6 +152,13 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
   const [portalReturns, setPortalReturns] = useState<PortalReturnRow[]>([]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("section") as Section | null;
+    if (requested && NAV.some((item) => item.id === requested)) setSection(requested);
+  }, []);
+
+  useEffect(() => {
     if (!session) return;
     setOrdersLoading(true);
     Promise.all([
@@ -679,36 +686,57 @@ function AccountPanel({
     company: "",
     companyNumber: "",
     vatNumber: "",
-    currentPassword: "",
     newPassword: "",
     confirmPassword: "",
+    currentPassword: "",
+    twoStepEnabled: false,
+    twoStepMethod: "email" as "email" | "phone",
   });
+  const [baseline, setBaseline] = useState(form);
+  const [editable, setEditable] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
 
   useEffect(() => {
-    setForm((current) => ({ ...current, name: userName, email: userEmail }));
+    const next = { ...form, name: userName, email: userEmail };
+    setForm(next);
+    setBaseline(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail, userName]);
 
-  function updateField(field: keyof typeof form, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
+  function enable(field: string) {
+    setEditable((current) => ({ ...current, [field]: true }));
   }
+
+  function updateField(field: keyof typeof form, value: string | boolean) {
+    setForm((current) => ({ ...current, [field]: value as never }));
+    setError("");
+    setPasswordError(false);
+  }
+
+  const changedFields = useMemo(() => {
+    const fields: string[] = [];
+    (["name", "email", "phoneCode", "phone", "company", "companyNumber", "vatNumber", "newPassword", "twoStepEnabled", "twoStepMethod"] as const).forEach((field) => {
+      if (String(form[field] ?? "") !== String(baseline[field] ?? "")) fields.push(field);
+    });
+    return fields;
+  }, [form, baseline]);
+
+  const editedFields = Object.keys(editable).filter((key) => editable[key]);
+  const fieldsToSave = Array.from(new Set([...changedFields, ...editedFields]));
+  const hasChanges = fieldsToSave.length > 0;
 
   async function submitAccountSettings() {
     setError("");
+    setPasswordError(false);
 
-    const emailChanged = form.email.trim().toLowerCase() !== userEmail.trim().toLowerCase();
-    const passwordChangeRequested = Boolean(form.newPassword || form.confirmPassword);
-
-    if (passwordChangeRequested && form.newPassword !== form.confirmPassword) {
-      setError("New password and confirmation password do not match.");
-      return;
-    }
-
-    if ((emailChanged || passwordChangeRequested) && !form.currentPassword) {
-      setError("Enter your current password to change your email address or password.");
-      return;
-    }
+    if (!form.name.trim()) { setError("Full name is required."); return; }
+    if (!form.email.trim()) { setError("Email address is required."); return; }
+    if (!form.phone.trim()) { setError("Phone number is required."); return; }
+    if (accountType === "company" && !form.company.trim()) { setError("Company name is required for company accounts."); return; }
+    if (form.newPassword && form.newPassword !== form.confirmPassword) { setError("New password and confirmation password do not match."); return; }
+    if (hasChanges && !form.currentPassword) { setPasswordError(true); setError("Enter your current password to save account changes."); return; }
 
     setSaving(true);
     try {
@@ -719,19 +747,27 @@ function AccountPanel({
           accountType,
           name: form.name,
           email: form.email,
-          phone: `${form.phoneCode} ${form.phone}`.trim(),
+          phoneCode: form.phoneCode,
+          phone: form.phone,
           company: accountType === "company" ? form.company : "",
           companyNumber: accountType === "company" ? form.companyNumber : "",
           vatNumber: accountType === "company" ? form.vatNumber : "",
           currentPassword: form.currentPassword,
           newPassword: form.newPassword,
+          twoStepEnabled: form.twoStepEnabled,
+          twoStepMethod: form.twoStepMethod,
+          changedFields: fieldsToSave,
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Account settings could not be saved.");
       onSave(data.message || "Account settings saved.");
-      setForm((current) => ({ ...current, currentPassword: "", newPassword: "", confirmPassword: "" }));
+      const next = { ...form, currentPassword: "", newPassword: "", confirmPassword: "" };
+      setForm(next);
+      setBaseline(next);
+      setEditable({});
     } catch (err) {
+      setPasswordError(true);
       setError(err instanceof Error ? err.message : "Account settings could not be saved.");
     } finally {
       setSaving(false);
@@ -740,30 +776,34 @@ function AccountPanel({
 
   return (
     <section>
-      <SectionHeader title="Account Settings" subtitle="Update contact details, company profile and security settings." />
+      <SectionHeader title="Account Settings" subtitle="Details are locked by default. Click the edit icon beside any field you want to change." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-6">
         <div>
           <label className="label">Account type</label>
           <div className="flex gap-2">
-            <button onClick={() => onAccountTypeChange("individual")} className={`font-display font-600 text-sm px-4 py-2 rounded-md border capitalize transition-colors ${accountType === "individual" ? "bg-navy-950 text-white border-navy-950" : "border-gray-200 text-gray-600 hover:border-navy-950"}`}>Individual</button>
-            <button onClick={() => onAccountTypeChange("company")} className={`font-display font-600 text-sm px-4 py-2 rounded-md border capitalize transition-colors ${accountType === "company" ? "bg-navy-950 text-white border-navy-950" : "border-gray-200 text-gray-600 hover:border-navy-950"}`}>Company</button>
+            <button onClick={() => { onAccountTypeChange("individual"); enable("accountType"); }} className={`font-display font-600 text-sm px-4 py-2 rounded-md border capitalize transition-colors ${accountType === "individual" ? "bg-navy-950 text-white border-navy-950" : "border-gray-200 text-gray-600 hover:border-navy-950"}`}>Individual</button>
+            <button onClick={() => { onAccountTypeChange("company"); enable("accountType"); }} className={`font-display font-600 text-sm px-4 py-2 rounded-md border capitalize transition-colors ${accountType === "company" ? "bg-navy-950 text-white border-navy-950" : "border-gray-200 text-gray-600 hover:border-navy-950"}`}>Company</button>
           </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Full name"><input className="input" value={form.name} onChange={(event) => updateField("name", event.target.value)} /></Field>
-          <Field label="Email address" hint="Changing email requires your current password."><input className="input" type="email" value={form.email} onChange={(event) => updateField("email", event.target.value)} /></Field>
-          <Field label="Phone number">
+          <EditableInput label="Full name" required value={form.name} editable={!!editable.name} onEdit={() => enable("name")} onChange={(value) => updateField("name", value)} />
+          <EditableInput label="Email address" required type="email" value={form.email} editable={!!editable.email} onEdit={() => enable("email")} onChange={(value) => updateField("email", value)} />
+          <div>
+            <label className="label">Phone number *</label>
             <div className="flex">
-              <select className="input rounded-r-none w-56 flex-shrink-0 border-r-0" value={form.phoneCode} onChange={(event) => updateField("phoneCode", event.target.value)}>
+              <select disabled={!editable.phone} className={`input rounded-r-none w-56 flex-shrink-0 border-r-0 ${!editable.phone ? "bg-gray-100 text-gray-500" : "bg-white"}`} value={form.phoneCode} onChange={(event) => updateField("phoneCode", event.target.value)}>
                 {PHONE_CODES.map((item) => <option key={`${item.country}-${item.code}`} value={item.code}>{item.label}</option>)}
               </select>
-              <input className="input rounded-l-none" type="tel" placeholder="7xxx xxxxxx" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
+              <div className="relative flex-1">
+                <input disabled={!editable.phone} required className={`input rounded-l-none pr-10 ${!editable.phone ? "bg-gray-100 text-gray-500" : "bg-white"}`} type="tel" placeholder="7xxx xxxxxx" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
+                <button type="button" onClick={() => enable("phone")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button>
+              </div>
             </div>
-          </Field>
-          {accountType === "company" && <Field label="Company name"><input className="input" placeholder="Company Ltd" value={form.company} onChange={(event) => updateField("company", event.target.value)} /></Field>}
-          {accountType === "company" && <Field label="Company number"><input className="input" placeholder="12345678" value={form.companyNumber} onChange={(event) => updateField("companyNumber", event.target.value)} /></Field>}
-          {accountType === "company" && <Field label="VAT number"><input className="input" placeholder="GB123456789" value={form.vatNumber} onChange={(event) => updateField("vatNumber", event.target.value)} /></Field>}
+          </div>
+          {accountType === "company" && <EditableInput label="Company name" required value={form.company} editable={!!editable.company} onEdit={() => enable("company")} onChange={(value) => updateField("company", value)} />}
+          {accountType === "company" && <EditableInput label="Company number" value={form.companyNumber} editable={!!editable.companyNumber} onEdit={() => enable("companyNumber")} onChange={(value) => updateField("companyNumber", value)} />}
+          {accountType === "company" && <EditableInput label="VAT number" value={form.vatNumber} editable={!!editable.vatNumber} onEdit={() => enable("vatNumber")} onChange={(value) => updateField("vatNumber", value)} />}
         </div>
 
         {accountType === "company" && (
@@ -778,23 +818,62 @@ function AccountPanel({
           </div>
         )}
 
-        <div className="border-t border-gray-100 pt-5 space-y-3">
+        <div className="border-t border-gray-100 pt-5 space-y-4">
           <div>
-            <p className="font-display font-700 text-sm text-navy-950">Email and password</p>
-            <p className="text-xs text-gray-500 mt-1">Change your email, password, or both. Your current password is only required if changing email or password. Email verification codes are no longer used.</p>
+            <p className="font-display font-700 text-sm text-navy-950">Password</p>
+            <p className="text-xs text-gray-500 mt-1">Password is hidden. Click edit to set a new password.</p>
           </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <Field label="Current password"><input className="input" type="password" value={form.currentPassword} onChange={(event) => updateField("currentPassword", event.target.value)} placeholder="Required for email/password changes" autoComplete="current-password" /></Field>
-            <Field label="New password"><input className="input" type="password" minLength={8} value={form.newPassword} onChange={(event) => updateField("newPassword", event.target.value)} placeholder="Leave blank to keep current" autoComplete="new-password" /></Field>
-            <Field label="Confirm new password"><input className="input" type="password" minLength={8} value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></Field>
-          </div>
+          {!editable.password ? (
+            <div className="relative max-w-md"><input disabled className="input bg-gray-100 text-gray-500 pr-10" type="password" value="********" readOnly /><button type="button" onClick={() => enable("password")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button></div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="New password"><input className="input" type="password" minLength={8} value={form.newPassword} onChange={(event) => updateField("newPassword", event.target.value)} placeholder="Enter new password" autoComplete="new-password" /></Field>
+              <Field label="Confirm new password"><input className="input" type="password" minLength={8} value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></Field>
+            </div>
+          )}
         </div>
 
-        <button disabled={saving} onClick={submitAccountSettings} className="btn-primary">{saving ? "Saving..." : "Save changes →"}</button>
-        {error && <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-        {notice && <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{notice}</p>}
+        <div className="border-t border-gray-100 pt-5 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-display font-700 text-sm text-navy-950">Two-step verification</p>
+              <p className="text-xs text-gray-500 mt-1">Add an extra verification step by email or phone. This stores your preference; enforcement will be enabled in the real-auth security phase.</p>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-display font-600 text-gray-600"><input type="checkbox" checked={form.twoStepEnabled} onChange={(event) => { enable("twoStep"); updateField("twoStepEnabled", event.target.checked); }} className="w-4 h-4 accent-accent" /> Enable</label>
+          </div>
+          {form.twoStepEnabled && (
+            <div className="grid sm:grid-cols-2 gap-3 max-w-lg">
+              <label className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm"><input type="radio" name="twoStepMethod" checked={form.twoStepMethod === "email"} onChange={() => { enable("twoStep"); updateField("twoStepMethod", "email"); }} /> Email code</label>
+              <label className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm"><input type="radio" name="twoStepMethod" checked={form.twoStepMethod === "phone"} onChange={() => { enable("twoStep"); updateField("twoStepMethod", "phone"); }} /> Phone/SMS code</label>
+            </div>
+          )}
+        </div>
+
+        {hasChanges && (
+          <div className="border-t border-gray-100 pt-5">
+            <Field label="Enter current password to save changes">
+              <input className={`input max-w-md ${passwordError ? "border-red-500 ring-1 ring-red-200" : ""}`} type="password" value={form.currentPassword} onChange={(event) => updateField("currentPassword", event.target.value)} autoComplete="current-password" />
+            </Field>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+        {notice && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{notice}</p>}
+        <button disabled={saving || !hasChanges} onClick={submitAccountSettings} className="btn-primary disabled:opacity-50">{saving ? "Saving..." : "Save account settings →"}</button>
       </div>
     </section>
+  );
+}
+
+function EditableInput({ label, value, editable, onEdit, onChange, type = "text", required = false }: { label: string; value: string; editable: boolean; onEdit: () => void; onChange: (value: string) => void; type?: string; required?: boolean }) {
+  return (
+    <div>
+      <label className="label">{label}{required ? " *" : ""}</label>
+      <div className="relative">
+        <input disabled={!editable} required={required} type={type} className={`input pr-10 ${!editable ? "bg-gray-100 text-gray-500" : "bg-white"}`} value={value} onChange={(event) => onChange(event.target.value)} />
+        <button type="button" onClick={onEdit} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button>
+      </div>
+    </div>
   );
 }
 
@@ -879,21 +958,60 @@ function AddressesPanel({
 }
 
 function PaymentsPanel({ savedCardPreview, onSavePreview }: { savedCardPreview: boolean; onSavePreview: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [methods, setMethods] = useState<Array<{ id: string; brand: string; last4: string; expMonth?: number; expYear?: number }>>([]);
+
+  function loadMethods() {
+    fetch("/api/payment-methods", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => setMethods(Array.isArray(data.methods) ? data.methods : []))
+      .catch(() => setMethods([]));
+  }
+
+  useEffect(() => { loadMethods(); }, []);
+
+  async function addPaymentMethod() {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/payment-methods/setup", { method: "POST" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.url) throw new Error(data.error || "Unable to start Stripe card setup.");
+      window.location.href = data.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start Stripe card setup.");
+      setLoading(false);
+    }
+  }
+
   return (
     <section>
-      <SectionHeader title="Payment Methods" subtitle="Stripe-ready saved card structure for faster future checkouts." />
+      <SectionHeader title="Payment Methods" subtitle="Add saved cards securely through Stripe. Combay never stores raw card numbers." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Saved cards require Stripe setup. This screen is prepared for tokenised Stripe payment methods; no raw card data is stored by Combay.
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Cards are stored tokenised by Stripe and can be used for faster future checkouts once saved-card charging is enabled.
         </div>
-        {savedCardPreview ? (
-          <div className="border border-gray-200 rounded-xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3"><CreditCard size={20} className="text-accent" /><div><p className="font-display font-700 text-sm text-navy-950">Visa ending 4242</p><p className="text-xs text-gray-400">Preview payment method · not stored in Stripe yet</p></div></div>
-            <span className="badge bg-gray-50 text-gray-500 border-gray-200">Preview</span>
+        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+        {methods.length > 0 ? (
+          <div className="space-y-3">
+            {methods.map((method) => (
+              <div key={method.id} className="border border-gray-200 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CreditCard size={20} className="text-accent" />
+                  <div>
+                    <p className="font-display font-700 text-sm text-navy-950 capitalize">{method.brand} ending {method.last4}</p>
+                    <p className="text-xs text-gray-400">Expires {method.expMonth}/{method.expYear}</p>
+                  </div>
+                </div>
+                <span className="badge bg-green-50 text-green-700 border-green-200">Stripe</span>
+              </div>
+            ))}
           </div>
         ) : (
-          <button onClick={onSavePreview} className="btn-secondary">Add preview payment method</button>
+          <p className="text-sm text-gray-500">No saved cards yet.</p>
         )}
+        <button onClick={addPaymentMethod} disabled={loading} className="btn-primary">{loading ? "Opening Stripe..." : "Add card securely with Stripe →"}</button>
       </div>
     </section>
   );
