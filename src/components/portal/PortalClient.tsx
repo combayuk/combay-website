@@ -24,8 +24,6 @@ import {
   COUNTRIES,
   PHONE_CODES,
   PORTAL_ORDERS,
-  PORTAL_PENDING_RETURNS,
-  PORTAL_RETURNS,
   RETURN_STAGES,
   canReturn,
   daysUntilReturnDeadline,
@@ -48,6 +46,20 @@ type Address = {
 };
 
 type SubmitState = { reference: string; message: string } | null;
+
+type PortalReturnRow = {
+  id: string;
+  reference: string;
+  orderId: string;
+  item: string;
+  sku?: string;
+  reason: string;
+  status: string;
+  statusLabel?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 type AddressDraft = Omit<Address, "id" | "isDefault">;
 
@@ -108,26 +120,26 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
   const [savedCardPreview, setSavedCardPreview] = useState(false);
   const [orders, setOrders] = useState<PortalOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [portalReturns, setPortalReturns] = useState<PortalReturnRow[]>([]);
 
   useEffect(() => {
     if (!session) return;
     setOrdersLoading(true);
-    fetch("/api/orders?portal=1", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
-        const portalOrders = Array.isArray(data.portalOrders) ? data.portalOrders : [];
+    Promise.all([
+      fetch("/api/orders?portal=1", { cache: "no-store" }).then((response) => response.json()),
+      fetch("/api/returns?portal=1", { cache: "no-store" }).then((response) => response.json()).catch(() => ({ portalReturns: [] })),
+    ])
+      .then(([ordersData, returnsData]) => {
+        const portalOrders = Array.isArray(ordersData.portalOrders) ? ordersData.portalOrders : [];
+        const returnRows = Array.isArray(returnsData.portalReturns) ? returnsData.portalReturns : Array.isArray(returnsData.returns) ? returnsData.returns : [];
         setOrders(portalOrders.length ? portalOrders : []);
+        setPortalReturns(returnRows);
       })
-      .catch(() => setOrders([]))
+      .catch(() => { setOrders([]); setPortalReturns([]); })
       .finally(() => setOrdersLoading(false));
   }, [session]);
 
   const portalOrders = orders;
-
-  const activeReturn = useMemo(
-    () => PORTAL_RETURNS[0],
-    []
-  );
 
   if (!session) {
     return (
@@ -163,6 +175,10 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
     const result = await response.json();
     setReturnLoading(false);
     setReturnResult({ reference: result.reference || "RET-PREVIEW", message: result.message || "Return request logged." });
+    fetch("/api/returns?portal=1", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => setPortalReturns(Array.isArray(data.portalReturns) ? data.portalReturns : Array.isArray(data.returns) ? data.returns : []))
+      .catch(() => undefined);
   }
 
   function startAddAddress() {
@@ -222,8 +238,8 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
           </aside>
 
           <div className="flex-1 min-w-0">
-            {section === "orders" && <OrdersPanel orders={portalOrders} loading={ordersLoading} onReturn={setReturnOrder} onSupport={openSupportForOrder} />}
-            {section === "returns" && <ReturnsPanel orders={portalOrders} onReturn={setReturnOrder} />}
+            {section === "orders" && <OrdersPanel orders={portalOrders} returns={portalReturns} loading={ordersLoading} onReturn={setReturnOrder} onSupport={openSupportForOrder} />}
+            {section === "returns" && <ReturnsPanel orders={portalOrders} returns={portalReturns} onReturn={setReturnOrder} />}
             {section === "tracking" && <TrackingPanel orders={portalOrders} loading={ordersLoading} />}
             {section === "support" && <SupportPanel orders={portalOrders} orderId={supportOrder} onOrderChange={setSupportOrder} />}
             {section === "account" && (
@@ -272,7 +288,7 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
   );
 }
 
-function OrdersPanel({ orders, loading, onReturn, onSupport }: { orders: PortalOrder[]; loading: boolean; onReturn: (order: PortalOrder) => void; onSupport: (orderId: string) => void }) {
+function OrdersPanel({ orders, returns, loading, onReturn, onSupport }: { orders: PortalOrder[]; returns: PortalReturnRow[]; loading: boolean; onReturn: (order: PortalOrder) => void; onSupport: (orderId: string) => void }) {
   return (
     <section>
       <SectionHeader title="Your Orders" subtitle="Track purchases, request support, and check return eligibility." />
@@ -280,8 +296,10 @@ function OrdersPanel({ orders, loading, onReturn, onSupport }: { orders: PortalO
         {loading && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">Loading orders…</div>}
         {!loading && orders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No orders found yet.</div>}
         {!loading && orders.map((order) => {
-          const pendingReturn = PORTAL_PENDING_RETURNS.find((item) => item.orderId === order.id);
-          const approvedReturn = PORTAL_RETURNS.find((item) => item.orderId === order.id);
+          const returnRecord = returns.find((item) => item.orderId === order.id);
+          const pendingReturn = returnRecord && ["AWAITING_APPROVAL", "REQUESTED"].includes(returnRecord.status);
+          const approvedReturn = returnRecord && !["AWAITING_APPROVAL", "REQUESTED", "REJECTED"].includes(returnRecord.status);
+          const rejectedReturn = returnRecord && returnRecord.status === "REJECTED";
           const eligible = canReturn(order) && !pendingReturn && !approvedReturn;
           return (
             <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-5">
@@ -307,7 +325,9 @@ function OrdersPanel({ orders, loading, onReturn, onSupport }: { orders: PortalO
                 {pendingReturn ? (
                   <span className="text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-1 font-display font-600">Return awaiting approval</span>
                 ) : approvedReturn ? (
-                  <span className="text-green-700 bg-green-50 border border-green-100 rounded-full px-2.5 py-1 font-display font-600">Return in progress</span>
+                  <span className="text-green-700 bg-green-50 border border-green-100 rounded-full px-2.5 py-1 font-display font-600">Return: {returnRecord?.statusLabel || returnRecord?.status?.replace(/_/g, " ")}</span>
+                ) : rejectedReturn ? (
+                  <span className="text-red-700 bg-red-50 border border-red-100 rounded-full px-2.5 py-1 font-display font-600">Return rejected</span>
                 ) : eligible ? (
                   <button onClick={() => onReturn(order)} className="text-accent hover:text-accent-dark font-display font-600 transition-colors">Request return approval</button>
                 ) : order.status === "DELIVERED" ? (
@@ -326,33 +346,52 @@ function OrdersPanel({ orders, loading, onReturn, onSupport }: { orders: PortalO
   );
 }
 
-function ReturnsPanel({ orders, onReturn }: { orders: PortalOrder[]; onReturn: (order: PortalOrder) => void }) {
-  const ordersWithReturnRecords = new Set([
-    ...PORTAL_PENDING_RETURNS.map((item) => item.orderId),
-    ...PORTAL_RETURNS.map((item) => item.orderId),
-  ]);
+function ReturnsPanel({ orders, returns, onReturn }: { orders: PortalOrder[]; returns: PortalReturnRow[]; onReturn: (order: PortalOrder) => void }) {
+  const ordersWithReturnRecords = new Set(returns.map((item) => item.orderId));
   const eligibleOrders = orders.filter((order) => canReturn(order) && !ordersWithReturnRecords.has(order.id));
-  const returnStageIndex = RETURN_STAGES.findIndex((stage) => stage.id === PORTAL_RETURNS[0]?.stage);
+  const awaiting = returns.filter((item) => ["AWAITING_APPROVAL", "REQUESTED"].includes(item.status));
+  const active = returns.filter((item) => !["AWAITING_APPROVAL", "REQUESTED", "REJECTED"].includes(item.status));
+  const rejected = returns.filter((item) => item.status === "REJECTED");
+
+  function stageIndex(status: string) {
+    const map: Record<string, string> = { APPROVED: "REQUEST_SUBMITTED", COLLECTION_BOOKED: "COLLECTION_BOOKED", IN_TRANSIT: "IN_TRANSIT", INSPECTING: "INSPECTING", REFUND_APPROVED: "REFUND_APPROVED", RECEIVED: "INSPECTING", REFUNDED: "REFUND_APPROVED" };
+    return RETURN_STAGES.findIndex((stage) => stage.id === map[status]);
+  }
 
   return (
     <section>
       <SectionHeader title="Returns" subtitle="Returns are available within 30 days of confirmed delivery. Submitted requests must be approved by admin before the return status flow begins." />
 
-      {PORTAL_PENDING_RETURNS.length > 0 && (
+      {awaiting.length > 0 && (
         <div className="mb-5">
           <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Awaiting approval</h3>
           <div className="grid lg:grid-cols-2 gap-4">
-            {PORTAL_PENDING_RETURNS.map((pending) => (
+            {awaiting.map((pending) => (
               <div key={pending.id} className="bg-white border border-amber-200 rounded-xl p-5">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div>
                     <p className="font-display font-700 text-sm text-navy-950">{pending.item}</p>
-                    <p className="text-gray-400 text-xs mt-1">Order #{pending.orderId} · Requested {formatDate(pending.requestedAt)}</p>
+                    <p className="text-gray-400 text-xs mt-1">Order #{pending.orderId} · Requested {formatDate(pending.createdAt)}</p>
                   </div>
                   <span className="badge text-amber-700 bg-amber-50 border-amber-200">Awaiting approval</span>
                 </div>
-                <p className="text-sm text-gray-600">{pending.statusText}</p>
-                <p className="text-[11px] text-gray-400 mt-3">Once admin approves this return, the status flow below will start from “Request submitted”.</p>
+                <p className="text-sm text-gray-600">Your return request is awaiting admin review.</p>
+                <p className="text-[11px] text-gray-400 mt-3">Once admin approves this return, the return status flow will start.</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {rejected.length > 0 && (
+        <div className="mb-5">
+          <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Rejected returns</h3>
+          <div className="grid lg:grid-cols-2 gap-4">
+            {rejected.map((item) => (
+              <div key={item.id} className="bg-white border border-red-200 rounded-xl p-5">
+                <p className="font-display font-700 text-sm text-navy-950">{item.item}</p>
+                <p className="text-gray-400 text-xs mt-1">Order #{item.orderId} · {item.reference}</p>
+                <span className="badge text-red-700 bg-red-50 border-red-200 mt-3">Rejected</span>
               </div>
             ))}
           </div>
@@ -373,18 +412,26 @@ function ReturnsPanel({ orders, onReturn }: { orders: PortalOrder[]; onReturn: (
         )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="font-display font-700 text-sm text-navy-950 mb-1">Existing approved return: {PORTAL_RETURNS[0].id}</p>
-        <p className="text-gray-500 text-sm mb-4">{PORTAL_RETURNS[0].statusText}</p>
-        <div className="grid sm:grid-cols-5 gap-2">
-          {RETURN_STAGES.map((stage, index) => (
-            <div key={stage.id} className={`rounded-lg border p-3 ${index <= returnStageIndex ? "border-accent bg-accent/10" : "border-gray-200 bg-gray-50"}`}>
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-display font-800 mb-2 ${index <= returnStageIndex ? "bg-accent text-navy-950" : "bg-gray-200 text-gray-400"}`}>{index + 1}</div>
-              <p className="text-xs font-display font-700 text-navy-950">{stage.label}</p>
+      {active.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No approved/in-progress returns yet.</div>
+      ) : active.map((item) => {
+        const idx = stageIndex(item.status);
+        return (
+          <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <p className="font-display font-700 text-sm text-navy-950 mb-1">Return {item.reference}</p>
+            <p className="text-gray-500 text-sm mb-1">Order #{item.orderId} · {item.item}</p>
+            <p className="text-gray-400 text-xs mb-4">Current status: {item.statusLabel || item.status.replace(/_/g, " ")}</p>
+            <div className="grid sm:grid-cols-5 gap-2">
+              {RETURN_STAGES.map((stage, index) => (
+                <div key={stage.id} className={`rounded-lg border p-3 ${index <= idx ? "border-accent bg-accent/10" : "border-gray-200 bg-gray-50"}`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-display font-800 mb-2 ${index <= idx ? "bg-accent text-navy-950" : "bg-gray-200 text-gray-400"}`}>{index + 1}</div>
+                  <p className="text-xs font-display font-700 text-navy-950">{stage.label}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        );
+      })}
     </section>
   );
 }
