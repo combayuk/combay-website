@@ -46,11 +46,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (adminNote) noteLines.push(`Admin note: ${adminNote}`);
       if (customerMessage) noteLines.push(`Customer message: ${customerMessage}`);
     }
+    const optionalText = (value: unknown) => (typeof value === "string" ? value.trim() : undefined);
     const updated = await prisma.return.update({
       where: { id: params.id },
       data: {
         ...(nextStatus ? { status: nextStatus as any } : {}),
         notes: noteLines.filter(Boolean).join("\n"),
+        ...(optionalText(body.returnLabelUrl) !== undefined ? { returnLabelUrl: optionalText(body.returnLabelUrl) || null } : {}),
+        ...(optionalText(body.returnLabelName) !== undefined ? { returnLabelName: optionalText(body.returnLabelName) || null } : {}),
+        ...(optionalText(body.returnCourier) !== undefined ? { returnCourier: optionalText(body.returnCourier) || null } : {}),
+        ...(optionalText(body.returnTrackingNumber) !== undefined ? { returnTrackingNumber: optionalText(body.returnTrackingNumber) || null } : {}),
+        ...(optionalText(body.returnTrackingUrl) !== undefined ? { returnTrackingUrl: optionalText(body.returnTrackingUrl) || null } : {}),
+        ...(optionalText(body.refundProofUrl) !== undefined ? { refundProofUrl: optionalText(body.refundProofUrl) || null } : {}),
+        ...(optionalText(body.refundProofName) !== undefined ? { refundProofName: optionalText(body.refundProofName) || null } : {}),
       },
       include: { order: { include: { items: true } } },
     });

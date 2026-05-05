@@ -310,16 +310,23 @@ enum InvoiceStatus {
 }
 
 model Return {
-  id          String       @id @default(cuid())
-  orderId     String
-  order       Order        @relation(fields: [orderId], references: [id])
-  userId      String?
-  user        User?        @relation(fields: [userId], references: [id])
-  reason      String
-  status      ReturnStatus @default(REQUESTED)
-  notes       String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                   String       @id @default(cuid())
+  orderId              String
+  order                Order        @relation(fields: [orderId], references: [id])
+  userId               String?
+  user                 User?        @relation(fields: [userId], references: [id])
+  reason               String
+  status               ReturnStatus @default(REQUESTED)
+  notes                String?
+  returnLabelUrl       String?
+  returnLabelName      String?
+  returnCourier        String?
+  returnTrackingNumber String?
+  returnTrackingUrl    String?
+  refundProofUrl       String?
+  refundProofName      String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 }
 
 enum OrderStatus {

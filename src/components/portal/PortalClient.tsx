@@ -57,6 +57,13 @@ type PortalReturnRow = {
   status: string;
   statusLabel?: string;
   notes?: string;
+  returnLabelUrl?: string;
+  returnLabelName?: string;
+  returnCourier?: string;
+  returnTrackingNumber?: string;
+  returnTrackingUrl?: string;
+  refundProofUrl?: string;
+  refundProofName?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -429,10 +436,58 @@ function ReturnsPanel({ orders, returns, onReturn }: { orders: PortalOrder[]; re
                 </div>
               ))}
             </div>
+            <ReturnResources item={item} />
           </div>
         );
       })}
     </section>
+  );
+}
+
+
+function ReturnResources({ item }: { item: PortalReturnRow }) {
+  const hasLabel = Boolean(item.returnLabelUrl);
+  const hasTracking = Boolean(item.returnTrackingNumber || item.returnTrackingUrl);
+  const hasRefundProof = Boolean(item.refundProofUrl);
+
+  if (!hasLabel && !hasTracking && !hasRefundProof) return null;
+
+  const trackingHref = item.returnTrackingUrl || (item.returnTrackingNumber ? `https://www.google.com/search?q=${encodeURIComponent(`${item.returnCourier || "courier"} ${item.returnTrackingNumber}`)}` : "");
+
+  return (
+    <div className="mt-4 grid md:grid-cols-3 gap-3">
+      {hasLabel && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-xs font-display font-800 text-blue-900 mb-1">Collection booked</p>
+          <a href={item.returnLabelUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-blue-700 font-display font-700 hover:text-blue-900">
+            Download return label <ExternalLink size={12} />
+          </a>
+          <p className="text-[11px] text-blue-700/70 mt-1">{item.returnLabelName || "Return label"}</p>
+        </div>
+      )}
+      {hasTracking && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+          <p className="text-xs font-display font-800 text-purple-900 mb-1">In transit</p>
+          {trackingHref ? (
+            <a href={trackingHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-purple-700 font-display font-700 hover:text-purple-900">
+              Track: {item.returnTrackingNumber || "shipment"} <ExternalLink size={12} />
+            </a>
+          ) : (
+            <p className="text-sm text-purple-700 font-display font-700">Tracking pending</p>
+          )}
+          {item.returnCourier && <p className="text-[11px] text-purple-700/70 mt-1">Courier: {item.returnCourier}</p>}
+        </div>
+      )}
+      {hasRefundProof && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <p className="text-xs font-display font-800 text-green-900 mb-1">Refund approved</p>
+          <a href={item.refundProofUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-green-700 font-display font-700 hover:text-green-900">
+            View payment confirmation <ExternalLink size={12} />
+          </a>
+          <p className="text-[11px] text-green-700/70 mt-1">{item.refundProofName || "Refund proof"}</p>
+        </div>
+      )}
+    </div>
   );
 }
 

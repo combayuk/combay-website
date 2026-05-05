@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle, Mail, RefreshCw, RotateCcw, Search, XCircle } from "lucide-react";
+import { CheckCircle, ExternalLink, FileUp, Mail, RefreshCw, Search, XCircle } from "lucide-react";
 
 const RETURN_STATUSES = [
   "AWAITING_APPROVAL",
@@ -49,6 +49,13 @@ type ReturnRow = {
   status: string;
   statusLabel: string;
   notes?: string;
+  returnLabelUrl?: string;
+  returnLabelName?: string;
+  returnCourier?: string;
+  returnTrackingNumber?: string;
+  returnTrackingUrl?: string;
+  refundProofUrl?: string;
+  refundProofName?: string;
   orderTotal?: number;
   createdAt: string;
   updatedAt: string;
@@ -88,12 +95,12 @@ export default function AdminReturnsPage() {
     });
   }, [returns, search, status]);
 
-  async function updateReturn(row: ReturnRow, nextStatus: string, adminNote = "", customerMessage = "") {
+  async function updateReturn(row: ReturnRow, nextStatus: string, adminNote = "", customerMessage = "", extra: Partial<ReturnRow> = {}) {
     setMessage("Updating return…");
     const response = await fetch(`/api/returns/${row.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus, adminNote, customerMessage, notifyCustomer: true }),
+      body: JSON.stringify({ status: nextStatus, adminNote, customerMessage, notifyCustomer: true, ...extra }),
     });
     const data = await response.json();
     if (!response.ok || !data.ok) {
@@ -110,7 +117,7 @@ export default function AdminReturnsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="font-display font-800 text-navy-900 text-2xl">Returns</h1>
-          <p className="text-sm text-gray-500 mt-1">Approve, reject and update customer return requests. Customer portal reflects these statuses live.</p>
+          <p className="text-sm text-gray-500 mt-1">Approve returns, attach customer documents and update the customer-visible return timeline.</p>
         </div>
         <button onClick={loadReturns} className="btn-secondary flex items-center gap-1.5"><RefreshCw size={14}/> Refresh</button>
       </div>
@@ -162,13 +169,56 @@ export default function AdminReturnsPage() {
   );
 }
 
-function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => void; onSave: (row: ReturnRow, status: string, note?: string, message?: string) => void }) {
+function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => void; onSave: (row: ReturnRow, status: string, note?: string, message?: string, extra?: Partial<ReturnRow>) => void }) {
   const [nextStatus, setNextStatus] = useState(row.status === "REQUESTED" ? "AWAITING_APPROVAL" : row.status);
   const [adminNote, setAdminNote] = useState("");
   const [customerMessage, setCustomerMessage] = useState("");
+  const [returnLabelUrl, setReturnLabelUrl] = useState(row.returnLabelUrl || "");
+  const [returnLabelName, setReturnLabelName] = useState(row.returnLabelName || "Return label");
+  const [returnCourier, setReturnCourier] = useState(row.returnCourier || "");
+  const [returnTrackingNumber, setReturnTrackingNumber] = useState(row.returnTrackingNumber || "");
+  const [returnTrackingUrl, setReturnTrackingUrl] = useState(row.returnTrackingUrl || "");
+  const [refundProofUrl, setRefundProofUrl] = useState(row.refundProofUrl || "");
+  const [refundProofName, setRefundProofName] = useState(row.refundProofName || "Refund payment confirmation");
+  const [uploading, setUploading] = useState("");
+  const [uploadError, setUploadError] = useState("");
+
+  async function uploadDocument(file: File | null, type: "label" | "refund") {
+    if (!file) return;
+    setUploading(type);
+    setUploadError("");
+    const form = new FormData();
+    form.set("folder", "docs");
+    form.set("file", file);
+    const response = await fetch("/api/uploads", { method: "POST", body: form });
+    const payload = await response.json().catch(() => ({}));
+    setUploading("");
+    if (!response.ok || !payload.ok) {
+      setUploadError(payload.error || "Upload failed.");
+      return;
+    }
+    if (type === "label") {
+      setReturnLabelUrl(payload.url);
+      setReturnLabelName(file.name || "Return label");
+    } else {
+      setRefundProofUrl(payload.url);
+      setRefundProofName(file.name || "Refund payment confirmation");
+    }
+  }
+
+  const extras: Partial<ReturnRow> = {
+    returnLabelUrl,
+    returnLabelName,
+    returnCourier,
+    returnTrackingNumber,
+    returnTrackingUrl,
+    refundProofUrl,
+    refundProofName,
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-auto p-6 relative">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-auto p-6 relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
         <div className="mb-5">
           <p className="font-mono text-[10px] text-accent tracking-widest uppercase mb-1">{row.reference}</p>
@@ -209,12 +259,49 @@ function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => 
             <label className="label">Admin note</label>
             <textarea className="input min-h-[90px]" value={adminNote} onChange={(e)=>setAdminNote(e.target.value)} placeholder="Internal note, inspection detail or refund handling comment" />
           </div>
-          <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 mt-3">Refund approval here does not automatically refund Stripe. Process the refund manually or add Stripe refund automation in a later payment-management phase.</div>
         </div>
+
+        <div className="border border-gray-200 rounded-xl p-4 mb-5">
+          <h3 className="font-display font-700 text-sm text-navy-950 mb-3">Customer portal documents / tracking</h3>
+          <p className="text-xs text-gray-500 mb-4">Attach documents and tracking details here. They appear under the relevant return timeline stage in the customer portal.</p>
+          {uploadError && <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{uploadError}</div>}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <label className="label">Return label / collection document</label>
+              <input type="file" accept="application/pdf,image/*" className="input" onChange={(e) => uploadDocument(e.target.files?.[0] || null, "label")} />
+              <input className="input mt-2" value={returnLabelName} onChange={(e)=>setReturnLabelName(e.target.value)} placeholder="Display name" />
+              <input className="input mt-2" value={returnLabelUrl} onChange={(e)=>setReturnLabelUrl(e.target.value)} placeholder="Return label URL" />
+              <div className="mt-2 flex gap-2 items-center text-xs">
+                {uploading === "label" && <span className="text-gray-500">Uploading…</span>}
+                {returnLabelUrl && <a href={returnLabelUrl} target="_blank" rel="noopener noreferrer" className="text-accent font-display font-700 inline-flex gap-1 items-center">Open label <ExternalLink size={11}/></a>}
+              </div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <label className="label">Refund paid proof</label>
+              <input type="file" accept="application/pdf,image/*" className="input" onChange={(e) => uploadDocument(e.target.files?.[0] || null, "refund")} />
+              <input className="input mt-2" value={refundProofName} onChange={(e)=>setRefundProofName(e.target.value)} placeholder="Display name" />
+              <input className="input mt-2" value={refundProofUrl} onChange={(e)=>setRefundProofUrl(e.target.value)} placeholder="Refund proof URL" />
+              <div className="mt-2 flex gap-2 items-center text-xs">
+                {uploading === "refund" && <span className="text-gray-500">Uploading…</span>}
+                {refundProofUrl && <a href={refundProofUrl} target="_blank" rel="noopener noreferrer" className="text-accent font-display font-700 inline-flex gap-1 items-center">Open proof <ExternalLink size={11}/></a>}
+              </div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:col-span-2">
+              <label className="label">Return shipment tracking</label>
+              <div className="grid md:grid-cols-3 gap-3">
+                <input className="input" value={returnCourier} onChange={(e)=>setReturnCourier(e.target.value)} placeholder="Courier e.g. DHL / DPD" />
+                <input className="input" value={returnTrackingNumber} onChange={(e)=>setReturnTrackingNumber(e.target.value)} placeholder="Tracking number" />
+                <input className="input" value={returnTrackingUrl} onChange={(e)=>setReturnTrackingUrl(e.target.value)} placeholder="Tracking URL override" />
+              </div>
+            </div>
+          </div>
+          <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 mt-4">Refund approval here does not automatically refund Stripe. Process the refund manually or add Stripe refund automation in a later payment-management phase.</div>
+        </div>
+
         {row.notes && <div className="border border-gray-200 rounded-xl p-4 mb-5"><h3 className="font-display font-700 text-sm text-navy-950 mb-2">History / notes</h3><pre className="whitespace-pre-wrap text-xs text-gray-600 font-sans">{row.notes}</pre></div>}
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="btn-secondary">Cancel</button>
-          <button onClick={() => onSave(row, nextStatus, adminNote, customerMessage)} className="btn-primary flex items-center gap-1.5"><Mail size={14}/> Save and notify customer</button>
+          <button onClick={() => onSave(row, nextStatus, adminNote, customerMessage, extras)} className="btn-primary flex items-center gap-1.5"><Mail size={14}/> Save and notify customer</button>
         </div>
       </div>
     </div>
