@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   const email = portal ? (emailParam || sessionEmail) : "";
 
   const dbResult = await withDatabase(async () => prisma.supportTicket.findMany({
-    where: portal && email ? { email } : undefined,
+    where: portal ? (email ? { email } : { id: "__no_portal_session__" }) : undefined,
     orderBy: { updatedAt: "desc" },
     take: portal ? 50 : 200,
     include: { messages: { orderBy: { createdAt: "asc" } } },
@@ -66,10 +66,16 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await readJsonBody(req);
+  const session = await getServerSession(authOptions).catch(() => null);
   const reference = typeof body.reference === "string" ? body.reference : generateReference("SUP");
   const product = typeof body.product === "object" && body.product !== null ? (body.product as any) : {};
+  const source = String(body.source || "website");
+  const sessionEmail = session?.user?.email || "";
+  const sessionName = session?.user?.name || "";
+  const submittedEmail = String(body.email || "").trim();
+  const canonicalEmail = source === "customer-portal" && sessionEmail ? sessionEmail : submittedEmail;
 
-  if (!body.email && !body.subject && !product.sku) {
+  if (!canonicalEmail && !body.subject && !product.sku) {
     return Response.json({ ok: false, error: "Support request requires an email, subject or product context." }, { status: 400 });
   }
 
@@ -77,8 +83,8 @@ export async function POST(req: Request) {
     id: reference,
     type: "support" as const,
     date: todayLabel(),
-    name: String(body.name || "Website user"),
-    email: String(body.email || "not-provided"),
+    name: String(body.name || sessionName || "Website user"),
+    email: canonicalEmail || "not-provided",
     phone: body.phone ? String(body.phone) : undefined,
     country: body.country ? String(body.country) : undefined,
     company: body.company ? String(body.company) : undefined,
@@ -88,7 +94,7 @@ export async function POST(req: Request) {
     productSku: product.sku ? String(product.sku) : body.productSku ? String(body.productSku) : undefined,
     productTitle: product.title ? String(product.title) : body.productTitle ? String(body.productTitle) : undefined,
     status: "NEW" as const,
-    source: String(body.source || "website"),
+    source,
   };
 
   const dbResult = await withDatabase(async () => prisma.supportTicket.create({
