@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     email: String(body.email),
     phone: body.phone ? String(body.phone) : undefined,
     company: body.company ? String(body.company) : undefined,
+    country: body.country ? String(body.country) : undefined,
     subject: String(body.subject || "General enquiry"),
     message: String(body.message),
     status: "NEW" as const,
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
     name: record.name,
     email: record.email,
     phone: record.phone,
+    country: record.country,
     company: record.company,
     source: "web form (contact)",
     sourceRef: reference,
@@ -59,7 +61,7 @@ export async function POST(req: Request) {
       subject: `Combay contact enquiry ${reference}`,
       title: `New contact enquiry`,
       message: `Reference: ${reference}`,
-      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Subject", record.subject], ["Message", record.message]],
+      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Country", record.country || "—"], ["Subject", record.subject], ["Message", record.message]],
     }),
     customer: record.email && record.email !== "not-provided"
       ? await sendCustomerAcknowledgement({

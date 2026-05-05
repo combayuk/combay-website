@@ -46,7 +46,8 @@ export default function AssetForm() {
         <div><label className="label">Email *</label><input name="email" required type="email" className="input" placeholder="john@company.com"/></div>
         <div><label className="label">Phone</label><input name="phone" type="tel" className="input" placeholder="+44..."/></div>
         <div><label className="label">Company</label><input name="company" className="input" placeholder="Optional"/></div>
-        <div><label className="label">Collection Location</label><input name="location" className="input" placeholder="City or postcode"/></div>
+        <div><label className="label">Country *</label><input name="country" required className="input" placeholder="United Kingdom"/></div>
+        <div><label className="label">Collection location</label><input name="location" className="input" placeholder="City or postcode"/></div>
       </div>
       <div>
         <label className="label">Describe Your Stock *</label>

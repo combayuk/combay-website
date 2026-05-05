@@ -26,6 +26,7 @@ export async function POST(req: Request) {
     email: String(body.email || "not-provided"),
     phone: body.phone ? String(body.phone) : undefined,
     company: body.company ? String(body.company) : undefined,
+    country: body.country ? String(body.country) : undefined,
     subject: String(body.subject || (product.sku ? `Question about ${product.sku}` : "Support request")),
     message: String(body.message || body.description || "Support request submitted."),
     productSku: product.sku ? String(product.sku) : undefined,
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
     name: record.name,
     email: record.email,
     phone: record.phone,
+    country: record.country,
     company: record.company,
     source: record.source.includes("product") ? "web form (product question)" : "web form (support)",
     sourceRef: reference,
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
       subject: `Combay support ticket ${reference}`,
       title: `New support ticket`,
       message: `Reference: ${reference}`,
-      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Subject", record.subject], ["Product SKU", record.productSku || "—"], ["Message", record.message]],
+      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Country", record.country || "—"], ["Subject", record.subject], ["Product SKU", record.productSku || "—"], ["Message", record.message]],
     }),
     customer: record.email && record.email !== "not-provided"
       ? await sendCustomerAcknowledgement({

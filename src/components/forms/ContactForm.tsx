@@ -49,6 +49,7 @@ export default function ContactForm() {
         <div><label className="label">Email *</label><input name="email" required type="email" className="input" placeholder="you@company.com"/></div>
         <div><label className="label">Phone</label><input name="phone" type="tel" className="input" placeholder="+44..."/></div>
         <div><label className="label">Company</label><input name="company" className="input" placeholder="Optional"/></div>
+        <div><label className="label">Country *</label><input name="country" required className="input" placeholder="United Kingdom"/></div>
       </div>
       <div>
         <label className="label">Subject *</label>

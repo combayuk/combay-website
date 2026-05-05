@@ -463,12 +463,34 @@ model Lead {
   orderId      String?
   invoiceId    String?
   notes        String?   @db.Text
+  contactCount Int      @default(1)
+  lastContactAt DateTime @default(now())
+  interactions LeadInteraction[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([email])
   @@index([source])
   @@index([productSku])
+  @@index([createdAt])
+}
+
+model LeadInteraction {
+  id           String   @id @default(cuid())
+  leadId       String
+  source       String
+  sourceRef    String?
+  productSku   String?
+  productTitle String?
+  orderId      String?
+  invoiceId    String?
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([source])
   @@index([createdAt])
 }
 

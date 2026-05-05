@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     email: String(body.email),
     phone: body.phone ? String(body.phone) : undefined,
     company: body.company ? String(body.company) : undefined,
+    country: body.country ? String(body.country) : undefined,
     message: String(body.description),
     subject: String(body.quantity || "Asset recovery enquiry"),
     status: "NEW" as const,
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
     email: record.email,
     phone: record.phone,
     company: record.company,
-    country: body.location ? String(body.location) : undefined,
+    country: record.country || (body.location ? String(body.location) : undefined),
     source: "web form (Asset recovery)",
     sourceRef: reference,
     notes: record.message,
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
       subject: `Combay asset recovery request ${reference}`,
       title: `New asset recovery request`,
       message: `Reference: ${reference}`,
-      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Quantity", record.subject || "—"], ["Description", record.message]],
+      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Country", record.country || "—"], ["Quantity", record.subject || "—"], ["Description", record.message]],
     }),
     customer: record.email && record.email !== "not-provided"
       ? await sendCustomerAcknowledgement({

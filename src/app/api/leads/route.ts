@@ -1,6 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 
+function normaliseInteraction(item: any) {
+  return {
+    id: item.id,
+    source: item.source,
+    sourceRef: item.sourceRef ?? null,
+    productSku: item.productSku ?? null,
+    productTitle: item.productTitle ?? null,
+    orderId: item.orderId ?? null,
+    invoiceId: item.invoiceId ?? null,
+    notes: item.notes ?? null,
+    createdAt: item.createdAt,
+  };
+}
+
 function normaliseLead(lead: any) {
   return {
     id: lead.id,
@@ -16,6 +30,9 @@ function normaliseLead(lead: any) {
     orderId: lead.orderId ?? null,
     invoiceId: lead.invoiceId ?? null,
     notes: lead.notes ?? null,
+    contactCount: lead.contactCount ?? (lead.interactions?.length || 1),
+    lastContactAt: lead.lastContactAt ?? lead.updatedAt ?? lead.createdAt,
+    interactions: (lead.interactions ?? []).map(normaliseInteraction),
     createdAt: lead.createdAt,
   };
 }
@@ -37,10 +54,14 @@ export async function GET(request: NextRequest) {
           { productSku: { contains: q, mode: "insensitive" } },
           { productTitle: { contains: q, mode: "insensitive" } },
           { sourceRef: { contains: q, mode: "insensitive" } },
+          { interactions: { some: { sourceRef: { contains: q, mode: "insensitive" } } } },
+          { interactions: { some: { productSku: { contains: q, mode: "insensitive" } } } },
+          { interactions: { some: { productTitle: { contains: q, mode: "insensitive" } } } },
         ],
       } : {}),
     },
-    orderBy: { createdAt: "desc" },
+    include: { interactions: { orderBy: { createdAt: "desc" }, take: 50 } },
+    orderBy: { lastContactAt: "desc" },
     take: 500,
   }));
 

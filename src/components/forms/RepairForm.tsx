@@ -43,6 +43,7 @@ export default function RepairForm() {
         <div><label className="label">Email *</label><input name="email" required type="email" className="input" placeholder="john@company.com"/></div>
         <div><label className="label">Phone</label><input name="phone" type="tel" className="input" placeholder="+44 7xxx xxxxxx"/></div>
         <div><label className="label">Company</label><input name="company" className="input" placeholder="Your company name"/></div>
+        <div><label className="label">Country *</label><input name="country" required className="input" placeholder="United Kingdom"/></div>
         <div>
           <label className="label">Type of Service *</label>
           <select name="serviceType" required className="select">
