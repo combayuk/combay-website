@@ -9,14 +9,31 @@ import CredentialsProvider from "next-auth/providers/credentials";
 // FUTURE: import { prisma } from "./prisma";
 // FUTURE: import bcrypt from "bcryptjs";
 
-// Single shared test credential per master instruction
+// PRE-LAUNCH mock credentials. Keep admin/customer credentials separate.
+// Important: ADMIN_EMAIL is reserved elsewhere for notification emails, so do not use it as login.
 const MOCK_AUTH_ENABLED = process.env.MOCK_AUTH_ENABLED !== "false";
-const TEST_EMAIL = process.env.MOCK_AUTH_EMAIL ?? process.env.TEST_USER_EMAIL ?? "test@combay.co.uk";
-const TEST_PASSWORD = process.env.MOCK_AUTH_PASSWORD ?? process.env.TEST_USER_PASSWORD ?? "Test12345";
 
-// Admin credential (separate for admin portal access)
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? TEST_EMAIL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? TEST_PASSWORD;
+const CUSTOMER_EMAIL =
+  process.env.MOCK_CUSTOMER_EMAIL ??
+  process.env.MOCK_AUTH_EMAIL ??
+  process.env.TEST_USER_EMAIL ??
+  "test@combay.co.uk";
+
+const CUSTOMER_PASSWORD =
+  process.env.MOCK_CUSTOMER_PASSWORD ??
+  process.env.MOCK_AUTH_PASSWORD ??
+  process.env.TEST_USER_PASSWORD ??
+  "Test12345";
+
+const ADMIN_LOGIN_EMAIL =
+  process.env.MOCK_ADMIN_EMAIL ??
+  process.env.ADMIN_LOGIN_EMAIL ??
+  "admin@combay.co.uk";
+
+const ADMIN_LOGIN_PASSWORD =
+  process.env.MOCK_ADMIN_PASSWORD ??
+  process.env.ADMIN_LOGIN_PASSWORD ??
+  "Admin12345";
 
 export const authOptions: NextAuthOptions = {
   // FUTURE DB: adapter: PrismaAdapter(prisma) as any,
@@ -32,11 +49,11 @@ export const authOptions: NextAuthOptions = {
 
         // MOCK AUTH — replace this entire block with DB lookup when ready
         if (!MOCK_AUTH_ENABLED) return null;
-        if (credentials.email === ADMIN_EMAIL && credentials.password === ADMIN_PASSWORD) {
-          return { id: "admin-001", email: ADMIN_EMAIL, name: "Combay Admin", role: "ADMIN" };
+        if (credentials.email === ADMIN_LOGIN_EMAIL && credentials.password === ADMIN_LOGIN_PASSWORD) {
+          return { id: "admin-001", email: ADMIN_LOGIN_EMAIL, name: "Combay Admin", role: "ADMIN" };
         }
-        if (credentials.email === TEST_EMAIL && credentials.password === TEST_PASSWORD) {
-          return { id: "user-001", email: TEST_EMAIL, name: "Test User", role: "CUSTOMER" };
+        if (credentials.email === CUSTOMER_EMAIL && credentials.password === CUSTOMER_PASSWORD) {
+          return { id: "user-001", email: CUSTOMER_EMAIL, name: "Test Customer", role: "CUSTOMER" };
         }
         // END MOCK AUTH
 

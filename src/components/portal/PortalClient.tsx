@@ -148,7 +148,7 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
         <h2 className="font-display font-800 text-navy-950 text-2xl mb-2">Sign in to access your portal</h2>
         <p className="text-gray-500 mb-6 text-sm">View orders, track shipments, manage returns and support requests.</p>
         <div className="flex gap-3">
-          <Link href="/auth/login" className="btn-primary">Sign In →</Link>
+          <Link href="/portal/login" className="btn-primary">Customer Sign In →</Link>
           <Link href="/auth/register" className="btn-secondary">Create Account</Link>
         </div>
       </div>

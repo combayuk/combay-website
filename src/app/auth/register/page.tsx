@@ -18,7 +18,7 @@ export default function RegisterPage() {
       body: JSON.stringify({ name: fd.get("name"), email: fd.get("email"), password: fd.get("password"), company: fd.get("company") }),
     });
     setLoading(false);
-    if (res.ok) router.push("/auth/login?registered=1");
+    if (res.ok) router.push("/portal/login?registered=1");
     else { const d = await res.json(); setError(d.error ?? "Registration failed"); }
   }
 
@@ -47,7 +47,7 @@ export default function RegisterPage() {
             </button>
           </form>
           <p className="text-xs text-gray-400 text-center mt-4">By registering you agree to our <Link href="/terms" className="underline">Terms</Link> and <Link href="/privacy-policy" className="underline">Privacy Policy</Link>.</p>
-          <p className="text-center text-sm text-gray-500 mt-3">Have an account? <Link href="/auth/login" className="text-accent hover:text-accent-dark font-600">Sign in</Link></p>
+          <p className="text-center text-sm text-gray-500 mt-3">Have an account? <Link href="/portal/login" className="text-accent hover:text-accent-dark font-600">Sign in</Link></p>
         </div>
       </div>
     </div>

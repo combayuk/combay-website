@@ -152,6 +152,7 @@ export default function Navigation() {
               {l:"About",         h:"/about"},
               {l:"Contact",       h:"/contact"},
               {l:"Customer Portal",h:"/portal"},
+              {l:"Admin Portal",   h:"/admin-login"},
               {l:"FAQs",          h:"/faq"},
             ].map(n=>(
               <Link key={n.h} href={n.h} onClick={()=>setMob(false)}

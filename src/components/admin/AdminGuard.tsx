@@ -10,7 +10,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (status === "loading") return;
     if (!session) {
-      router.replace("/auth/login?callbackUrl=/admin");
+      router.replace("/admin-login?callbackUrl=/admin");
       return;
     }
     if ((session.user as any)?.role !== "ADMIN") {
