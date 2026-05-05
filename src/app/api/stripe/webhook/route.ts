@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma, withDatabase } from "@/lib/db";
 import { isStripeConfigured, verifyStripeWebhookSignature } from "@/lib/stripe";
+import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -18,10 +19,30 @@ export async function POST(request: Request) {
     const orderId = session.metadata?.orderId;
     const orderNumber = session.metadata?.orderNumber || session.client_reference_id;
     if (orderId || orderNumber) {
-      await withDatabase(async () => prisma.order.update({
+      const updateResult = await withDatabase(async () => prisma.order.update({
         where: orderId ? { id: orderId } : { orderNumber },
         data: { paymentStatus: "PAID", status: "PAYMENT_RECEIVED", notes: `Stripe webhook confirmed payment. Session: ${session.id}` },
+        include: { items: true },
       }));
+      if (updateResult.ok) {
+        const order: any = updateResult.data;
+        await sendCustomerAcknowledgement({
+          to: order.customerEmail,
+          name: order.customerName,
+          subject: `Combay order confirmation ${order.orderNumber}`,
+          title: "Order confirmation",
+          reference: order.orderNumber,
+          body: `Thank you for your order. Payment has been received and your order is now being processed.`,
+          ctaUrl: `${process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/orders`,
+          ctaLabel: "View order",
+        });
+        await sendAdminNotification({
+          subject: `Paid Combay order ${order.orderNumber}`,
+          title: "Paid order received",
+          message: `Stripe confirmed payment for order ${order.orderNumber}.`,
+          rows: [["Order", order.orderNumber], ["Customer", order.customerName], ["Email", order.customerEmail], ["Total", `£${Number(order.total).toFixed(2)}`], ["Items", order.items.map((item: any) => `${item.quantity} x ${item.sku}`).join(", ")]],
+        });
+      }
     }
   }
 

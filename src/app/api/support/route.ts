@@ -1,5 +1,6 @@
 import { prisma, withDatabase } from "@/lib/db";
-import { DEMO_REQUESTS, generateReference, getEmailStatus, readJsonBody, todayLabel } from "@/lib/requests";
+import { DEMO_REQUESTS, generateReference, readJsonBody, todayLabel } from "@/lib/requests";
+import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 
 export async function GET() {
   const dbResult = await withDatabase(async () => prisma.supportTicket.findMany({ orderBy: { createdAt: "desc" }, take: 100 }));
@@ -47,6 +48,26 @@ export async function POST(req: Request) {
     },
   }));
 
+
+  const email = {
+    admin: await sendAdminNotification({
+      subject: `Combay support ticket ${reference}`,
+      title: `New support ticket`,
+      message: `Reference: ${reference}`,
+      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Subject", record.subject], ["Product SKU", record.productSku || "—"], ["Message", record.message]],
+    }),
+    customer: record.email && record.email !== "not-provided"
+      ? await sendCustomerAcknowledgement({
+          to: record.email,
+          name: record.name,
+          subject: `Combay support ticket received ${reference}`,
+          title: `New support ticket`,
+          reference,
+          body: `Thank you. Your support request has been received and our team will respond as soon as possible.`,
+        })
+      : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
+  };
+
   console.info("[support-request]", record);
 
   return Response.json({
@@ -56,7 +77,7 @@ export async function POST(req: Request) {
     persistence: dbResult.ok ? "saved" : "not-saved",
     persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
     message: "Support request received.",
-    email: getEmailStatus(),
+    email,
     request: dbResult.ok ? dbResult.data : record,
   });
 }

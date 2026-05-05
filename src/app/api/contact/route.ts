@@ -1,5 +1,6 @@
 import { prisma, withDatabase } from "@/lib/db";
-import { DEMO_REQUESTS, generateReference, getEmailStatus, readFormBody, todayLabel } from "@/lib/requests";
+import { DEMO_REQUESTS, generateReference, readFormBody, todayLabel } from "@/lib/requests";
+import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 
 export async function GET() {
   const dbResult = await withDatabase(async () => prisma.contactRequest.findMany({ orderBy: { createdAt: "desc" }, take: 100 }));
@@ -41,6 +42,26 @@ export async function POST(req: Request) {
     },
   }));
 
+
+  const email = {
+    admin: await sendAdminNotification({
+      subject: `Combay contact enquiry ${reference}`,
+      title: `New contact enquiry`,
+      message: `Reference: ${reference}`,
+      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Subject", record.subject], ["Message", record.message]],
+    }),
+    customer: record.email && record.email !== "not-provided"
+      ? await sendCustomerAcknowledgement({
+          to: record.email,
+          name: record.name,
+          subject: `Combay enquiry received ${reference}`,
+          title: `New contact enquiry`,
+          reference,
+          body: `Thank you for contacting Combay. We have received your enquiry and will respond as soon as possible.`,
+        })
+      : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
+  };
+
   console.info("[contact-request]", record);
 
   return Response.json({
@@ -50,7 +71,7 @@ export async function POST(req: Request) {
     persistence: dbResult.ok ? "saved" : "not-saved",
     persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
     message: "Contact message received.",
-    email: getEmailStatus(),
+    email,
     request: dbResult.ok ? dbResult.data : record,
   });
 }

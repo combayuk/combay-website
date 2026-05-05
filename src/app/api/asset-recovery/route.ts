@@ -1,5 +1,6 @@
 import { prisma, withDatabase } from "@/lib/db";
-import { DEMO_REQUESTS, generateReference, getEmailStatus, readFormBody, todayLabel } from "@/lib/requests";
+import { DEMO_REQUESTS, generateReference, readFormBody, todayLabel } from "@/lib/requests";
+import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 
 export async function GET() {
   const dbResult = await withDatabase(async () => prisma.assetRecoveryRequest.findMany({ orderBy: { createdAt: "desc" }, take: 100 }));
@@ -43,6 +44,26 @@ export async function POST(req: Request) {
     },
   }));
 
+
+  const email = {
+    admin: await sendAdminNotification({
+      subject: `Combay asset recovery request ${reference}`,
+      title: `New asset recovery request`,
+      message: `Reference: ${reference}`,
+      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Quantity", record.subject || "—"], ["Description", record.message]],
+    }),
+    customer: record.email && record.email !== "not-provided"
+      ? await sendCustomerAcknowledgement({
+          to: record.email,
+          name: record.name,
+          subject: `Combay asset recovery request received ${reference}`,
+          title: `New asset recovery request`,
+          reference,
+          body: `Thank you for submitting your surplus stock / asset recovery enquiry. We have received the details and will review them shortly.`,
+        })
+      : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
+  };
+
   console.info("[asset-recovery-request]", record);
 
   return Response.json({
@@ -52,7 +73,7 @@ export async function POST(req: Request) {
     persistence: dbResult.ok ? "saved" : "not-saved",
     persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
     message: "Asset recovery request received.",
-    email: getEmailStatus(),
+    email,
     request: dbResult.ok ? dbResult.data : record,
   });
 }

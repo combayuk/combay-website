@@ -111,11 +111,18 @@ export default function InvoicesPage() {
     setMessage(`${doc.documentNumber} marked as received and is now visible in Orders for tracking/dispatch management.`);
   }
 
-  function emailHref(doc: Doc) {
-    const subject = encodeURIComponent(`${label(doc.type)} ${doc.documentNumber} from Combay`);
-    const body = encodeURIComponent(`Dear ${doc.customerName},\n\nPlease find your ${label(doc.type).toLowerCase()} here:\n${window.location.origin}/api/invoices/${doc.id}/html\n\nRegards,\nCombay Limited`);
-    return `mailto:${doc.customerEmail}?subject=${subject}&body=${body}`;
+  async function sendDocument(doc: Doc) {
+    setMessage("");
+    const response = await fetch(`/api/invoices/${doc.id}/send`, { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.email?.sent) {
+      setMessage(data.email?.error || data.error || "Email could not be sent. Check Resend environment variables/domain verification.");
+      return;
+    }
+    setDocs((current) => current.map((item) => (item.id === doc.id ? { ...item, status: data.document?.status ?? item.status, sentAt: data.document?.sentAt ?? item.sentAt } : item)));
+    setMessage(`${doc.documentNumber} sent to ${doc.customerEmail}.`);
   }
+
 
   return (
     <div>
@@ -155,7 +162,7 @@ export default function InvoicesPage() {
                   <td>
                     <div className="flex flex-wrap gap-2">
                       <a href={`/api/invoices/${doc.id}/html`} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><FileText size={12}/> View</a>
-                      <a href={emailHref(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><Mail size={12}/> Send by email</a>
+                      <button onClick={() => sendDocument(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><Mail size={12}/> Send by email</button>
                       <button onClick={() => markSent(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><Send size={12}/> Mark sent</button>
                       <button onClick={() => markReceived(doc)} className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"><CheckCircle size={12}/> Mark received</button>
                       <a href={`/api/invoices/${doc.id}/html`} target="_blank" rel="noopener noreferrer" className="text-accent hover:text-accent-dark px-2 py-1.5"><ExternalLink size={14}/></a>

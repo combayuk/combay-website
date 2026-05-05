@@ -1,5 +1,6 @@
 import { prisma, withDatabase } from "@/lib/db";
-import { generateReference, getEmailStatus, readJsonBody, todayLabel } from "@/lib/requests";
+import { generateReference, readJsonBody, todayLabel } from "@/lib/requests";
+import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 
 const DEMO_RETURNS = [
   {
@@ -48,8 +49,33 @@ export async function POST(req: Request) {
         reason: record.reason,
         notes: `${record.message}\nReference: ${reference}`,
       },
+      include: { order: true },
     });
   });
+
+
+  const returnedOrder = dbResult.ok ? (dbResult as any).data?.order : null;
+  const customerEmail = String(body.email || returnedOrder?.customerEmail || "");
+  const customerName = String(body.name || returnedOrder?.customerName || "Customer");
+  const email = {
+    admin: await sendAdminNotification({
+      subject: `Combay return request ${reference}`,
+      title: "New return request",
+      message: `Reference: ${reference}`,
+      rows: [["Order", record.orderId], ["Item", record.item || record.sku || "—"], ["Reason", record.reason], ["Message", record.message]],
+    }),
+    customer: customerEmail
+      ? await sendCustomerAcknowledgement({
+          to: customerEmail,
+          name: customerName,
+          subject: `Combay return request received ${reference}`,
+          title: "Return request received",
+          reference,
+          body: "Thank you. Your return request has been received and is awaiting review/approval.",
+        })
+      : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
+  };
+
 
   console.info("[return-request]", record);
 
@@ -60,7 +86,7 @@ export async function POST(req: Request) {
     persistence: dbResult.ok ? "saved" : "not-saved",
     persistenceMessage: dbResult.ok ? "Saved to PostgreSQL." : dbResult.reason,
     message: "Return request received. Collection/inspection status will update in the customer portal once returns storage is connected.",
-    email: getEmailStatus(),
+    email,
     request: dbResult.ok ? dbResult.data : record,
   });
 }

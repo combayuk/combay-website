@@ -33,24 +33,10 @@ export function todayLabel(date = new Date()) {
 }
 
 export function getEmailStatus() {
-  const configured = Boolean(
-    process.env.SENDGRID_API_KEY ||
-      (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD)
-  );
-
+  const configured = Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
   return configured
-    ? {
-        configured: true,
-        sent: false,
-        message:
-          "Email transport is configured, but this preview endpoint has not sent live mail yet. Phase 5 will wire the mailer.",
-      }
-    : {
-        configured: false,
-        sent: false,
-        message:
-          "Email not sent because SMTP/SendGrid environment variables are not configured yet.",
-      };
+    ? { configured: true, sent: false, provider: "resend", message: "Resend is configured. Live endpoints will attempt to send email." }
+    : { configured: false, sent: false, provider: "not-configured", message: "Email not sent because RESEND_API_KEY and EMAIL_FROM are not configured." };
 }
 
 export async function readJsonBody(req: Request) {
