@@ -23,6 +23,8 @@ export async function PATCH(req: Request) {
   const phoneCode = String(body.phoneCode || "+44").trim();
   const phone = String(body.phone || "").trim();
   const company = String(body.company || "").trim();
+  const companyEmail = String(body.companyEmail || "").trim().toLowerCase();
+  const designation = String(body.designation || "").trim();
   const companyNumber = String(body.companyNumber || "").trim();
   const vatNumber = String(body.vatNumber || "").trim();
   const accountType = body.accountType === "company" ? "company" : "individual";
@@ -73,6 +75,8 @@ export async function PATCH(req: Request) {
       phone,
       phoneCode,
       company: accountType === "company" ? company : null,
+      companyEmail: accountType === "company" ? companyEmail || null : null,
+      designation: accountType === "company" ? designation || null : null,
       companyNumber: accountType === "company" ? companyNumber || null : null,
       vatNumber: accountType === "company" ? vatNumber || null : null,
       accountType,

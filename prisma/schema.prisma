@@ -20,6 +20,8 @@ model User {
   phoneCode      String?
   accountType    String?   @default("individual")
   company        String?
+  companyEmail   String?
+  designation    String?
   companyNumber  String?
   vatNumber      String?
   stripeCustomerId String? @unique

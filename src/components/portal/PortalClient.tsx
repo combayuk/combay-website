@@ -684,6 +684,8 @@ function AccountPanel({
     phoneCode: "+44",
     phone: "",
     company: "",
+    companyEmail: "",
+    designation: "",
     companyNumber: "",
     vatNumber: "",
     newPassword: "",
@@ -709,6 +711,30 @@ function AccountPanel({
     setEditable((current) => ({ ...current, [field]: true }));
   }
 
+  function cancelField(field: string) {
+    setEditable((current) => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setForm((current) => ({
+      ...current,
+      ...(field === "phone" ? { phone: baseline.phone, phoneCode: baseline.phoneCode } : {}),
+      ...(field === "password" ? { newPassword: "", confirmPassword: "" } : {}),
+      ...(field === "twoStep" ? { twoStepEnabled: baseline.twoStepEnabled, twoStepMethod: baseline.twoStepMethod } : {}),
+      ...((field in baseline && field !== "password" && field !== "phone" && field !== "twoStep") ? { [field]: (baseline as any)[field] } : {}),
+    }));
+    setError("");
+    setPasswordError(false);
+  }
+
+  function cancelAllChanges() {
+    setForm({ ...baseline, currentPassword: "", newPassword: "", confirmPassword: "" });
+    setEditable({});
+    setError("");
+    setPasswordError(false);
+  }
+
   function updateField(field: keyof typeof form, value: string | boolean) {
     setForm((current) => ({ ...current, [field]: value as never }));
     setError("");
@@ -717,7 +743,7 @@ function AccountPanel({
 
   const changedFields = useMemo(() => {
     const fields: string[] = [];
-    (["name", "email", "phoneCode", "phone", "company", "companyNumber", "vatNumber", "newPassword", "twoStepEnabled", "twoStepMethod"] as const).forEach((field) => {
+    (["name", "email", "phoneCode", "phone", "company", "companyEmail", "designation", "companyNumber", "vatNumber", "newPassword", "twoStepEnabled", "twoStepMethod"] as const).forEach((field) => {
       if (String(form[field] ?? "") !== String(baseline[field] ?? "")) fields.push(field);
     });
     return fields;
@@ -735,6 +761,7 @@ function AccountPanel({
     if (!form.email.trim()) { setError("Email address is required."); return; }
     if (!form.phone.trim()) { setError("Phone number is required."); return; }
     if (accountType === "company" && !form.company.trim()) { setError("Company name is required for company accounts."); return; }
+    if (accountType === "company" && !form.companyEmail.trim()) { setError("Company email is required for company accounts."); return; }
     if (form.newPassword && form.newPassword !== form.confirmPassword) { setError("New password and confirmation password do not match."); return; }
     if (hasChanges && !form.currentPassword) { setPasswordError(true); setError("Enter your current password to save account changes."); return; }
 
@@ -750,6 +777,8 @@ function AccountPanel({
           phoneCode: form.phoneCode,
           phone: form.phone,
           company: accountType === "company" ? form.company : "",
+          companyEmail: accountType === "company" ? form.companyEmail : "",
+          designation: accountType === "company" ? form.designation : "",
           companyNumber: accountType === "company" ? form.companyNumber : "",
           vatNumber: accountType === "company" ? form.vatNumber : "",
           currentPassword: form.currentPassword,
@@ -787,8 +816,8 @@ function AccountPanel({
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <EditableInput label="Full name" required value={form.name} editable={!!editable.name} onEdit={() => enable("name")} onChange={(value) => updateField("name", value)} />
-          <EditableInput label="Email address" required type="email" value={form.email} editable={!!editable.email} onEdit={() => enable("email")} onChange={(value) => updateField("email", value)} />
+          <EditableInput label="Full name" required value={form.name} editable={!!editable.name} onEdit={() => enable("name")} onCancel={() => cancelField("name")} onChange={(value) => updateField("name", value)} />
+          <EditableInput label="Email address" required type="email" value={form.email} editable={!!editable.email} onEdit={() => enable("email")} onCancel={() => cancelField("email")} onChange={(value) => updateField("email", value)} />
           <div>
             <label className="label">Phone number *</label>
             <div className="flex">
@@ -797,13 +826,15 @@ function AccountPanel({
               </select>
               <div className="relative flex-1">
                 <input disabled={!editable.phone} required className={`input rounded-l-none pr-10 ${!editable.phone ? "bg-gray-100 text-gray-500" : "bg-white"}`} type="tel" placeholder="7xxx xxxxxx" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
-                <button type="button" onClick={() => enable("phone")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button>
+                <button type="button" onClick={() => editable.phone ? cancelField("phone") : enable("phone")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950">{editable.phone ? <X size={14} /> : <Edit3 size={14} />}</button>
               </div>
             </div>
           </div>
-          {accountType === "company" && <EditableInput label="Company name" required value={form.company} editable={!!editable.company} onEdit={() => enable("company")} onChange={(value) => updateField("company", value)} />}
-          {accountType === "company" && <EditableInput label="Company number" value={form.companyNumber} editable={!!editable.companyNumber} onEdit={() => enable("companyNumber")} onChange={(value) => updateField("companyNumber", value)} />}
-          {accountType === "company" && <EditableInput label="VAT number" value={form.vatNumber} editable={!!editable.vatNumber} onEdit={() => enable("vatNumber")} onChange={(value) => updateField("vatNumber", value)} />}
+          {accountType === "company" && <EditableInput label="Company name" required value={form.company} editable={!!editable.company} onEdit={() => enable("company")} onCancel={() => cancelField("company")} onChange={(value) => updateField("company", value)} />}
+          {accountType === "company" && <EditableInput label="Company email" required type="email" value={form.companyEmail} editable={!!editable.companyEmail} onEdit={() => enable("companyEmail")} onCancel={() => cancelField("companyEmail")} onChange={(value) => updateField("companyEmail", value)} />}
+          {accountType === "company" && <EditableInput label="Designation" value={form.designation} editable={!!editable.designation} onEdit={() => enable("designation")} onCancel={() => cancelField("designation")} onChange={(value) => updateField("designation", value)} />}
+          {accountType === "company" && <EditableInput label="Company number" value={form.companyNumber} editable={!!editable.companyNumber} onEdit={() => enable("companyNumber")} onCancel={() => cancelField("companyNumber")} onChange={(value) => updateField("companyNumber", value)} />}
+          {accountType === "company" && <EditableInput label="VAT number" value={form.vatNumber} editable={!!editable.vatNumber} onEdit={() => enable("vatNumber")} onCancel={() => cancelField("vatNumber")} onChange={(value) => updateField("vatNumber", value)} />}
         </div>
 
         {accountType === "company" && (
@@ -826,9 +857,12 @@ function AccountPanel({
           {!editable.password ? (
             <div className="relative max-w-md"><input disabled className="input bg-gray-100 text-gray-500 pr-10" type="password" value="********" readOnly /><button type="button" onClick={() => enable("password")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button></div>
           ) : (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="New password"><input className="input" type="password" minLength={8} value={form.newPassword} onChange={(event) => updateField("newPassword", event.target.value)} placeholder="Enter new password" autoComplete="new-password" /></Field>
-              <Field label="Confirm new password"><input className="input" type="password" minLength={8} value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></Field>
+            <div className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="New password"><input className="input" type="password" minLength={8} value={form.newPassword} onChange={(event) => updateField("newPassword", event.target.value)} placeholder="Enter new password" autoComplete="new-password" /></Field>
+                <Field label="Confirm new password"><input className="input" type="password" minLength={8} value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></Field>
+              </div>
+              <button type="button" onClick={() => cancelField("password")} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-600"><X size={13} /> Cancel password change</button>
             </div>
           )}
         </div>
@@ -839,7 +873,7 @@ function AccountPanel({
               <p className="font-display font-700 text-sm text-navy-950">Two-step verification</p>
               <p className="text-xs text-gray-500 mt-1">Add an extra verification step by email or phone. This stores your preference; enforcement will be enabled in the real-auth security phase.</p>
             </div>
-            <label className="flex items-center gap-2 text-sm font-display font-600 text-gray-600"><input type="checkbox" checked={form.twoStepEnabled} onChange={(event) => { enable("twoStep"); updateField("twoStepEnabled", event.target.checked); }} className="w-4 h-4 accent-accent" /> Enable</label>
+            <div className="flex items-center gap-3"><label className="flex items-center gap-2 text-sm font-display font-600 text-gray-600"><input type="checkbox" checked={form.twoStepEnabled} onChange={(event) => { enable("twoStep"); updateField("twoStepEnabled", event.target.checked); }} className="w-4 h-4 accent-accent" /> Enable</label>{editable.twoStep && <button type="button" onClick={() => cancelField("twoStep")} className="text-gray-400 hover:text-red-600"><X size={14} /></button>}</div>
           </div>
           {form.twoStepEnabled && (
             <div className="grid sm:grid-cols-2 gap-3 max-w-lg">
@@ -859,19 +893,22 @@ function AccountPanel({
 
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         {notice && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{notice}</p>}
-        <button disabled={saving || !hasChanges} onClick={submitAccountSettings} className="btn-primary disabled:opacity-50">{saving ? "Saving..." : "Save account settings →"}</button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button disabled={saving || !hasChanges} onClick={submitAccountSettings} className="btn-primary disabled:opacity-50">{saving ? "Saving..." : "Save account settings →"}</button>
+          {hasChanges && <button type="button" onClick={cancelAllChanges} className="btn-secondary inline-flex items-center gap-1"><X size={14} /> Cancel changes</button>}
+        </div>
       </div>
     </section>
   );
 }
 
-function EditableInput({ label, value, editable, onEdit, onChange, type = "text", required = false }: { label: string; value: string; editable: boolean; onEdit: () => void; onChange: (value: string) => void; type?: string; required?: boolean }) {
+function EditableInput({ label, value, editable, onEdit, onCancel, onChange, type = "text", required = false }: { label: string; value: string; editable: boolean; onEdit: () => void; onCancel?: () => void; onChange: (value: string) => void; type?: string; required?: boolean }) {
   return (
     <div>
       <label className="label">{label}{required ? " *" : ""}</label>
       <div className="relative">
         <input disabled={!editable} required={required} type={type} className={`input pr-10 ${!editable ? "bg-gray-100 text-gray-500" : "bg-white"}`} value={value} onChange={(event) => onChange(event.target.value)} />
-        <button type="button" onClick={onEdit} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button>
+        <button type="button" onClick={editable && onCancel ? onCancel : onEdit} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950">{editable && onCancel ? <X size={14} /> : <Edit3 size={14} />}</button>
       </div>
     </div>
   );

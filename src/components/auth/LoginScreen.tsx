@@ -142,10 +142,16 @@ function LoginForm({ mode }: { mode: LoginMode }) {
             </button>
           </form>
 
+          {mode === "customer" && (
+            <p className="text-center text-sm text-gray-500 mt-5">
+              Don’t have an account? <Link href="/auth/register" className="text-accent hover:text-accent-dark font-700">Register with us</Link>
+            </p>
+          )}
+
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs text-gray-400 mt-5">
             <Link href="/" className="hover:text-navy-950 transition-colors">← Back to website</Link>
             {mode !== "customer" && <Link href="/portal/login" className="hover:text-navy-950 transition-colors">Customer portal</Link>}
-            {mode !== "admin" && <Link href="/admin/login" className="hover:text-navy-950 transition-colors">Admin portal</Link>}
+            {mode !== "admin" && <Link href="/admin-login" className="hover:text-navy-950 transition-colors">Admin portal</Link>}
           </div>
         </div>
       </div>
