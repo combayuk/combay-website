@@ -161,7 +161,7 @@ async function generateForProduct(product: ProductRecord) {
   });
   await saveTags(product.id, suggestion.tags);
 
-  return { sku: product.sku, title: product.title, provider: suggestion.provider, model: suggestion.model };
+  return { sku: product.sku, title: product.title, provider: suggestion.provider, model: suggestion.model, note: suggestion.note };
 }
 
 export async function POST(req: Request) {
@@ -184,7 +184,7 @@ export async function POST(req: Request) {
       };
     }
 
-    const updated: Array<{ sku: string; title: string; provider?: string; model?: string }> = [];
+    const updated: Array<{ sku: string; title: string; provider?: string; model?: string; note?: string }> = [];
     const errors: Array<{ sku: string; title: string; error: string }> = [];
 
     for (const product of selected) {

@@ -24,11 +24,19 @@ function compact(value?: string | null) {
     .trim();
 }
 
+function limitForPrompt(value: string, max = 3600) {
+  const text = compact(value);
+  if (text.length <= max) return text;
+  const sliced = text.slice(0, max + 1);
+  const lastSpace = sliced.lastIndexOf(" ");
+  return `${sliced.slice(0, lastSpace > 100 ? lastSpace : max)}…`;
+}
+
 function specsForPrompt(specs: ProductContentInput["specs"] = []) {
   return specs
     .filter((spec) => compact(spec.label) && compact(spec.value))
-    .slice(0, 24)
-    .map((spec) => `${compact(spec.label)}: ${compact(spec.value)}`)
+    .slice(0, 20)
+    .map((spec) => `${limitForPrompt(compact(spec.label), 60)}: ${limitForPrompt(compact(spec.value), 180)}`)
     .join("\n");
 }
 
@@ -38,7 +46,7 @@ function tagsForPrompt(tags: string[] = []) {
 
 function buildPrompt(input: ProductContentInput, scope: GeminiContentScope) {
   const title = compact(input.title) || "Industrial product";
-  const description = compact(input.description || input.productOverview);
+  const description = limitForPrompt(input.description || input.productOverview || "", 3600);
   const specs = specsForPrompt(input.specs);
   const existingTags = tagsForPrompt(input.tags);
 
@@ -94,9 +102,32 @@ function findJsonObject(text: string) {
   }
 
   const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    return JSON.parse(cleaned.slice(start, end + 1));
+  if (start >= 0) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < cleaned.length; i += 1) {
+      const ch = cleaned[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === "{") depth += 1;
+      if (ch === "}") depth -= 1;
+      if (depth === 0) {
+        return JSON.parse(cleaned.slice(start, i + 1));
+      }
+    }
   }
 
   throw new Error("Gemini did not return JSON.");
@@ -207,8 +238,13 @@ export async function generateGeminiProductContent(input: ProductContentInput, s
     try {
       const repairedText = await requestGeminiRepair(apiKey, model, prompt, firstText || String(firstError));
       gemini = parseSuggestion(repairedText);
-    } catch {
-      throw firstError;
+    } catch (repairError) {
+      return {
+        ...local,
+        provider: "local",
+        model: "local-rule-based",
+        note: `${firstError instanceof Error ? firstError.message : "Gemini did not return usable JSON."} Local fallback was used after Gemini JSON repair failed.`,
+      };
     }
   }
 
