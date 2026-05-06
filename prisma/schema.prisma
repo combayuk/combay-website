@@ -118,6 +118,12 @@ model Product {
   stockQty         Int           @default(1)
   description      String?       @db.Text
   productOverview  String?       @db.Text
+  rawEbayDescription String?     @db.Text
+  titleLocked      Boolean       @default(false)
+  priceLocked      Boolean       @default(false)
+  imagesLocked     Boolean       @default(false)
+  specsLocked      Boolean       @default(false)
+  descriptionLocked Boolean      @default(false)
   manufacturerUrl  String?
   weight           Decimal?      @db.Decimal(8, 3)
   dimensions       String?

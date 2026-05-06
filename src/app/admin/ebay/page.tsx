@@ -80,7 +80,7 @@ export default function EbayAdminPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display font-800 text-navy-950 text-2xl">eBay Inventory Sync</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Connect eBay and import active Inventory API listings into Combay products.</p>
+          <p className="text-gray-400 text-sm mt-0.5">Connect eBay and import products using one unified sync. The system tries the Sell Inventory API first, then falls back to active eBay listings where needed.</p>
         </div>
         <button onClick={sync} disabled={syncing || !connected} className="btn-primary text-sm py-2 disabled:opacity-50">
           <RefreshCw size={14} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync eBay Inventory"}
@@ -164,9 +164,9 @@ export default function EbayAdminPage() {
         <aside className="bg-white border border-gray-200 rounded-xl p-5 h-fit">
           <h2 className="font-display font-800 text-navy-950 text-lg mb-3">Sync behaviour</h2>
           <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
-            <p>Sync imports eBay Inventory API items by SKU, title, price, quantity, images and item specifics.</p>
-            <p>Existing Combay products are updated when SKU matches. New SKUs are created as published products under eBay Import.</p>
-            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted.</p>
+            <p>One button runs a unified sync: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
+            <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
+            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. If active listings fail because of OAuth scope, reconnect eBay OAuth using the current RuName.</p>
           </div>
           <div className="border-t border-gray-100 mt-4 pt-4 text-xs text-gray-400 space-y-1">
             <p>Last sync: {config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"}</p>

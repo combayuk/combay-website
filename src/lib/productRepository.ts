@@ -9,6 +9,12 @@ export type ProductWriteInput = Partial<CatalogProduct> & {
   hsCode?: string;
   ebayItemId?: string;
   syncExcluded?: boolean;
+  rawEbayDescription?: string | null;
+  titleLocked?: boolean;
+  priceLocked?: boolean;
+  imagesLocked?: boolean;
+  specsLocked?: boolean;
+  descriptionLocked?: boolean;
   weightKg?: string;
   dimensionsCm?: string;
   adminNotes?: string;
@@ -89,6 +95,12 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     hsCode: product.hsCode ?? "",
     ebayItemId: product.ebayItemId ?? "",
     syncExcluded: product.syncExcluded ?? false,
+    rawEbayDescription: (product as any).rawEbayDescription ?? "",
+    titleLocked: (product as any).titleLocked ?? false,
+    priceLocked: (product as any).priceLocked ?? false,
+    imagesLocked: (product as any).imagesLocked ?? false,
+    specsLocked: (product as any).specsLocked ?? false,
+    descriptionLocked: (product as any).descriptionLocked ?? false,
     dimensionsCm: product.dimensions ?? "",
     weightKg: product.weight === null || product.weight === undefined ? "" : String(product.weight),
   };
@@ -279,6 +291,12 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       seoKeywords: Array.isArray(input.tags) ? input.tags.join(", ") : null,
       ebayItemId: (input as any).ebayItemId ?? null,
       syncExcluded: Boolean((input as any).syncExcluded),
+      rawEbayDescription: (input as any).rawEbayDescription ?? null,
+      titleLocked: Boolean((input as any).titleLocked),
+      priceLocked: Boolean((input as any).priceLocked),
+      imagesLocked: Boolean((input as any).imagesLocked),
+      specsLocked: Boolean((input as any).specsLocked),
+      descriptionLocked: Boolean((input as any).descriptionLocked),
     };
 
     const product = existing
