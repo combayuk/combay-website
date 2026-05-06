@@ -33,6 +33,27 @@ const DEFAULT_RULES: Record<AutomationTrigger, { name: string; subject: string; 
   },
 };
 
+function capitaliseWords(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (match) => match.toUpperCase())
+    .replace(/\s+/g, " ");
+}
+
+function hasHtmlMarkup(value: string) {
+  return /<(strong|b|em|i|u|br|p|ul|ol|li|span|h2|h3|div)\b/i.test(value);
+}
+
+function sanitizeLimitedHtml(value: string) {
+  const escapedDanger = String(value || "")
+    .replace(/<\/?script[^>]*>/gi, "")
+    .replace(/on[a-z]+\s*=\s*["'][^"']*["']/gi, "")
+    .replace(/javascript:/gi, "");
+  const allowed = /<\/?(strong|b|em|i|u|br|p|ul|ol|li|span|h2|h3|div)(\s+style="[^"]{0,220}")?\s*\/?>/gi;
+  return escapedDanger.replace(/<[^>]+>/g, (tag) => tag.match(allowed) ? tag : escapeHtml(tag));
+}
+
 export function defaultAutomationRule(trigger: AutomationTrigger) {
   return { trigger, isActive: true, delayHours: 0, ...DEFAULT_RULES[trigger] };
 }
@@ -50,7 +71,7 @@ function recipientFor(trigger: AutomationTrigger, context: AutomationContext) {
   const customer = context.customer;
   return {
     email: String(order?.customerEmail || user?.email || customer?.email || "").trim().toLowerCase(),
-    name: String(order?.customerName || user?.name || customer?.name || "Customer").trim(),
+    name: capitaliseWords(order?.customerName || user?.name || customer?.name || "Customer"),
     company: order?.company || user?.company || customer?.company || "",
     orderNumber: order?.orderNumber || "",
     orderTotal: order?.total !== undefined ? `£${Number(order.total).toFixed(2)}` : "",
@@ -79,6 +100,11 @@ export function renderTemplate(template: string, trigger: AutomationTrigger, con
 }
 
 function bodyHtml(body: string) {
+  if (hasHtmlMarkup(body)) {
+    return sanitizeLimitedHtml(body)
+      .replace(/\n{2,}/g, "</p><p>")
+      .replace(/(?<!>)\n/g, "<br/>");
+  }
   return body
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
@@ -139,7 +165,7 @@ export async function runEmailAutomations(trigger: AutomationTrigger, context: A
       },
     }).catch(() => null);
 
-    const result = await sendEmail({ to: recipient.email, subject, html });
+    const result = await sendEmail({ to: recipient.email, subject, html, headers: { "X-Combay-Automation": trigger } });
     results.push(result);
     if (log) {
       await prisma.emailAutomationLog.update({

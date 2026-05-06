@@ -3,7 +3,7 @@ import TopBar from "@/components/layout/TopBar";
 import Navigation from "@/components/layout/Navigation";
 import Footer from "@/components/layout/Footer";
 import ShopClient from "@/components/shop/ShopClient";
-import PublicPromotionStrip from "@/components/promotions/PublicPromotionStrip";
+import { getPublicPromotions, type PublicPromotion } from "@/lib/promotionDisplay";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +19,13 @@ type ShopPageProps = {
   };
 };
 
-export default function ShopPage({ searchParams }: ShopPageProps) {
+export default async function ShopPage({ searchParams }: ShopPageProps) {
+  const promotions: PublicPromotion[] = await getPublicPromotions("shop", 2);
   return (
     <main>
       <TopBar />
       <Navigation />
-      <PublicPromotionStrip placement="shop" />
-      <ShopClient initialQuery={searchParams?.q ?? ""} initialCategory={searchParams?.category ?? ""} />
+      <ShopClient initialQuery={searchParams?.q ?? ""} initialCategory={searchParams?.category ?? ""} promotions={promotions} />
       <Footer />
     </main>
   );

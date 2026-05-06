@@ -13,6 +13,7 @@ export type SendEmailInput = {
   html: string;
   text?: string;
   replyTo?: string;
+  headers?: Record<string, string>;
 };
 
 function cleanEmail(value: unknown) {
@@ -77,6 +78,10 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
         html: input.html,
         text: input.text || htmlToText(input.html),
         reply_to: replyTo,
+        headers: {
+          "X-Entity-Ref-ID": `combay-${Date.now()}`,
+          ...(input.headers || {}),
+        },
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -120,7 +125,7 @@ export function htmlShell(title: string, content: string, preheader?: string) {
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;">${escapeHtml(preheader)}</div>`
     : "";
 
-  return `<!doctype html><html><head><meta charSet="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#111827;">${hiddenPreheader}<div style="max-width:680px;margin:0 auto;padding:24px;"><div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;"><div style="padding:22px 24px 18px;border-bottom:1px solid #e5e7eb;background:#ffffff;"><img src="${escapeHtml(logo)}" alt="Combay" width="170" style="display:block;max-width:170px;height:auto;margin:0 0 14px;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Sourcing · Stock · Supply</div><h1 style="margin:0;font-size:21px;line-height:1.25;color:#0f172a;">${escapeHtml(title)}</h1></div><div style="padding:24px;font-size:14px;line-height:1.6;color:#1f2937;">${content}</div><div style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.55;color:#6b7280;"><strong style="color:#374151;">Combay Limited</strong><br/>2B Erick Avenue, Chelmsford, Essex, CM1 7BX<br/>sales@combay.co.uk · +44 7340 383334<br/><span style="color:#9ca3af;">This email relates to your enquiry, order, quote or document with Combay. Please reply to this email if anything needs correcting.</span></div></div></div></body></html>`;
+  return `<!doctype html><html><head><meta charSet="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#eef2f5;font-family:Arial,Helvetica,sans-serif;color:#111827;">${hiddenPreheader}<div style="max-width:700px;margin:0 auto;padding:26px 14px;"><div style="background:#ffffff;border:1px solid #d9e1e8;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,.06);"><div style="padding:24px 28px 20px;border-bottom:1px solid #e5e7eb;background:#ffffff;"><img src="${escapeHtml(logo)}" alt="Combay" width="175" style="display:block;max-width:175px;height:auto;margin:0 0 16px;"><h1 style="margin:0;font-size:22px;line-height:1.28;color:#0f172a;font-weight:800;">${escapeHtml(title)}</h1></div><div style="padding:26px 28px;font-size:14px;line-height:1.68;color:#1f2937;">${content}</div><div style="padding:18px 28px;background:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.6;color:#64748b;"><strong style="color:#334155;">Combay Limited</strong><br/>2B Erick Avenue, Chelmsford, Essex, CM1 7BX<br/>sales@combay.co.uk · +44 7340 383334<br/><span style="color:#94a3b8;">This email relates to your account, enquiry, order, quote or document with Combay. Please reply to this email if anything needs correcting.</span></div></div></div></body></html>`;
 }
 
 export function escapeHtml(value: unknown) {

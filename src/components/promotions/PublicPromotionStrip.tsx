@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Tag } from "lucide-react";
-import { getPublicPromotions, promotionOfferLabel } from "@/lib/promotionDisplay";
+import { getPublicPromotions } from "@/lib/promotionDisplay";
+import PublicPromotionCards from "@/components/promotions/PublicPromotionCards";
 
 export default async function PublicPromotionStrip({ placement = "home" }: { placement?: "home" | "shop" }) {
   const promotions = await getPublicPromotions(placement, placement === "home" ? 3 : 2);
@@ -14,22 +15,11 @@ export default async function PublicPromotionStrip({ placement = "home" }: { pla
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-navy-950"><Tag size={17} /></span>
             <div>
               <p className="font-display font-800 text-navy-950 text-sm">Current Combay offers</p>
-              <p className="text-xs text-gray-500">Apply the code at checkout where eligible.</p>
+              <p className="text-xs text-gray-500">Copy the code and apply it at checkout where eligible.</p>
             </div>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2 flex-1">
-            {promotions.map((promotion) => (
-              <div key={promotion.id} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-display font-800 text-navy-950 text-sm">{promotionOfferLabel(promotion)}</p>
-                    <p className="text-xs text-gray-700 mt-0.5">{promotion.bannerText || promotion.description || promotion.name}</p>
-                    {promotion.minOrderValue ? <p className="text-[11px] text-gray-500 mt-1">Minimum order £{Number(promotion.minOrderValue).toFixed(2)} before VAT.</p> : null}
-                  </div>
-                  {promotion.code ? <span className="font-mono text-xs font-800 tracking-wide bg-white border border-amber-300 text-navy-950 rounded-md px-2 py-1 whitespace-nowrap">{promotion.code}</span> : null}
-                </div>
-              </div>
-            ))}
+            <PublicPromotionCards promotions={promotions} />
           </div>
           <Link href="/shop" className="btn-secondary text-sm flex-shrink-0">Shop offers</Link>
         </div>
