@@ -15,7 +15,7 @@ export type CartLine = {
 
 export type CartProductLine = {
   product: CatalogProduct;
-  variant?: ProductVariantOption | null;
+  variant: ProductVariantOption | null;
   qty: number;
   unitPrice: number;
   availableQty: number;
