@@ -1,0 +1,29 @@
+Phase 13B.3 — eBay active listing detail enrichment
+
+This patch fixes the Phase 13B.2 issue where sync-all passed but product pictures, eBay descriptions, item specifics and categories did not appear.
+
+Root cause:
+Phase 13B.2 used the fast GetMyeBaySelling ActiveList summary payload to avoid Vercel timeouts. That summary often contains only item shells/stock and does not reliably include full PictureDetails, Description, ItemSpecifics or CategoryName. Therefore products were saved with the fallback description: "Imported from active eBay listing."
+
+Fix:
+- Keep the safe 50-listing browser/API batching from 13B.2.
+- For each Active Listings item in a batch, call Trading API GetItem with ReturnAll + IncludeItemSpecifics.
+- Enrich each product with:
+  - PictureDetails / PictureURL images
+  - full eBay description, cleaned using existing Shipping & Returns / T&C cutoff logic
+  - item specifics
+  - primary category name
+  - brand/manufacturer/model/MPN from item specifics where available
+- Process detail calls with limited concurrency to reduce timeout risk.
+- If GetItem detail fails for a single listing, save summary-only data for that item and log a partial error instead of failing the whole batch.
+
+No Prisma schema change required.
+
+After deploy:
+1. Go to /admin/ebay.
+2. Run Test sync 10.
+3. Check imported/updated products for images, description, specs and category.
+4. Then run Sync first 50.
+5. Then run Sync all.
+
+Existing products previously imported with fallback descriptions should update on the next sync unless their images/specs/description lock fields are enabled.

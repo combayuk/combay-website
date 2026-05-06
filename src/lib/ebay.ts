@@ -328,6 +328,46 @@ function conditionFromEbay(value: string) {
   return "USED" as const;
 }
 
+
+function mergeListingDetails(summary: NormalizedEbayListing | null, detail: NormalizedEbayListing | null): NormalizedEbayListing | null {
+  if (!summary && !detail) return null;
+  if (!summary) return detail;
+  if (!detail) return summary;
+  return {
+    ...summary,
+    ...detail,
+    // Keep operational fields from the active-list summary when eBay's GetItem detail response omits them.
+    ebayItemId: detail.ebayItemId || summary.ebayItemId,
+    sku: detail.sku || summary.sku,
+    title: detail.title || summary.title,
+    price: detail.price ?? summary.price,
+    quantity: Number.isFinite(detail.quantity) && detail.quantity >= 0 ? detail.quantity : summary.quantity,
+    images: detail.images.length ? detail.images : summary.images,
+    specs: detail.specs.length ? detail.specs : summary.specs,
+    rawDescription: detail.rawDescription || summary.rawDescription,
+    cleanDescription: detail.cleanDescription || summary.cleanDescription,
+    category: detail.category && detail.category !== "eBay Import" ? detail.category : summary.category,
+    brand: detail.brand || summary.brand,
+    manufacturer: detail.manufacturer || summary.manufacturer,
+    model: detail.model || summary.model,
+    mpn: detail.mpn || summary.mpn,
+    sourceMethod: "active-listings",
+  };
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>) {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, limit), items.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const current = nextIndex++;
+      results[current] = await worker(items[current], current);
+    }
+  }));
+  return results;
+}
+
 function specsFromTradingXml(xml: string) {
   return xmlBlocks(xmlText(xml, "ItemSpecifics") || xml, "NameValueList")
     .map((block) => {
@@ -555,30 +595,46 @@ async function syncTradingActiveListings(token: string, config: EbayConfig, opti
     const activeList = xmlText(xml, "ActiveList") || xml;
     const itemBlocks = xmlBlocks(activeList, "Item");
 
+    const pageItems: { itemId: string; itemBlock: string }[] = [];
     for (const itemBlock of itemBlocks) {
-      if (counts.records >= options.maxListings) break;
+      if (counts.records + pageItems.length >= options.maxListings) break;
       const itemId = xmlText(itemBlock, "ItemID");
       if (!itemId || seen.has(itemId)) continue;
       seen.add(itemId);
-      counts.records++;
-      try {
-        // Speed fix: use GetMyeBaySelling's returned item block by default.
-        // Older code called GetItem once per listing, which made 135 listings take ~10 minutes and caused full-sync failures.
-        // Detailed per-item enrichment can be added later as a separate background enrichment job.
-        let listing = listingFromTradingXml(itemBlock, "active-listings");
-        if (!listing && !options.fast) {
-          const detailedXml = await getTradingItemDetails(token, config, itemId).catch(() => itemBlock);
-          listing = listingFromTradingXml(detailedXml, "active-listings") || listingFromTradingXml(itemBlock, "active-listings");
-        }
-        if (!listing) { counts.skipped++; continue; }
-        const result = await saveEbayListing(listing);
-        if (result === "imported") counts.imported++;
-        else if (result === "updated") counts.updated++;
-        else counts.skipped++;
-      } catch (err: any) {
-        counts.errors.push(`Item ${itemId}: ${err.message || "Unknown ActiveList item sync error"}`);
-      }
+      pageItems.push({ itemId, itemBlock });
     }
+
+    const pageResults = await mapWithConcurrency(pageItems, 6, async ({ itemId, itemBlock }) => {
+      try {
+        const summaryListing = listingFromTradingXml(itemBlock, "active-listings");
+        // GetMyeBaySelling is fast but often omits the fields Combay needs for product pages.
+        // GetItem enriches each active listing with pictures, full description, item specifics and category.
+        const detailedXml = await getTradingItemDetails(token, config, itemId).catch((err: any) => {
+          throw new Error(err?.message || "Could not fetch detailed eBay listing data.");
+        });
+        const detailedListing = listingFromTradingXml(detailedXml, "active-listings");
+        const listing = mergeListingDetails(summaryListing, detailedListing);
+        if (!listing) return { result: "skipped" as const, error: "Could not parse listing after detail enrichment." };
+        const result = await saveEbayListing(listing);
+        return { result };
+      } catch (err: any) {
+        const fallbackListing = listingFromTradingXml(itemBlock, "active-listings");
+        if (fallbackListing) {
+          const result = await saveEbayListing(fallbackListing).catch(() => "skipped" as const);
+          return { result, error: `Item ${itemId}: detail enrichment failed; saved summary only. ${err.message || "Unknown ActiveList item sync error"}` };
+        }
+        return { result: "skipped" as const, error: `Item ${itemId}: ${err.message || "Unknown ActiveList item sync error"}` };
+      }
+    });
+
+    for (const item of pageResults) {
+      counts.records++;
+      if (item.result === "imported") counts.imported++;
+      else if (item.result === "updated") counts.updated++;
+      else counts.skipped++;
+      if (item.error) counts.errors.push(item.error);
+    }
+
     page++;
     counts.nextPage = page;
   } while (page <= totalPages && page <= lastPage && counts.records < options.maxListings);
@@ -616,7 +672,7 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
     notes.push(`Inventory API: ${inventoryCounts.records} records.`);
 
     if (inventoryCounts.records === 0) {
-      notes.push("Inventory API returned 0 records; using fast Active Listings fallback.");
+      notes.push("Inventory API returned 0 records; using Active Listings fallback with per-item detail enrichment for images, descriptions, categories and item specifics.");
       const tradingCounts = await syncTradingActiveListings(token, config, options);
       imported += tradingCounts.imported;
       updated += tradingCounts.updated;
@@ -626,7 +682,7 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
       totalPages = tradingCounts.totalPages;
       done = Boolean(tradingCounts.done);
       errors.push(...tradingCounts.errors);
-      notes.push(`Active Listings fallback: ${tradingCounts.records} records on page ${tradingCounts.startPage}${tradingCounts.totalPages ? ` of ${tradingCounts.totalPages}` : ""}.`);
+      notes.push(`Active Listings fallback: ${tradingCounts.records} enriched records on page ${tradingCounts.startPage}${tradingCounts.totalPages ? ` of ${tradingCounts.totalPages}` : ""}.`);
     } else {
       done = true;
       notes.push("Active Listings fallback not used because Inventory API returned records.");
