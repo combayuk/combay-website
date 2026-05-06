@@ -13,6 +13,9 @@ export type AdminProduct = CatalogProduct & {
   locationBin?: string;
   itemLocation?: string;
   hsCode?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoKeywords?: string;
   ebayItemId?: string;
   syncExcluded?: boolean;
 };
@@ -30,6 +33,9 @@ export function toAdminProduct(product: CatalogProduct, index = 0): AdminProduct
     source: "catalog",
     locationBin: index % 2 === 0 ? "WH-A" : "WH-B",
     itemLocation: "United Kingdom",
+    seoTitle: "",
+    seoDescription: "",
+    seoKeywords: "",
   };
 }
 
@@ -153,6 +159,9 @@ export function createBlankAdminProduct(): AdminProduct {
     updatedAt: nowIso(),
     source: "admin",
     itemLocation: "United Kingdom",
+    seoTitle: "",
+    seoDescription: "",
+    seoKeywords: "",
   };
 }
 

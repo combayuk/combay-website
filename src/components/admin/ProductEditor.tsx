@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText, ImagePlus, Plus, Save, Star, Trash2, Video } from "lucide-react";
+import { ArrowLeft, FileText, ImagePlus, Plus, Save, Sparkles, Star, Trash2, Video } from "lucide-react";
 import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
+import { generateProductContent } from "@/lib/productContentAssistant";
 
 type Props = { mode: "new" | "edit"; productId?: string };
 type Tab = "basic" | "content" | "images" | "logistics" | "variants" | "seo";
@@ -158,6 +159,44 @@ export default function ProductEditor({ mode, productId }: Props) {
   function addVariantRow() { setVariantRows((rows) => [...rows, { label: `Variant ${rows.length + 1}`, sku: "", optionName: "", optionValue: "", price: null, stockQty: 0, sortOrder: rows.length }]); }
   function deleteVariantRow(index: number) { setVariantRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, sortOrder: rowIndex }))); }
 
+  function applyContentAssistant(scope: "overview" | "seo" | "all") {
+    const suggestions = generateProductContent({
+      title: product.title,
+      sku: product.sku,
+      brand: product.brand,
+      manufacturer: product.manufacturer,
+      model: product.model,
+      mpn: product.mpn,
+      category: product.category,
+      condition: product.condition,
+      description: product.description,
+      productOverview: product.productOverview,
+      itemLocation: (product as any).itemLocation,
+      specs: textToSpecs(specText),
+      tags: textToTags(tagText),
+    });
+
+    if (scope === "overview" || scope === "all") {
+      setProduct((current) => ({
+        ...current,
+        description: scope === "all" || !current.description?.trim() ? suggestions.description : current.description,
+        productOverview: suggestions.productOverview,
+      }));
+    }
+
+    if (scope === "seo" || scope === "all") {
+      setProduct((current) => ({
+        ...current,
+        seoTitle: suggestions.seoTitle,
+        seoDescription: suggestions.seoDescription,
+        seoKeywords: suggestions.tags.join(", "),
+      } as AdminProduct));
+      setTagText(suggestions.tags.join(", "));
+    }
+
+    setMessage(scope === "seo" ? "SEO suggestions generated. Review and save the product." : "Content suggestions generated. Review and save the product.");
+  }
+
   async function uploadFile(file: File | null, folder: "products" | "docs") {
     if (!file) return;
     const form = new FormData();
@@ -279,7 +318,23 @@ export default function ProductEditor({ mode, productId }: Props) {
           </div>
         )}
 
-        {tab === "content" && <div className="space-y-5"><div><label className="label">Short description</label><textarea value={product.description} onChange={(e) => update("description", e.target.value)} className="input min-h-[120px]" /></div><div><label className="label">Product overview</label><textarea value={product.productOverview} onChange={(e) => update("productOverview", e.target.value)} className="input min-h-[160px]" /></div><div><label className="label">Specifications table</label><p className="text-xs text-gray-400 mb-2">One per line: Label: Value</p><textarea value={specText} onChange={(e) => setSpecText(e.target.value)} className="input min-h-[160px] font-mono text-xs" placeholder="Series: SIMATIC S7-400\nMPN: 6ES7412-2XJ05-0AB0" /></div></div>}
+        {tab === "content" && (
+          <div className="space-y-5">
+            <div className="bg-surface border border-gray-200 rounded-xl p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="font-display font-800 text-navy-950">Product content assistant</h2>
+                <p className="text-xs text-gray-500 mt-1">Creates concise procurement-style copy from title, brand, MPN, category and specifications. Review before saving.</p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button type="button" onClick={() => applyContentAssistant("overview")} className="btn-secondary text-sm"><Sparkles size={14} /> Generate overview</button>
+                <button type="button" onClick={() => applyContentAssistant("all")} className="btn-primary text-sm"><Sparkles size={14} /> Generate content + SEO</button>
+              </div>
+            </div>
+            <div><label className="label">Short description</label><textarea value={product.description} onChange={(e) => update("description", e.target.value)} className="input min-h-[120px]" /></div>
+            <div><label className="label">Product overview</label><textarea value={product.productOverview} onChange={(e) => update("productOverview", e.target.value)} className="input min-h-[180px]" /></div>
+            <div><label className="label">Specifications table</label><p className="text-xs text-gray-400 mb-2">One per line: Label: Value</p><textarea value={specText} onChange={(e) => setSpecText(e.target.value)} className="input min-h-[160px] font-mono text-xs" placeholder={"Series: SIMATIC S7-400\nMPN: 6ES7412-2XJ05-0AB0"} /></div>
+          </div>
+        )}
 
         {tab === "images" && (
           <div className="space-y-5">
@@ -305,7 +360,22 @@ export default function ProductEditor({ mode, productId }: Props) {
           </div>
         )}
 
-        {tab === "seo" && <div className="space-y-5"><div><label className="label">Slug</label><input value={product.slug} onChange={(e) => update("slug", e.target.value)} className="input font-mono text-sm" /></div><div><label className="label">Search tags</label><input value={tagText} onChange={(e) => setTagText(e.target.value)} className="input" placeholder="PLC, Siemens, 6ES7412" /></div><div><label className="label">Admin notes</label><textarea value={product.adminNotes ?? ""} onChange={(e) => update("adminNotes", e.target.value)} className="input min-h-[120px]" /></div></div>}
+        {tab === "seo" && (
+          <div className="space-y-5">
+            <div className="bg-surface border border-gray-200 rounded-xl p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="font-display font-800 text-navy-950">SEO assistant</h2>
+                <p className="text-xs text-gray-500 mt-1">Generates a compact title, meta description and search tags using the current product fields.</p>
+              </div>
+              <button type="button" onClick={() => applyContentAssistant("seo")} className="btn-secondary text-sm"><Sparkles size={14} /> Generate SEO</button>
+            </div>
+            <div><label className="label">Slug</label><input value={product.slug} onChange={(e) => update("slug", e.target.value)} className="input font-mono text-sm" /></div>
+            <div><label className="label">SEO title</label><input value={(product as any).seoTitle ?? ""} onChange={(e) => update("seoTitle" as any, e.target.value as any)} className="input" placeholder="Short product title for search engines" /><p className="text-xs text-gray-400 mt-1">Aim for 50–68 characters.</p></div>
+            <div><label className="label">SEO meta description</label><textarea value={(product as any).seoDescription ?? ""} onChange={(e) => update("seoDescription" as any, e.target.value as any)} className="input min-h-[90px]" placeholder="Concise search result description" /><p className="text-xs text-gray-400 mt-1">Aim for 140–155 characters.</p></div>
+            <div><label className="label">Search tags</label><input value={tagText} onChange={(e) => setTagText(e.target.value)} className="input" placeholder="PLC, Siemens, 6ES7412" /></div>
+            <div><label className="label">Admin notes</label><textarea value={product.adminNotes ?? ""} onChange={(e) => update("adminNotes", e.target.value)} className="input min-h-[120px]" /></div>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-between items-center"><Link href="/admin/products" className="btn-secondary">Cancel</Link><div className="flex gap-2"><button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary"><Save size={14} /> Save Draft</button><button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary">Save & Publish</button></div></div>
