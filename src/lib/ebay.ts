@@ -19,6 +19,10 @@ type SyncCounts = {
   skipped: number;
   errors: string[];
   records: number;
+  startPage?: number;
+  nextPage?: number;
+  totalPages?: number;
+  done?: boolean;
 };
 
 export type EbaySyncMode = "test10" | "first50" | "all";
@@ -27,13 +31,21 @@ type EbaySyncOptions = {
   mode?: EbaySyncMode;
   maxListings?: number;
   maxPages?: number;
+  startPage?: number;
+  entriesPerPage?: number;
+  fast?: boolean;
 };
 
 function normaliseSyncOptions(options: EbaySyncOptions = {}) {
   const mode = options.mode || "test10";
-  if (mode === "all") return { mode, maxListings: options.maxListings ?? 500, maxPages: options.maxPages ?? 25 };
-  if (mode === "first50") return { mode, maxListings: 50, maxPages: 5 };
-  return { mode: "test10" as const, maxListings: 10, maxPages: 2 };
+  const startPage = Math.max(1, Number(options.startPage || 1));
+  const entriesPerPage = Math.min(100, Math.max(10, Number(options.entriesPerPage || 50)));
+
+  // Full sync is intentionally paged client-side. Each request processes one or a few eBay pages only,
+  // avoiding Vercel timeouts and allowing inventories of 5,000+ listings to be processed in batches.
+  if (mode === "all") return { mode, maxListings: options.maxListings ?? 50, maxPages: options.maxPages ?? 1, startPage, entriesPerPage, fast: options.fast ?? true };
+  if (mode === "first50") return { mode, maxListings: 50, maxPages: 1, startPage: 1, entriesPerPage, fast: options.fast ?? true };
+  return { mode: "test10" as const, maxListings: 10, maxPages: 1, startPage: 1, entriesPerPage: 10, fast: options.fast ?? true };
 }
 
 async function markStaleEbayRuns() {
@@ -290,7 +302,7 @@ function xmlBlocks(xml: string, tag: string) {
 
 function cleanEbayDescription(raw: string) {
   if (!raw) return "";
-  return htmlDecode(raw)
+  const text = htmlDecode(raw)
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
@@ -303,6 +315,9 @@ function cleanEbayDescription(raw: string) {
     .replace(/\n\s+|\s+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  const cutoff = text.search(/(^|\n|\b)(shipping\s*&\s*returns|shipping\s+and\s+returns|terms\s*&\s*conditions|terms\s+and\s+conditions|t&c'?s|returns policy|payment|postage|delivery)(\b|\n)/i);
+  return cutoff > 0 ? text.slice(0, cutoff).trim() : text;
 }
 
 function conditionFromEbay(value: string) {
@@ -514,17 +529,19 @@ function listingFromTradingXml(itemXml: string, sourceMethod: "active-listings")
 }
 
 async function syncTradingActiveListings(token: string, config: EbayConfig, options: ReturnType<typeof normaliseSyncOptions>): Promise<SyncCounts> {
-  const counts: SyncCounts = { imported: 0, updated: 0, skipped: 0, errors: [], records: 0 };
-  let page = 1;
-  let totalPages = 1;
+  const counts: SyncCounts = { imported: 0, updated: 0, skipped: 0, errors: [], records: 0, startPage: options.startPage, nextPage: options.startPage, totalPages: 1, done: false };
+  let page = options.startPage;
+  let totalPages = options.startPage;
   const seen = new Set<string>();
+  const lastPage = options.startPage + options.maxPages - 1;
+
   do {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ActiveList>
     <Include>true</Include>
     <Pagination>
-      <EntriesPerPage>50</EntriesPerPage>
+      <EntriesPerPage>${options.entriesPerPage}</EntriesPerPage>
       <PageNumber>${page}</PageNumber>
     </Pagination>
   </ActiveList>
@@ -533,9 +550,11 @@ async function syncTradingActiveListings(token: string, config: EbayConfig, opti
   <WarningLevel>High</WarningLevel>
 </GetMyeBaySellingRequest>`;
     const xml = await tradingApiCall(token, config, "GetMyeBaySelling", body);
-    totalPages = Number(xmlText(xml, "TotalNumberOfPages") || 1);
+    totalPages = Number(xmlText(xml, "TotalNumberOfPages") || page || 1);
+    counts.totalPages = totalPages;
     const activeList = xmlText(xml, "ActiveList") || xml;
     const itemBlocks = xmlBlocks(activeList, "Item");
+
     for (const itemBlock of itemBlocks) {
       if (counts.records >= options.maxListings) break;
       const itemId = xmlText(itemBlock, "ItemID");
@@ -543,8 +562,14 @@ async function syncTradingActiveListings(token: string, config: EbayConfig, opti
       seen.add(itemId);
       counts.records++;
       try {
-        const detailedXml = await getTradingItemDetails(token, config, itemId).catch(() => itemBlock);
-        const listing = listingFromTradingXml(detailedXml, "active-listings") || listingFromTradingXml(itemBlock, "active-listings");
+        // Speed fix: use GetMyeBaySelling's returned item block by default.
+        // Older code called GetItem once per listing, which made 135 listings take ~10 minutes and caused full-sync failures.
+        // Detailed per-item enrichment can be added later as a separate background enrichment job.
+        let listing = listingFromTradingXml(itemBlock, "active-listings");
+        if (!listing && !options.fast) {
+          const detailedXml = await getTradingItemDetails(token, config, itemId).catch(() => itemBlock);
+          listing = listingFromTradingXml(detailedXml, "active-listings") || listingFromTradingXml(itemBlock, "active-listings");
+        }
         if (!listing) { counts.skipped++; continue; }
         const result = await saveEbayListing(listing);
         if (result === "imported") counts.imported++;
@@ -555,9 +580,14 @@ async function syncTradingActiveListings(token: string, config: EbayConfig, opti
       }
     }
     page++;
-  } while (page <= totalPages && page <= options.maxPages && counts.records < options.maxListings);
+    counts.nextPage = page;
+  } while (page <= totalPages && page <= lastPage && counts.records < options.maxListings);
+
+  counts.done = page > totalPages;
+  counts.nextPage = counts.done ? undefined : page;
   return counts;
 }
+
 
 export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
   const options = normaliseSyncOptions(inputOptions);
@@ -566,8 +596,12 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
   if (activeRun) {
     return { ok: false, imported: 0, updated: 0, skipped: 0, errors: ["Another eBay sync is already running. Use Reset stuck sync if this is stale."], message: "Another eBay sync is already running." };
   }
-  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Starting unified eBay inventory sync (${options.mode}, max ${options.maxListings} listings).` } });
+  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Starting unified eBay inventory sync (${options.mode}, page ${options.startPage}, max ${options.maxListings} listings).` } });
   let imported = 0, updated = 0, skipped = 0;
+  let records = 0;
+  let nextPage: number | undefined;
+  let totalPages: number | undefined;
+  let done = true;
   const errors: string[] = [];
   const notes: string[] = [];
   try {
@@ -578,17 +612,23 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
     updated += inventoryCounts.updated;
     skipped += inventoryCounts.skipped;
     errors.push(...inventoryCounts.errors);
+    records += inventoryCounts.records;
     notes.push(`Inventory API: ${inventoryCounts.records} records.`);
 
     if (inventoryCounts.records === 0) {
-      notes.push("Inventory API returned 0 records; using Active Listings fallback.");
+      notes.push("Inventory API returned 0 records; using fast Active Listings fallback.");
       const tradingCounts = await syncTradingActiveListings(token, config, options);
       imported += tradingCounts.imported;
       updated += tradingCounts.updated;
       skipped += tradingCounts.skipped;
+      records += tradingCounts.records;
+      nextPage = tradingCounts.nextPage;
+      totalPages = tradingCounts.totalPages;
+      done = Boolean(tradingCounts.done);
       errors.push(...tradingCounts.errors);
-      notes.push(`Active Listings fallback: ${tradingCounts.records} records.`);
+      notes.push(`Active Listings fallback: ${tradingCounts.records} records on page ${tradingCounts.startPage}${tradingCounts.totalPages ? ` of ${tradingCounts.totalPages}` : ""}.`);
     } else {
+      done = true;
       notes.push("Active Listings fallback not used because Inventory API returned records.");
     }
 
@@ -597,9 +637,9 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
     }
 
     await prisma.ebaySyncConfig.update({ where: { id: config.id }, data: { lastSyncAt: new Date() } });
-    const message = `Unified sync complete (${options.mode}, max ${options.maxListings} listings). ${notes.join(" ")}`;
+    const message = `Unified sync complete (${options.mode}, page ${options.startPage}, max ${options.maxListings} listings). ${notes.join(" ")}${done ? " Done." : ` Next page: ${nextPage}.`}`;
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", message, imported, updated, skipped, errors, finishedAt: new Date() } });
-    return { ok: true, imported, updated, skipped, errors, message };
+    return { ok: true, imported, updated, skipped, records, errors, message, nextPage, totalPages, done };
   } catch (err: any) {
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay sync failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
     return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay sync failed."] };

@@ -1,0 +1,16 @@
+Phase 13B.2 - eBay sync speed and large inventory batching
+
+This patch improves the eBay sync after real-world testing showed:
+- Test sync 10: 2/2 pass but 1-2 minutes
+- Sync first 50: 2/2 pass but 4-5 minutes
+- Sync all: 0/3 pass, timing out/failing around 135 listings
+
+Changes:
+1. Sync all now runs in safe 50-listing browser/API batches rather than a single long Vercel request.
+2. Full sync supports up to 250 eBay pages at 50 listings per page (12,500 listing capacity), so it is ready for 5,000+ inventory.
+3. Active Listings fallback uses fast summary import from GetMyeBaySelling instead of one slow GetItem detail call per listing.
+4. Sync all shows progress page-by-page and records each batch as a sync run.
+5. Admin page displays pass/fail counters since the speed patch for Test sync 10, Sync first 50 and Sync all.
+6. eBay description cleaning now strips boilerplate starting from Shipping & Returns / T&Cs / Terms & Conditions / Payment / Postage / Delivery headings where detected.
+
+No Prisma schema change required.

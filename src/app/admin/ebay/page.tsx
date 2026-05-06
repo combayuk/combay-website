@@ -64,14 +64,44 @@ export default function EbayAdminPage() {
 
   async function sync(mode: "test10" | "first50" | "all") {
     setSyncing(mode);
-    const label = mode === "test10" ? "test sync of first 10 listings" : mode === "first50" ? "first 50 listings" : "all available listings";
+    let totalImported = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let totalRecords = 0;
+    let page = 1;
+    let done = false;
+    const maxSafetyPages = mode === "all" ? 250 : 1; // 250 pages × 50 entries = 12,500 listings capacity.
+    const label = mode === "test10" ? "test sync of first 10 listings" : mode === "first50" ? "first 50 listings" : "all available listings in safe batches";
     setMessage(`Starting ${label}. Do not start another sync until this finishes.`);
-    const response = await fetch("/api/ebay/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) });
-    const result = await response.json().catch(() => ({}));
-    setSyncing(null);
-    if (!response.ok || !result.ok) { setMessage(result.errors?.join(" ") || result.error || "eBay sync failed."); await load(); return; }
-    setMessage(`Sync complete: ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped. ${result.message || ""}`);
-    await load();
+
+    try {
+      while (!done && page <= maxSafetyPages) {
+        const payload = mode === "all"
+          ? { mode, startPage: page, maxPages: 1, maxListings: 50, entriesPerPage: 50, fast: true }
+          : { mode, fast: true };
+        setMessage(mode === "all" ? `Sync all running safely in batches. Processing eBay page ${page}...` : `Starting ${label}...`);
+        const response = await fetch("/api/ebay/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) {
+          throw new Error(result.errors?.join(" ") || result.error || "eBay sync failed.");
+        }
+        totalImported += Number(result.imported || 0);
+        totalUpdated += Number(result.updated || 0);
+        totalSkipped += Number(result.skipped || 0);
+        totalRecords += Number(result.records || 0);
+        done = mode !== "all" || Boolean(result.done);
+        page = Number(result.nextPage || page + 1);
+        await load();
+        if (mode !== "all") break;
+      }
+
+      setMessage(`Sync complete: ${totalImported} imported, ${totalUpdated} updated, ${totalSkipped} skipped, ${totalRecords} records processed.${mode === "all" ? " Full sync ran in safe 50-listing batches to reduce timeout failures." : ""}`);
+    } catch (error: any) {
+      setMessage(error.message || "eBay sync failed.");
+    } finally {
+      setSyncing(null);
+      await load();
+    }
   }
 
   async function resetSync() {
@@ -84,6 +114,13 @@ export default function EbayAdminPage() {
 
   const connected = config.refreshTokenConfigured;
   const accountDeletionEndpoint = typeof window !== "undefined" ? `${window.location.origin}/api/ebay/account-deletion` : "/api/ebay/account-deletion";
+
+  function passFail(mode: "test10" | "first50" | "all") {
+    const relevant = runs.filter((run) => (run.message || "").includes(`(${mode},`));
+    const pass = relevant.filter((run) => run.status === "SUCCESS" || run.status === "PARTIAL").length;
+    const fail = relevant.filter((run) => run.status === "FAILED").length;
+    return `${pass}/${fail}`;
+  }
 
   return (
     <div className="space-y-6">
@@ -106,6 +143,20 @@ export default function EbayAdminPage() {
       </div>
 
       {message && <div className={`rounded-xl px-4 py-3 text-sm border ${message.toLowerCase().includes("fail") || message.toLowerCase().includes("could not") ? "bg-red-50 border-red-200 text-red-700" : "bg-green-50 border-green-200 text-green-800"}`}>{message}</div>}
+
+      <section className="grid sm:grid-cols-3 gap-3">
+        {[
+          ["Test sync 10", passFail("test10")],
+          ["Sync first 50", passFail("first50")],
+          ["Sync all", passFail("all")],
+        ].map(([label, value]) => (
+          <div key={label} className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="text-xs text-gray-400 uppercase tracking-widest">Since speed patch</p>
+            <p className="font-display font-800 text-navy-950 mt-1">{label}</p>
+            <p className="text-sm text-gray-500 mt-1">Pass / fail: <span className="font-display font-800 text-navy-950">{value}</span></p>
+          </div>
+        ))}
+      </section>
 
       <section className="bg-amber-50 border border-amber-200 rounded-xl p-5">
         <div className="flex items-start gap-3">
@@ -185,6 +236,7 @@ export default function EbayAdminPage() {
           <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
             <p>The sync still uses one unified engine: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
             <p>Use <strong>Test sync 10</strong> before a full import. Then use <strong>Sync first 50</strong> to check mapping, descriptions and images before running all listings.</p>
+            <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
             <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p>
           </div>
