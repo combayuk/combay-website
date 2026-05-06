@@ -27,6 +27,7 @@ model User {
   stripeCustomerId String? @unique
   twoStepEnabled Boolean  @default(false)
   twoStepMethod  String?
+  requiresEmailVerification Boolean @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -680,6 +681,23 @@ model EmailAutomationRule {
   @@index([isActive])
 }
 
+model EmailDraftTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("general")
+  trigger   EmailAutomationTrigger
+  subject   String
+  body      String   @db.Text
+  ctaLabel  String?
+  ctaUrl    String?
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([trigger])
+}
+
 model EmailAutomationLog {
   id             String   @id @default(cuid())
   ruleId         String?
@@ -704,4 +722,21 @@ enum EmailAutomationTrigger {
   NEW_SIGNUP
   FIRST_ORDER_COMPLETED
   ORDER_COMPLETED
+  MONTHLY_JANUARY
+  MONTHLY_FEBRUARY
+  MONTHLY_MARCH
+  MONTHLY_APRIL
+  MONTHLY_MAY
+  MONTHLY_JUNE
+  MONTHLY_JULY
+  MONTHLY_AUGUST
+  MONTHLY_SEPTEMBER
+  MONTHLY_OCTOBER
+  MONTHLY_NOVEMBER
+  MONTHLY_DECEMBER
+  NEW_YEAR
+  SUMMER
+  EASTER
+  CHRISTMAS
+  BOXING_DAY
 }

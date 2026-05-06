@@ -1,4 +1,6 @@
+import { getServerSession } from "next-auth";
 import { prisma, withDatabase } from "@/lib/db";
+import { authOptions } from "@/lib/auth";
 import { generateReference, readJsonBody, todayLabel } from "@/lib/requests";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 import { formatReturnRow } from "@/lib/returnUtils";
@@ -19,11 +21,16 @@ const DEMO_RETURNS = [
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const portal = url.searchParams.get("portal") === "1";
-  const admin = url.searchParams.get("admin") === "1";
+  const session = portal ? await getServerSession(authOptions).catch(() => null) : null;
+  const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
+  if (portal && !sessionEmail) {
+    return Response.json({ ok: true, mode: "database", data: [], returns: [], portalReturns: [] });
+  }
   const dbResult = await withDatabase(async () => {
     const rows = await prisma.return.findMany({
+      where: portal ? { order: { customerEmail: { equals: sessionEmail, mode: "insensitive" as const } } } : undefined,
       orderBy: { createdAt: "desc" },
-      take: 200,
+      take: portal ? 50 : 200,
       include: { order: { include: { items: true } } },
     });
     return rows.map(formatReturnRow);
@@ -35,6 +42,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const session = await getServerSession(authOptions).catch(() => null);
+  const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
   const body = await readJsonBody(req);
   const reference = typeof body.reference === "string" ? body.reference : generateReference("RET");
 
@@ -58,6 +67,7 @@ export async function POST(req: Request) {
   const dbResult = await withDatabase(async () => {
     const order = body.orderId ? await prisma.order.findUnique({ where: { orderNumber: String(body.orderId) } }) : null;
     if (!order) throw new Error("Order not found in database. Return recorded in preview mode only until order persistence is active.");
+    if (sessionEmail && order.customerEmail.toLowerCase() !== sessionEmail) throw new Error("This order does not belong to the signed-in customer.");
     return prisma.return.create({
       data: {
         orderId: order.id,

@@ -1,5 +1,7 @@
+import { getServerSession } from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
+import { authOptions } from "@/lib/auth";
 
 const DEMO_ORDERS = [
   { id: "demo-1", orderNumber: "CB1ACB2F", status: "DELIVERED", paymentStatus: "PAID", total: 1240, subtotal: 1033.33, tax: 206.67, shipping: 0, createdAt: "2026-04-28", customerName: "Demo Customer", customerEmail: "demo@combay.co.uk", items: [] },
@@ -80,11 +82,18 @@ function normalizePortalOrder(order: any) {
 }
 
 export async function GET(request: NextRequest) {
-  const email = request.nextUrl.searchParams.get("email");
+  const requestedEmail = request.nextUrl.searchParams.get("email");
   const portal = request.nextUrl.searchParams.get("portal") === "1";
+  const session = portal ? await getServerSession(authOptions).catch(() => null) : null;
+  const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
+  const email = portal ? sessionEmail : requestedEmail;
+
+  if (portal && !sessionEmail) {
+    return NextResponse.json({ ok: true, mode: "database", data: [], orders: [], portalOrders: [] });
+  }
 
   const dbResult = await withDatabase(async () => {
-    const where = email ? { customerEmail: email } : undefined;
+    const where = email ? { customerEmail: { equals: email, mode: "insensitive" as const } } : undefined;
     return prisma.order.findMany({
       where,
       orderBy: { createdAt: "desc" },

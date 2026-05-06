@@ -43,10 +43,9 @@ function serialiseTicket(ticket: any) {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const portal = searchParams.get("portal") === "1";
-  const emailParam = searchParams.get("email") || "";
   const session = await getServerSession(authOptions).catch(() => null);
   const sessionEmail = session?.user?.email || "";
-  const email = portal ? (emailParam || sessionEmail) : "";
+  const email = portal ? sessionEmail : "";
 
   const dbResult = await withDatabase(async () => prisma.supportTicket.findMany({
     where: portal ? (email ? { email } : { id: "__no_portal_session__" }) : undefined,

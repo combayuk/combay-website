@@ -36,6 +36,7 @@ function LoginForm({ mode }: { mode: LoginMode }) {
   const params = useSearchParams();
   const defaultCallback = mode === "admin" ? "/admin" : "/portal";
   const callbackUrl = params.get("callbackUrl") ?? defaultCallback;
+  const verified = params.get("verified") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,10 +62,15 @@ function LoginForm({ mode }: { mode: LoginMode }) {
       return;
     }
 
+    if (res?.error === "EMAIL_NOT_VERIFIED" || String(res?.error || "").includes("EMAIL_NOT_VERIFIED")) {
+      setError("Please verify your email address before signing in. Use the verification code sent to your email.");
+      return;
+    }
+
     setError(
       mode === "admin"
         ? "Incorrect admin credentials. Use the authorised admin test account."
-        : "Incorrect credentials. Use the customer test account below."
+        : "Incorrect credentials. Check your email/password or use the customer test account below."
     );
   }
 
@@ -121,6 +127,12 @@ function LoginForm({ mode }: { mode: LoginMode }) {
         <div className="bg-white rounded-2xl p-6 shadow-card-lg">
           <h1 className="font-display font-800 text-navy-950 text-xl mb-0.5">{title}</h1>
           <p className="text-gray-400 text-xs mb-5">{subtitle}</p>
+
+          {verified && !error && (
+            <div className="bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg px-3 py-2.5 mb-4 font-display font-600">
+              Email verified. You can now sign in.
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2.5 mb-4 font-display font-600">

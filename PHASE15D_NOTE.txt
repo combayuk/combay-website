@@ -1,0 +1,29 @@
+Phase 15D — customer portal isolation, email verification, scheduled marketing triggers and editable draft templates
+
+Included:
+- Customer portal orders/returns/support now filter by the signed-in session email server-side.
+- New registrations now require email verification before sign-in.
+- Registration creates a pending account, emails a 6-digit code, shows a six-box verification screen, supports resend code, and runs NEW_SIGNUP automation only after verification.
+- Added User.requiresEmailVerification so existing older DB users are not locked out by the new verification requirement.
+- Added email automation triggers for all monthly first-Tuesday campaigns, New Year, Summer, Easter, Christmas and Boxing Day.
+- Added daily Vercel cron route /api/cron/email-automations, with optional CRON_SECRET protection.
+- Added reusable draft template model and API so admin can create/edit/delete custom draft mail templates.
+- Built-in draft templates added for welcome, new user discount, monthly campaigns, New Year, Summer, Easter, Christmas, Boxing Day, new stock arrival and first order.
+- Admin marketing page now has grouped trigger dropdowns, draft type dropdowns, template apply/copy, custom draft CRUD and live preview.
+
+Requires:
+- npx prisma db push
+- git add . && git commit -m "Phase 15D add email verification and scheduled marketing automations" && git push
+
+Optional Vercel env var:
+- CRON_SECRET=<long random secret>
+
+Test:
+- Create a new customer and confirm the verification-code screen appears.
+- Confirm the verification email arrives through Resend.
+- Enter the 6 digit code and confirm redirect to /portal/login?verified=1.
+- Sign in as that new customer and confirm old customer orders/returns/support do not show.
+- In /admin/marketing confirm new trigger dropdowns and draft template dropdowns.
+- Create, edit and delete a custom draft template.
+- Create active rules for seasonal/monthly triggers.
+- Test scheduled route manually with dates, e.g. /api/cron/email-automations?date=2027-03-25 for Easter 2027.
