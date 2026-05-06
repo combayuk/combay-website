@@ -324,6 +324,33 @@ function cleanEbayDescription(raw: string) {
   return cleaned.replace(/Imported from active eBay listing\.?/gi, "").trim();
 }
 
+function isFallbackEbayDescription(value?: string | null) {
+  const text = String(value || "").trim().toLowerCase();
+  return !text || text === "imported from active ebay listing." || text === "imported from ebay inventory api." || text.includes("imported from active ebay listing");
+}
+
+function normaliseWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function cleanSpecValue(value: string) {
+  return normaliseWhitespace(htmlDecode(value || "").replace(/<[^>]+>/g, " "));
+}
+
+function dedupeByLower(values: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of values) {
+    const value = String(raw || "").trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
 function conditionFromEbay(value: string) {
   const normalised = value.toLowerCase();
   if (normalised.includes("parts") || normalised.includes("not working")) return "FOR_PARTS" as const;
@@ -342,24 +369,44 @@ function firstSentence(text: string, maxLength = 360) {
 }
 
 function buildProcurementOverview(listing: NormalizedEbayListing, cleanDescription: string) {
-  const brand = listing.brand || listing.manufacturer || "";
-  const model = listing.model || "";
-  const mpn = listing.mpn || "";
-  const specificHighlights = listing.specs
-    .filter((spec) => !["brand", "manufacturer", "model", "mpn", "manufacturer part number"].includes(spec.label.toLowerCase()))
-    .slice(0, 6)
-    .map((spec) => `${spec.label}: ${spec.value}`);
-  const introParts = [brand, model, mpn].filter(Boolean).join(" ");
-  const intro = firstSentence(cleanDescription) || `${listing.title}${introParts ? ` (${introParts})` : ""} is listed for industrial procurement, maintenance replacement or spare-stock use.`;
-  const lines = [intro, "", "Combay listing notes:"];
-  lines.push(`- SKU: ${listing.sku || listing.ebayItemId || "confirmed on request"}`);
-  if (listing.category) lines.push(`- Category: ${listing.category}`);
-  if (brand) lines.push(`- Brand/manufacturer: ${brand}`);
-  if (model) lines.push(`- Model: ${model}`);
-  if (mpn) lines.push(`- MPN / part number: ${mpn}`);
-  for (const highlight of specificHighlights) lines.push(`- ${highlight}`);
-  lines.push("", "Please check the photographs, item specifics and description before ordering. For compatibility-critical equipment, request confirmation against your exact part number or application.");
-  return lines.join("\n");
+  const specMap = Object.fromEntries(listing.specs.map((s) => [s.label, s.value]));
+  const brand = listing.brand || listing.manufacturer || aspect(specMap, ["Brand", "Manufacturer", "Make"]);
+  const model = listing.model || aspect(specMap, ["Model", "Model Number"]);
+  const mpn = listing.mpn || aspect(specMap, ["MPN", "Manufacturer Part Number", "Part Number"]);
+  const title = normaliseWhitespace(listing.title);
+  const category = listing.category && listing.category !== "eBay Import" ? listing.category : "industrial equipment";
+  const baseDescription = normaliseWhitespace(cleanDescription || "");
+  const identity = dedupeByLower([brand, model, mpn]).join(" ");
+  const intro = baseDescription
+    ? firstSentence(baseDescription, 420)
+    : `${title}${identity ? ` (${identity})` : ""} is a Combay-supplied ${category} item suitable for industrial maintenance, replacement stock, engineering stores or procurement teams requiring a clearly identified part.`;
+
+  const usefulSpecs = listing.specs
+    .map((spec) => ({ label: normaliseWhitespace(spec.label), value: cleanSpecValue(spec.value) }))
+    .filter((spec) => spec.label && spec.value)
+    .filter((spec) => !["brand", "manufacturer", "model", "mpn", "manufacturer part number", "condition"].includes(spec.label.toLowerCase()))
+    .slice(0, 8);
+
+  const paragraphs: string[] = [];
+  paragraphs.push(intro);
+
+  const detailBits = [];
+  if (brand) detailBits.push(`manufacturer/brand ${brand}`);
+  if (model) detailBits.push(`model ${model}`);
+  if (mpn) detailBits.push(`part number ${mpn}`);
+  if (listing.sku) detailBits.push(`Combay SKU ${listing.sku}`);
+  if (detailBits.length) {
+    paragraphs.push(`Key identification details include ${detailBits.join(", ")}. This helps buyers cross-check compatibility before purchase or quotation.`);
+  }
+
+  if (usefulSpecs.length) {
+    const specSentence = usefulSpecs.map((spec) => `${spec.label}: ${spec.value}`).join("; ");
+    paragraphs.push(`Relevant item specifics recorded for this listing include ${specSentence}.`);
+  }
+
+  paragraphs.push("Please review the product photographs, item specifics and condition notes before ordering. For compatibility-critical equipment, request confirmation against your exact machine, system, part number or application before payment.");
+
+  return paragraphs.join("\n\n");
 }
 
 
@@ -404,11 +451,16 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item
 }
 
 function specsFromTradingXml(xml: string) {
+  const seen = new Set<string>();
   return xmlBlocks(xmlText(xml, "ItemSpecifics") || xml, "NameValueList")
     .map((block) => {
-      const label = xmlText(block, "Name");
-      const values = xmlBlocks(block, "Value").map((valueBlock) => xmlText(valueBlock, "Value")).filter(Boolean);
-      return label && values.length ? { label, value: values.join(", ") } : null;
+      const label = cleanSpecValue(xmlText(block, "Name"));
+      const values = dedupeByLower(xmlBlocks(block, "Value").map((valueBlock) => cleanSpecValue(xmlText(valueBlock, "Value"))).filter(Boolean));
+      if (!label || !values.length) return null;
+      const key = label.toLowerCase();
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return { label, value: values.join(", ") };
     })
     .filter(Boolean) as { label: string; value: string }[];
 }
@@ -423,7 +475,7 @@ async function getOffersForSku(token: string, config: EbayConfig, sku: string) {
   return Array.isArray(data.offers) ? data.offers : [];
 }
 
-async function saveEbayListing(listing: NormalizedEbayListing) {
+async function saveEbayListing(listing: NormalizedEbayListing, options: { forceRichUpdate?: boolean } = {}) {
   const where: any[] = [];
   if (listing.ebayItemId) where.push({ ebayItemId: listing.ebayItemId });
   if (listing.sku) where.push({ sku: listing.sku });
@@ -438,13 +490,19 @@ async function saveEbayListing(listing: NormalizedEbayListing) {
 
   const existingImages = existing?.images?.map((image) => ({ url: image.url, alt: image.alt ?? listing.title, isPrimary: image.isPrimary, sortOrder: image.sortOrder })) ?? [];
   const existingSpecs = existing?.specs?.map((spec) => ({ label: spec.label, value: spec.value })) ?? [];
-  const importedImages = Array.from(new Set(listing.images.filter(Boolean))).slice(0, 15).map((url, index) => ({ url, alt: listing.title, isPrimary: index === 0, sortOrder: index }));
+  const importedImages = dedupeByLower(listing.images.filter(Boolean)).slice(0, 15).map((url, index) => ({ url, alt: listing.title, isPrimary: index === 0, sortOrder: index }));
   const importedVariants = listing.variants ?? [];
   const variantStockTotal = importedVariants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stockQty || 0)), 0);
   const cleanDescription = listing.cleanDescription || cleanEbayDescription(listing.rawDescription || "");
   const descriptionPrefix = listing.sourceMethod === "active-listings" ? "Imported from active eBay listing." : "Imported from eBay Inventory API.";
   const description = cleanDescription || descriptionPrefix;
   const generatedOverview = buildProcurementOverview(listing, cleanDescription);
+  const existingDescriptionIsFallback = isFallbackEbayDescription(existing?.description);
+  const existingOverviewIsFallback = isFallbackEbayDescription(existing?.productOverview) || !String(existing?.productOverview || "").trim();
+  const existingImagesMissing = !existingImages.length;
+  const existingSpecsMissing = !existingSpecs.length;
+  const existingCategoryMissing = !existing?.category?.name || existing.category.name === "eBay Import";
+  const forceRichUpdate = Boolean(options.forceRichUpdate || existingDescriptionIsFallback || existingOverviewIsFallback || existingImagesMissing || existingSpecsMissing || existingCategoryMissing);
   const category = listing.category || "eBay Import";
   const categorySlug = category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "ebay-import";
   const sku = listing.sku?.trim() || undefined;
@@ -466,10 +524,10 @@ async function saveEbayListing(listing: NormalizedEbayListing) {
     priceOnRequest: existing?.priceLocked ? existing.priceOnRequest : listing.price === null,
     stockQty: importedVariants.length ? variantStockTotal : listing.quantity,
     variants: importedVariants,
-    description: existing?.descriptionLocked ? existing.description ?? "" : description,
-    productOverview: existing?.descriptionLocked ? existing.productOverview ?? existing.description ?? "" : generatedOverview,
-    images: existing?.imagesLocked ? existingImages : importedImages,
-    specs: existing?.specsLocked ? existingSpecs : listing.specs,
+    description: existing?.descriptionLocked && !forceRichUpdate ? existing.description ?? "" : description,
+    productOverview: existing?.descriptionLocked && !forceRichUpdate ? existing.productOverview ?? existing.description ?? "" : generatedOverview,
+    images: existing?.imagesLocked && !forceRichUpdate ? existingImages : importedImages,
+    specs: existing?.specsLocked && !forceRichUpdate ? existingSpecs : listing.specs,
     ebayItemId: listing.ebayItemId,
     syncExcluded: existing?.syncExcluded ?? false,
   });
@@ -513,7 +571,7 @@ async function syncInventoryApiItems(token: string, config: EbayConfig, options:
         const activeOffer = offers.find((offer: any) => offer.status === "PUBLISHED") || offers[0] || null;
         const aspects = item.product?.aspects as Record<string, string[] | string> | undefined;
         const rawDescription = String(item.product?.description || "");
-        const result = await saveEbayListing({
+        const summaryListing: NormalizedEbayListing = {
           ebayItemId: activeOffer?.listing?.listingId ? String(activeOffer.listing.listingId) : undefined,
           sku,
           title: String(item.product?.title || sku),
@@ -531,7 +589,14 @@ async function syncInventoryApiItems(token: string, config: EbayConfig, options:
           category: "eBay Import",
           variants: [],
           sourceMethod: "inventory-api",
-        });
+        };
+        let listing = summaryListing;
+        if (summaryListing.ebayItemId) {
+          const detailedXml = await getTradingItemDetails(token, config, summaryListing.ebayItemId).catch(() => "");
+          const detailedListing = detailedXml ? listingFromTradingXml(detailedXml, "active-listings") : null;
+          listing = mergeListingDetails(summaryListing, detailedListing) || summaryListing;
+        }
+        const result = await saveEbayListing(listing, { forceRichUpdate: true });
         if (result === "imported") counts.imported++;
         else if (result === "updated") counts.updated++;
         else counts.skipped++;
@@ -566,6 +631,21 @@ async function getTradingItemDetails(token: string, config: EbayConfig, itemId: 
   <ItemID>${itemId}</ItemID>
   <DetailLevel>ReturnAll</DetailLevel>
   <IncludeItemSpecifics>true</IncludeItemSpecifics>
+  <IncludeWatchCount>false</IncludeWatchCount>
+  <OutputSelector>Item.ItemID</OutputSelector>
+  <OutputSelector>Item.SKU</OutputSelector>
+  <OutputSelector>Item.Title</OutputSelector>
+  <OutputSelector>Item.Description</OutputSelector>
+  <OutputSelector>Item.PictureDetails</OutputSelector>
+  <OutputSelector>Item.ItemSpecifics</OutputSelector>
+  <OutputSelector>Item.PrimaryCategory</OutputSelector>
+  <OutputSelector>Item.ConditionDisplayName</OutputSelector>
+  <OutputSelector>Item.ConditionID</OutputSelector>
+  <OutputSelector>Item.Quantity</OutputSelector>
+  <OutputSelector>Item.QuantityAvailable</OutputSelector>
+  <OutputSelector>Item.SellingStatus</OutputSelector>
+  <OutputSelector>Item.StartPrice</OutputSelector>
+  <OutputSelector>Item.Variations</OutputSelector>
 </GetItemRequest>`;
   return tradingApiCall(token, config, "GetItem", body);
 }
@@ -604,23 +684,31 @@ function variationsFromTradingXml(xml: string) {
 }
 
 function listingFromTradingXml(itemXml: string, sourceMethod: "active-listings"): NormalizedEbayListing | null {
-  const ebayItemId = xmlText(itemXml, "ItemID");
-  const title = xmlText(itemXml, "Title") || ebayItemId;
+  const itemBlock = xmlText(itemXml, "Item") || itemXml;
+  const ebayItemId = xmlText(itemBlock, "ItemID");
+  const title = xmlText(itemBlock, "Title") || ebayItemId;
   if (!ebayItemId || !title) return null;
-  const sku = xmlText(itemXml, "SKU") || xmlText(itemXml, "SellerSKU") || undefined;
-  const rawDescription = xmlText(itemXml, "Description");
-  const quantityAvailable = Number(xmlText(itemXml, "QuantityAvailable") || xmlText(itemXml, "Quantity") || 0);
-  const sellingStatus = xmlText(itemXml, "SellingStatus");
-  const currentPriceBlock = xmlBlocks(sellingStatus || itemXml, "CurrentPrice")[0] || "";
-  const price = asMoney(xmlText(currentPriceBlock, "CurrentPrice") || currentPriceBlock.replace(/<[^>]+>/g, ""));
-  const pictureDetails = xmlText(itemXml, "PictureDetails") || itemXml;
-  const images = xmlBlocks(pictureDetails, "PictureURL").map((block) => xmlText(block, "PictureURL")).filter(Boolean);
-  const specs = specsFromTradingXml(itemXml);
+  const sku = xmlText(itemBlock, "SKU") || xmlText(itemBlock, "SellerSKU") || xmlText(itemBlock, "SellerInventoryID") || undefined;
+  const rawDescription = xmlText(itemBlock, "Description");
+  const quantityAvailable = Number(xmlText(itemBlock, "QuantityAvailable") || xmlText(itemBlock, "Quantity") || 0);
+  const sellingStatus = xmlText(itemBlock, "SellingStatus");
+  const currentPriceBlock = xmlBlocks(sellingStatus || itemBlock, "CurrentPrice")[0] || "";
+  const price = asMoney(xmlText(currentPriceBlock, "CurrentPrice") || currentPriceBlock.replace(/<[^>]+>/g, "") || xmlText(itemBlock, "StartPrice"));
+  const pictureDetails = xmlText(itemBlock, "PictureDetails") || itemBlock;
+  const images = dedupeByLower([
+    ...xmlBlocks(pictureDetails, "PictureURL").map((block) => xmlText(block, "PictureURL")),
+    ...xmlBlocks(pictureDetails, "ExternalPictureURL").map((block) => xmlText(block, "ExternalPictureURL")),
+    xmlText(pictureDetails, "GalleryURL"),
+    xmlText(pictureDetails, "PictureURLLarge"),
+  ]).slice(0, 15);
+  const specs = specsFromTradingXml(itemBlock);
   const specMap = Object.fromEntries(specs.map((s) => [s.label, s.value]));
-  const conditionDisplay = xmlText(itemXml, "ConditionDisplayName") || xmlText(itemXml, "ConditionID");
-  const primaryCategory = xmlText(itemXml, "PrimaryCategory") || itemXml;
-  const category = xmlText(primaryCategory, "CategoryName") || "eBay Import";
-  const variants = variationsFromTradingXml(itemXml);
+  const conditionDisplay = xmlText(itemBlock, "ConditionDisplayName") || xmlText(itemBlock, "ConditionID");
+  const primaryCategory = xmlText(itemBlock, "PrimaryCategory") || itemBlock;
+  const categoryName = xmlText(primaryCategory, "CategoryName");
+  const categoryId = xmlText(primaryCategory, "CategoryID");
+  const category = categoryName || (categoryId ? `eBay Category ${categoryId}` : "eBay Import");
+  const variants = variationsFromTradingXml(itemBlock);
   const variantStockTotal = variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stockQty || 0)), 0);
   const parentSku = variants.some((variant) => variant.sku && variant.sku === sku) ? undefined : sku;
 
@@ -636,10 +724,10 @@ function listingFromTradingXml(itemXml: string, sourceMethod: "active-listings")
     cleanDescription: cleanEbayDescription(rawDescription),
     category,
     condition: conditionFromEbay(conditionDisplay),
-    brand: aspect(specMap, ["Brand", "Manufacturer"]),
-    manufacturer: aspect(specMap, ["Manufacturer", "Brand"]),
-    model: aspect(specMap, ["Model"]),
-    mpn: aspect(specMap, ["MPN", "Manufacturer Part Number"]),
+    brand: aspect(specMap, ["Brand", "Manufacturer", "Make"]),
+    manufacturer: aspect(specMap, ["Manufacturer", "Brand", "Make"]),
+    model: aspect(specMap, ["Model", "Model Number"]),
+    mpn: aspect(specMap, ["MPN", "Manufacturer Part Number", "Part Number"]),
     variants,
     sourceMethod,
   };
@@ -692,15 +780,16 @@ async function syncTradingActiveListings(token: string, config: EbayConfig, opti
         const detailedListing = listingFromTradingXml(detailedXml, "active-listings");
         const listing = mergeListingDetails(summaryListing, detailedListing);
         if (!listing) return { result: "skipped" as const, error: "Could not parse listing after detail enrichment." };
-        const result = await saveEbayListing(listing);
+        const result = await saveEbayListing(listing, { forceRichUpdate: true });
         return { result };
       } catch (err: any) {
         const fallbackListing = listingFromTradingXml(itemBlock, "active-listings");
-        if (fallbackListing) {
-          const result = await saveEbayListing(fallbackListing).catch(() => "skipped" as const);
-          return { result, error: `Item ${itemId}: detail enrichment failed; saved summary only. ${err.message || "Unknown ActiveList item sync error"}` };
+        const fallbackHasUsefulDetails = Boolean(fallbackListing && (fallbackListing.images.length || fallbackListing.specs.length || !isFallbackEbayDescription(fallbackListing.cleanDescription || fallbackListing.rawDescription)));
+        if (fallbackListing && fallbackHasUsefulDetails) {
+          const result = await saveEbayListing(fallbackListing, { forceRichUpdate: true }).catch(() => "skipped" as const);
+          return { result, error: `Item ${itemId}: detail enrichment failed; saved useful ActiveList data only. ${err.message || "Unknown ActiveList item sync error"}` };
         }
-        return { result: "skipped" as const, error: `Item ${itemId}: ${err.message || "Unknown ActiveList item sync error"}` };
+        return { result: "skipped" as const, error: `Item ${itemId}: detail enrichment failed and summary data was too shallow, so existing product data was not overwritten. ${err.message || "Unknown ActiveList item sync error"}` };
       }
     });
 
@@ -777,6 +866,103 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay sync failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
     return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay sync failed."] };
   }
+}
+
+
+export async function repairMissingEbayDetailImports(limit = 100) {
+  await markStaleEbayRuns();
+  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Repairing shallow eBay imports; limit ${limit}.` } });
+  let imported = 0, updated = 0, skipped = 0;
+  const errors: string[] = [];
+  try {
+    const { token, config } = await getEbayAccessToken();
+    const products = await prisma.product.findMany({
+      where: {
+        source: "ebay",
+        syncExcluded: false,
+        OR: [
+          { ebayItemId: { not: null } },
+          { sku: { not: null } },
+          { description: { contains: "Imported from active eBay listing", mode: "insensitive" } },
+          { description: null },
+        ],
+      },
+      include: { images: true, specs: true, category: true },
+      orderBy: { updatedAt: "desc" },
+      take: Math.max(1, Math.min(200, Number(limit || 100))),
+    });
+
+    const shallowProducts = products.filter((product: any) => {
+      const imageMissing = !product.images?.length;
+      const specsMissing = !product.specs?.length;
+      const categoryMissing = !product.category?.name || product.category.name === "eBay Import";
+      const descMissing = isFallbackEbayDescription(product.description);
+      return imageMissing || specsMissing || categoryMissing || descMissing;
+    });
+
+    const activeIndex = shallowProducts.some((p: any) => !p.ebayItemId)
+      ? await buildActiveListingIndex(token, config, 250)
+      : new Map<string, string>();
+
+    for (const product of shallowProducts) {
+      try {
+        const itemId = product.ebayItemId || (product.sku ? activeIndex.get(String(product.sku).toLowerCase()) : undefined);
+        if (!itemId) {
+          skipped++;
+          errors.push(`SKU ${product.sku || product.id}: could not find eBay item ID for repair.`);
+          continue;
+        }
+        const detailedXml = await getTradingItemDetails(token, config, itemId);
+        const detailedListing = listingFromTradingXml(detailedXml, "active-listings");
+        if (!detailedListing) {
+          skipped++;
+          errors.push(`SKU ${product.sku || product.id}: eBay detail response could not be parsed.`);
+          continue;
+        }
+        const result = await saveEbayListing({ ...detailedListing, sku: detailedListing.sku || product.sku || undefined }, { forceRichUpdate: true });
+        if (result === "imported") imported++;
+        else if (result === "updated") updated++;
+        else skipped++;
+      } catch (err: any) {
+        skipped++;
+        errors.push(`SKU ${product.sku || product.id}: ${err.message || "repair failed"}`);
+      }
+    }
+
+    const message = `Repair complete. Checked ${products.length} eBay products; ${shallowProducts.length} needed repair.`;
+    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", message, imported, updated, skipped, errors, finishedAt: new Date() } });
+    return { ok: true, imported, updated, skipped, checked: products.length, repairCandidates: shallowProducts.length, errors, message };
+  } catch (err: any) {
+    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay repair failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
+    return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay repair failed."] };
+  }
+}
+
+async function buildActiveListingIndex(token: string, config: EbayConfig, maxPages = 250) {
+  const index = new Map<string, string>();
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ActiveList>
+    <Include>true</Include>
+    <Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>${page}</PageNumber></Pagination>
+  </ActiveList>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetMyeBaySellingRequest>`;
+    const xml = await tradingApiCall(token, config, "GetMyeBaySelling", body);
+    totalPages = Number(xmlText(xml, "TotalNumberOfPages") || page || 1);
+    const activeList = xmlText(xml, "ActiveList") || xml;
+    const itemBlocks = xmlBlocks(activeList, "Item");
+    for (const itemBlock of itemBlocks) {
+      const itemId = xmlText(itemBlock, "ItemID");
+      const sku = xmlText(itemBlock, "SKU") || xmlText(itemBlock, "SellerSKU") || xmlText(itemBlock, "SellerInventoryID");
+      if (itemId && sku) index.set(String(sku).toLowerCase(), itemId);
+    }
+    page++;
+  } while (page <= totalPages && page <= maxPages);
+  return index;
 }
 
 

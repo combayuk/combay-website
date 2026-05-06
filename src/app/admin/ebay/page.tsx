@@ -32,7 +32,7 @@ export default function EbayAdminPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | null>(null);
+  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | null>(null);
 
   async function load() {
     const [configRes, runsRes] = await Promise.all([fetch("/api/ebay/config", { cache: "no-store" }), fetch("/api/ebay/runs", { cache: "no-store" })]);
@@ -104,6 +104,23 @@ export default function EbayAdminPage() {
     }
   }
 
+
+  async function repairMissingDetails() {
+    setSyncing("repair");
+    setMessage("Repairing shallow eBay imports. This targets products with missing images, fallback descriptions, missing specifics or eBay Import category.");
+    try {
+      const response = await fetch("/api/ebay/repair-missing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 100 }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.errors?.join(" ") || result.error || "Repair failed.");
+      setMessage(`${result.message || "Repair complete."} Updated ${result.updated || 0}, imported ${result.imported || 0}, skipped ${result.skipped || 0}.`);
+    } catch (error: any) {
+      setMessage(error.message || "Could not repair shallow eBay imports.");
+    } finally {
+      setSyncing(null);
+      await load();
+    }
+  }
+
   async function resetSync() {
     setMessage("Resetting stuck sync state...");
     const response = await fetch("/api/ebay/sync", { method: "DELETE" });
@@ -138,6 +155,9 @@ export default function EbayAdminPage() {
           </button>
           <button onClick={() => sync("all")} disabled={!!syncing || !connected} className="btn-primary text-sm py-2 disabled:opacity-50">
             <RefreshCw size={14} className={syncing === "all" ? "animate-spin" : ""} /> Sync all
+          </button>
+          <button onClick={repairMissingDetails} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "repair" ? "animate-spin" : ""} /> Repair missing details
           </button>
         </div>
       </div>
@@ -237,6 +257,7 @@ export default function EbayAdminPage() {
             <p>The sync still uses one unified engine: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
             <p>Use <strong>Test sync 10</strong> before a full import. Then use <strong>Sync first 50</strong> to check mapping, descriptions and images before running all listings.</p>
             <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
+            <p><strong>Repair missing details</strong> targets older/shallow eBay imports that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
             <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p>
           </div>
