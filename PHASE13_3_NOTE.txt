@@ -1,0 +1,3 @@
+Phase 13.3 eBay Accept-Language header fix
+
+Fixes eBay sync failures caused by invalid Accept-Language values by mapping marketplace IDs such as EBAY_GB to valid locale tags such as en-GB and by sending X-EBAY-C-MARKETPLACE-ID separately.

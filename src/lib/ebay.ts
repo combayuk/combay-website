@@ -27,6 +27,35 @@ function tokenUrl(environment?: string) {
   return `${apiRoot(environment)}/identity/v1/oauth2/token`;
 }
 
+function ebayLocaleForMarketplace(marketplaceId?: string | null) {
+  const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
+  const localeMap: Record<string, string> = {
+    EBAY_GB: "en-GB",
+    EBAY_US: "en-US",
+    EBAY_AU: "en-AU",
+    EBAY_CA: "en-CA",
+    EBAY_IE: "en-IE",
+    EBAY_DE: "de-DE",
+    EBAY_FR: "fr-FR",
+    EBAY_IT: "it-IT",
+    EBAY_ES: "es-ES",
+  };
+  return localeMap[marketplace] || "en-GB";
+}
+
+function ebayMarketplaceHeaders(token: string, config: EbayConfig) {
+  const marketplaceId = config.marketplaceId || "EBAY_GB";
+  const locale = ebayLocaleForMarketplace(marketplaceId);
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "Accept-Language": locale,
+    "Content-Language": locale,
+    "X-EBAY-C-MARKETPLACE-ID": marketplaceId,
+  };
+}
+
 export async function getEbayConfig() {
   const existing = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
   if (existing) {
@@ -154,7 +183,7 @@ function asMoney(value: unknown) {
 async function getOffersForSku(token: string, config: EbayConfig, sku: string) {
   const params = new URLSearchParams({ sku, marketplace_id: config.marketplaceId || "EBAY_GB" });
   const response = await fetch(`${apiRoot(config.environment)}/sell/inventory/v1/offer?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: ebayMarketplaceHeaders(token, config),
   });
   if (!response.ok) return [];
   const data = await response.json().catch(() => ({}));
@@ -173,7 +202,7 @@ export async function runEbayInventorySync() {
     do {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       const response = await fetch(`${apiRoot(config.environment)}/sell/inventory/v1/inventory_item?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: ebayMarketplaceHeaders(token, config),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.errors?.[0]?.message || data.message || `eBay inventory request failed (${response.status})`);
