@@ -107,9 +107,9 @@ export default function EbayAdminPage() {
 
   async function repairMissingDetails() {
     setSyncing("repair");
-    setMessage("Repairing shallow eBay imports. This targets products with missing images, fallback descriptions, missing specifics or eBay Import category.");
+    setMessage("Scanning all eBay imports and repairing shallow products with missing images, fallback descriptions, missing specifics or eBay Import category.");
     try {
-      const response = await fetch("/api/ebay/repair-missing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 100 }) });
+      const response = await fetch("/api/ebay/repair-missing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 75 }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.ok) throw new Error(result.errors?.join(" ") || result.error || "Repair failed.");
       setMessage(`${result.message || "Repair complete."} Updated ${result.updated || 0}, imported ${result.imported || 0}, skipped ${result.skipped || 0}.`);
@@ -257,7 +257,7 @@ export default function EbayAdminPage() {
             <p>The sync still uses one unified engine: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
             <p>Use <strong>Test sync 10</strong> before a full import. Then use <strong>Sync first 50</strong> to check mapping, descriptions and images before running all listings.</p>
             <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
-            <p><strong>Repair missing details</strong> targets older/shallow eBay imports that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories.</p>
+            <p><strong>Repair missing details</strong> scans all imported eBay products, then repairs shallow records that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories. It repairs a safe batch at a time; run again if the message says products remain queued.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
             <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p>
           </div>

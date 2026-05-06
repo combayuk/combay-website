@@ -869,44 +869,78 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
 }
 
 
-export async function repairMissingEbayDetailImports(limit = 100) {
+export async function repairMissingEbayDetailImports(limit = 75) {
   await markStaleEbayRuns();
-  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Repairing shallow eBay imports; limit ${limit}.` } });
+  const candidateLimit = Math.max(1, Math.min(250, Number(limit || 75)));
+  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Scanning all eBay products and repairing up to ${candidateLimit} shallow imports.` } });
   let imported = 0, updated = 0, skipped = 0;
   const errors: string[] = [];
   try {
     const { token, config } = await getEbayAccessToken();
-    const products = await prisma.product.findMany({
-      where: {
-        source: "ebay",
-        syncExcluded: false,
-        OR: [
-          { ebayItemId: { not: null } },
-          { images: { none: {} } },
-          { specs: { none: {} } },
-          { category: { is: { name: "eBay Import" } } },
-          { description: { contains: "Imported from active eBay listing", mode: "insensitive" } },
-          { description: null },
-        ],
-      },
-      include: { images: true, specs: true, category: true },
-      orderBy: { updatedAt: "desc" },
-      take: Math.max(1, Math.min(200, Number(limit || 100))),
-    });
 
-    const shallowProducts = products.filter((product: any) => {
+    // Important: do not take the newest 100 products first. The stubborn products are usually older
+    // summary-only imports, so we count the whole eBay catalogue and then repair the actual shallow rows.
+    const ebayProductWhere: any = {
+      syncExcluded: false,
+      OR: [
+        { source: "ebay" },
+        { ebayItemId: { not: null } },
+        { description: { contains: "Imported from active eBay listing", mode: "insensitive" } },
+        { description: { contains: "Imported from eBay Inventory API", mode: "insensitive" } },
+        { productOverview: { contains: "Imported from active eBay listing", mode: "insensitive" } },
+        { category: { is: { name: "eBay Import" } } },
+      ],
+    };
+
+    const shallowWhere: any = {
+      AND: [
+        ebayProductWhere,
+        {
+          OR: [
+            { images: { none: {} } },
+            { specs: { none: {} } },
+            { category: { is: null } },
+            { category: { is: { name: "eBay Import" } } },
+            { description: null },
+            { description: { equals: "", mode: "insensitive" } },
+            { description: { contains: "Imported from active eBay listing", mode: "insensitive" } },
+            { description: { contains: "Imported from eBay Inventory API", mode: "insensitive" } },
+            { productOverview: null },
+            { productOverview: { equals: "", mode: "insensitive" } },
+            { productOverview: { contains: "Imported from active eBay listing", mode: "insensitive" } },
+            { rawEbayDescription: null },
+          ],
+        },
+      ],
+    };
+
+    const [totalEbayProducts, totalRepairCandidates, products] = await Promise.all([
+      prisma.product.count({ where: ebayProductWhere }),
+      prisma.product.count({ where: shallowWhere }),
+      prisma.product.findMany({
+        where: shallowWhere,
+        include: { images: true, specs: true, category: true },
+        // Old shallow records are normally the ones still showing fallback data.
+        orderBy: [{ updatedAt: "asc" }],
+        take: candidateLimit,
+      }),
+    ]);
+
+    const repairProducts = products.filter((product: any) => {
       const imageMissing = !product.images?.length;
       const specsMissing = !product.specs?.length;
       const categoryMissing = !product.category?.name || product.category.name === "eBay Import";
       const descMissing = isFallbackEbayDescription(product.description);
-      return imageMissing || specsMissing || categoryMissing || descMissing;
+      const overviewMissing = isFallbackEbayDescription(product.productOverview);
+      const rawMissing = !String(product.rawEbayDescription || "").trim();
+      return imageMissing || specsMissing || categoryMissing || descMissing || overviewMissing || rawMissing;
     });
 
-    const activeIndex = shallowProducts.some((p: any) => !p.ebayItemId)
+    const activeIndex = repairProducts.some((p: any) => !p.ebayItemId)
       ? await buildActiveListingIndex(token, config, 250)
       : new Map<string, string>();
 
-    for (const product of shallowProducts) {
+    for (const product of repairProducts) {
       try {
         const itemId = product.ebayItemId || (product.sku ? activeIndex.get(String(product.sku).toLowerCase()) : undefined);
         if (!itemId) {
@@ -931,9 +965,10 @@ export async function repairMissingEbayDetailImports(limit = 100) {
       }
     }
 
-    const message = `Repair complete. Checked ${products.length} eBay products; ${shallowProducts.length} needed repair.`;
+    const remaining = Math.max(0, totalRepairCandidates - repairProducts.length);
+    const message = `Repair complete. Scanned ${totalEbayProducts} eBay products; found ${totalRepairCandidates} shallow products; processed ${repairProducts.length} in this run${remaining ? `; ${remaining} still queued, run repair again.` : "."}`;
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", message, imported, updated, skipped, errors, finishedAt: new Date() } });
-    return { ok: true, imported, updated, skipped, checked: products.length, repairCandidates: shallowProducts.length, errors, message };
+    return { ok: true, imported, updated, skipped, checked: totalEbayProducts, repairCandidates: totalRepairCandidates, processed: repairProducts.length, remaining, errors, message };
   } catch (err: any) {
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay repair failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
     return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay repair failed."] };
