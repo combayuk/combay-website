@@ -882,7 +882,9 @@ export async function repairMissingEbayDetailImports(limit = 100) {
         syncExcluded: false,
         OR: [
           { ebayItemId: { not: null } },
-          { sku: { not: null } },
+          { images: { none: {} } },
+          { specs: { none: {} } },
+          { category: { is: { name: "eBay Import" } } },
           { description: { contains: "Imported from active eBay listing", mode: "insensitive" } },
           { description: null },
         ],
