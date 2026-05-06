@@ -32,7 +32,7 @@ export default function EbayAdminPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | null>(null);
 
   async function load() {
     const [configRes, runsRes] = await Promise.all([fetch("/api/ebay/config", { cache: "no-store" }), fetch("/api/ebay/runs", { cache: "no-store" })]);
@@ -62,13 +62,23 @@ export default function EbayAdminPage() {
     await load();
   }
 
-  async function sync() {
-    setSyncing(true); setMessage("Syncing eBay inventory. This can take a few minutes for large accounts...");
-    const response = await fetch("/api/ebay/sync", { method: "POST" });
+  async function sync(mode: "test10" | "first50" | "all") {
+    setSyncing(mode);
+    const label = mode === "test10" ? "test sync of first 10 listings" : mode === "first50" ? "first 50 listings" : "all available listings";
+    setMessage(`Starting ${label}. Do not start another sync until this finishes.`);
+    const response = await fetch("/api/ebay/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) });
     const result = await response.json().catch(() => ({}));
-    setSyncing(false);
+    setSyncing(null);
     if (!response.ok || !result.ok) { setMessage(result.errors?.join(" ") || result.error || "eBay sync failed."); await load(); return; }
-    setMessage(`Sync complete: ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped.`);
+    setMessage(`Sync complete: ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped. ${result.message || ""}`);
+    await load();
+  }
+
+  async function resetSync() {
+    setMessage("Resetting stuck sync state...");
+    const response = await fetch("/api/ebay/sync", { method: "DELETE" });
+    const result = await response.json().catch(() => ({}));
+    setMessage(result.ok ? `Reset ${result.resetCount || 0} stuck sync run(s).` : result.error || "Could not reset sync state.");
     await load();
   }
 
@@ -82,9 +92,17 @@ export default function EbayAdminPage() {
           <h1 className="font-display font-800 text-navy-950 text-2xl">eBay Inventory Sync</h1>
           <p className="text-gray-400 text-sm mt-0.5">Connect eBay and import products using one unified sync. The system tries the Sell Inventory API first, then falls back to active eBay listings where needed.</p>
         </div>
-        <button onClick={sync} disabled={syncing || !connected} className="btn-primary text-sm py-2 disabled:opacity-50">
-          <RefreshCw size={14} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync eBay Inventory"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => sync("test10")} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "test10" ? "animate-spin" : ""} /> Test sync 10
+          </button>
+          <button onClick={() => sync("first50")} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "first50" ? "animate-spin" : ""} /> Sync first 50
+          </button>
+          <button onClick={() => sync("all")} disabled={!!syncing || !connected} className="btn-primary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "all" ? "animate-spin" : ""} /> Sync all
+          </button>
+        </div>
       </div>
 
       {message && <div className={`rounded-xl px-4 py-3 text-sm border ${message.toLowerCase().includes("fail") || message.toLowerCase().includes("could not") ? "bg-red-50 border-red-200 text-red-700" : "bg-green-50 border-green-200 text-green-800"}`}>{message}</div>}
@@ -158,15 +176,17 @@ export default function EbayAdminPage() {
           <div className="flex flex-wrap gap-2">
             <button onClick={save} disabled={saving} className="btn-primary text-sm py-2">{saving ? "Saving…" : "Save eBay settings"}</button>
             <a href="/api/ebay/auth/start" className="btn-secondary text-sm py-2"><ExternalLink size={14} /> Connect with eBay OAuth</a>
+            <button type="button" onClick={resetSync} className="btn-secondary text-sm py-2">Reset stuck sync</button>
           </div>
         </section>
 
         <aside className="bg-white border border-gray-200 rounded-xl p-5 h-fit">
           <h2 className="font-display font-800 text-navy-950 text-lg mb-3">Sync behaviour</h2>
           <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
-            <p>One button runs a unified sync: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
+            <p>The sync still uses one unified engine: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
+            <p>Use <strong>Test sync 10</strong> before a full import. Then use <strong>Sync first 50</strong> to check mapping, descriptions and images before running all listings.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
-            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. If active listings fail because of OAuth scope, reconnect eBay OAuth using the current RuName.</p>
+            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p>
           </div>
           <div className="border-t border-gray-100 mt-4 pt-4 text-xs text-gray-400 space-y-1">
             <p>Last sync: {config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"}</p>

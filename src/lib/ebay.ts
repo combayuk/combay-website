@@ -21,6 +21,29 @@ type SyncCounts = {
   records: number;
 };
 
+export type EbaySyncMode = "test10" | "first50" | "all";
+
+type EbaySyncOptions = {
+  mode?: EbaySyncMode;
+  maxListings?: number;
+  maxPages?: number;
+};
+
+function normaliseSyncOptions(options: EbaySyncOptions = {}) {
+  const mode = options.mode || "test10";
+  if (mode === "all") return { mode, maxListings: options.maxListings ?? 500, maxPages: options.maxPages ?? 25 };
+  if (mode === "first50") return { mode, maxListings: 50, maxPages: 5 };
+  return { mode: "test10" as const, maxListings: 10, maxPages: 2 };
+}
+
+async function markStaleEbayRuns() {
+  const cutoff = new Date(Date.now() - 20 * 60 * 1000);
+  await prisma.ebaySyncRun.updateMany({
+    where: { status: "RUNNING", startedAt: { lt: cutoff }, finishedAt: null },
+    data: { status: "FAILED", message: "Sync marked failed after exceeding the 20-minute safety window.", finishedAt: new Date() },
+  }).catch(() => null);
+}
+
 type NormalizedEbayListing = {
   ebayItemId?: string;
   sku?: string;
@@ -372,7 +395,7 @@ async function saveEbayListing(listing: NormalizedEbayListing) {
   return existing ? "updated" as const : "imported" as const;
 }
 
-async function syncInventoryApiItems(token: string, config: EbayConfig): Promise<SyncCounts> {
+async function syncInventoryApiItems(token: string, config: EbayConfig, options: ReturnType<typeof normaliseSyncOptions>): Promise<SyncCounts> {
   const counts: SyncCounts = { imported: 0, updated: 0, skipped: 0, errors: [], records: 0 };
   let offset = 0;
   const limit = 50;
@@ -385,9 +408,10 @@ async function syncInventoryApiItems(token: string, config: EbayConfig): Promise
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.errors?.[0]?.message || data.message || `eBay inventory request failed (${response.status})`);
     const items = Array.isArray(data.inventoryItems) ? data.inventoryItems : [];
-    counts.records += items.length;
     total = Number(data.total ?? items.length ?? 0);
     for (const item of items) {
+      if (counts.records >= options.maxListings) break;
+      counts.records++;
       try {
         const sku = String(item.sku || "").trim();
         if (!sku) { counts.skipped++; continue; }
@@ -421,7 +445,7 @@ async function syncInventoryApiItems(token: string, config: EbayConfig): Promise
       }
     }
     offset += limit;
-  } while (offset < total && offset < 1000);
+  } while (offset < total && counts.records < options.maxListings);
   return counts;
 }
 
@@ -489,7 +513,7 @@ function listingFromTradingXml(itemXml: string, sourceMethod: "active-listings")
   };
 }
 
-async function syncTradingActiveListings(token: string, config: EbayConfig): Promise<SyncCounts> {
+async function syncTradingActiveListings(token: string, config: EbayConfig, options: ReturnType<typeof normaliseSyncOptions>): Promise<SyncCounts> {
   const counts: SyncCounts = { imported: 0, updated: 0, skipped: 0, errors: [], records: 0 };
   let page = 1;
   let totalPages = 1;
@@ -500,7 +524,7 @@ async function syncTradingActiveListings(token: string, config: EbayConfig): Pro
   <ActiveList>
     <Include>true</Include>
     <Pagination>
-      <EntriesPerPage>100</EntriesPerPage>
+      <EntriesPerPage>50</EntriesPerPage>
       <PageNumber>${page}</PageNumber>
     </Pagination>
   </ActiveList>
@@ -512,11 +536,12 @@ async function syncTradingActiveListings(token: string, config: EbayConfig): Pro
     totalPages = Number(xmlText(xml, "TotalNumberOfPages") || 1);
     const activeList = xmlText(xml, "ActiveList") || xml;
     const itemBlocks = xmlBlocks(activeList, "Item");
-    counts.records += itemBlocks.length;
     for (const itemBlock of itemBlocks) {
+      if (counts.records >= options.maxListings) break;
       const itemId = xmlText(itemBlock, "ItemID");
       if (!itemId || seen.has(itemId)) continue;
       seen.add(itemId);
+      counts.records++;
       try {
         const detailedXml = await getTradingItemDetails(token, config, itemId).catch(() => itemBlock);
         const listing = listingFromTradingXml(detailedXml, "active-listings") || listingFromTradingXml(itemBlock, "active-listings");
@@ -530,19 +555,25 @@ async function syncTradingActiveListings(token: string, config: EbayConfig): Pro
       }
     }
     page++;
-  } while (page <= totalPages && page <= 10);
+  } while (page <= totalPages && page <= options.maxPages && counts.records < options.maxListings);
   return counts;
 }
 
-export async function runEbayInventorySync() {
-  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: "Starting unified eBay inventory sync." } });
+export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
+  const options = normaliseSyncOptions(inputOptions);
+  await markStaleEbayRuns();
+  const activeRun = await prisma.ebaySyncRun.findFirst({ where: { status: "RUNNING", finishedAt: null }, orderBy: { startedAt: "desc" } });
+  if (activeRun) {
+    return { ok: false, imported: 0, updated: 0, skipped: 0, errors: ["Another eBay sync is already running. Use Reset stuck sync if this is stale."], message: "Another eBay sync is already running." };
+  }
+  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Starting unified eBay inventory sync (${options.mode}, max ${options.maxListings} listings).` } });
   let imported = 0, updated = 0, skipped = 0;
   const errors: string[] = [];
   const notes: string[] = [];
   try {
     const { token, config } = await getEbayAccessToken();
 
-    const inventoryCounts = await syncInventoryApiItems(token, config);
+    const inventoryCounts = await syncInventoryApiItems(token, config, options);
     imported += inventoryCounts.imported;
     updated += inventoryCounts.updated;
     skipped += inventoryCounts.skipped;
@@ -551,7 +582,7 @@ export async function runEbayInventorySync() {
 
     if (inventoryCounts.records === 0) {
       notes.push("Inventory API returned 0 records; using Active Listings fallback.");
-      const tradingCounts = await syncTradingActiveListings(token, config);
+      const tradingCounts = await syncTradingActiveListings(token, config, options);
       imported += tradingCounts.imported;
       updated += tradingCounts.updated;
       skipped += tradingCounts.skipped;
@@ -566,11 +597,20 @@ export async function runEbayInventorySync() {
     }
 
     await prisma.ebaySyncConfig.update({ where: { id: config.id }, data: { lastSyncAt: new Date() } });
-    const message = `Unified sync complete. ${notes.join(" ")}`;
+    const message = `Unified sync complete (${options.mode}, max ${options.maxListings} listings). ${notes.join(" ")}`;
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", message, imported, updated, skipped, errors, finishedAt: new Date() } });
     return { ok: true, imported, updated, skipped, errors, message };
   } catch (err: any) {
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay sync failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
     return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay sync failed."] };
   }
+}
+
+
+export async function resetStuckEbaySyncRuns() {
+  const result = await prisma.ebaySyncRun.updateMany({
+    where: { status: "RUNNING", finishedAt: null },
+    data: { status: "FAILED", message: "Manually reset by admin.", finishedAt: new Date() },
+  });
+  return { ok: true, resetCount: result.count };
 }

@@ -1,0 +1,10 @@
+Phase 13B.1 - eBay sync safety and progress controls
+
+Changes:
+- Admin eBay page now has Test sync 10, Sync first 50, and Sync all controls.
+- Sync route accepts a mode payload and applies listing/page limits server-side.
+- Prevents overlapping syncs when a run is already marked RUNNING.
+- Adds Reset stuck sync action to mark stale/running jobs as failed.
+- Keeps one unified eBay sync engine internally: Inventory API first, Active Listings fallback second.
+
+This phase intentionally does not implement variation-level cart/RFQ handling, gallery/video media limits, or advanced description/overview work. Those are carried forward as Phase 13C and 13D deliverables.
