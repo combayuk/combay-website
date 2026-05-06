@@ -6,6 +6,7 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   status?: "PUBLISHED" | "DRAFT" | "ARCHIVED";
   source?: string;
   locationBin?: string;
+  itemLocation?: string;
   hsCode?: string;
   ebayItemId?: string;
   syncExcluded?: boolean;
@@ -110,6 +111,7 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     createdAt: product.createdAt?.toISOString?.() ?? "",
     updatedAt: product.updatedAt?.toISOString?.() ?? "",
     locationBin: product.locationBin ?? "",
+    itemLocation: (product as any).itemLocation ?? "United Kingdom",
     hsCode: product.hsCode ?? "",
     ebayItemId: product.ebayItemId ?? "",
     syncExcluded: product.syncExcluded ?? false,
@@ -236,16 +238,22 @@ export async function getProductsFromRepository(params: {
       take: 5000,
     });
 
-    return products.map(mapDbProduct);
+    const dbCategories = await prisma.category.findMany({ orderBy: { name: "asc" } });
+    const categoryMap = new Map(CATEGORIES.map((category) => [category.slug, category]));
+    for (const category of dbCategories) {
+      if (category.slug) categoryMap.set(category.slug, { label: category.name, slug: category.slug });
+    }
+
+    return { products: products.map(mapDbProduct), categories: Array.from(categoryMap.values()) };
   });
 
   if (dbResult.ok) {
     return {
       source: "database",
       message: "Products served from PostgreSQL/Prisma.",
-      products: dbResult.data,
-      total: dbResult.data.length,
-      categories: CATEGORIES,
+      products: dbResult.data.products,
+      total: dbResult.data.products.length,
+      categories: dbResult.data.categories,
     };
   }
 
@@ -315,6 +323,7 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       leadTime: input.leadTime ?? null,
       warranty: input.warranty ?? null,
       locationBin: input.locationBin ?? null,
+      itemLocation: input.itemLocation?.trim?.() || "United Kingdom",
       hsCode: input.hsCode ?? null,
       dimensions: input.dimensionsCm ?? null,
       weight: input.weightKg ? Number(input.weightKg) : null,

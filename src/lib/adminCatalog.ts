@@ -11,6 +11,7 @@ export type AdminProduct = CatalogProduct & {
   weightKg?: string;
   dimensionsCm?: string;
   locationBin?: string;
+  itemLocation?: string;
   hsCode?: string;
   ebayItemId?: string;
   syncExcluded?: boolean;
@@ -28,6 +29,7 @@ export function toAdminProduct(product: CatalogProduct, index = 0): AdminProduct
     updatedAt: "2026-05-01T09:00:00.000Z",
     source: "catalog",
     locationBin: index % 2 === 0 ? "WH-A" : "WH-B",
+    itemLocation: "United Kingdom",
   };
 }
 
@@ -150,6 +152,7 @@ export function createBlankAdminProduct(): AdminProduct {
     createdAt: nowIso(),
     updatedAt: nowIso(),
     source: "admin",
+    itemLocation: "United Kingdom",
   };
 }
 

@@ -38,6 +38,7 @@ export type CatalogProduct = {
   dispatchNote: string;
   image: string | null;
   videoUrl?: string | null;
+  itemLocation?: string | null;
   images?: { url: string; alt?: string | null; isPrimary?: boolean; sortOrder?: number }[];
   variants?: ProductVariantOption[];
   description: string;
@@ -50,13 +51,23 @@ export type CatalogProduct = {
 export const CATEGORIES: CatalogCategory[] = [
   { label: "All Categories", slug: "" },
   { label: "Automation & Control", slug: "automation-control" },
-  { label: "Lab & Scientific", slug: "lab-scientific" },
+  { label: "PLCs & Industrial Controllers", slug: "plcs-industrial-controllers" },
+  { label: "HMI & Operator Panels", slug: "hmi-operator-panels" },
+  { label: "Sensors & Encoders", slug: "sensors-encoders" },
+  { label: "Drives & Motion", slug: "drives-motion" },
+  { label: "Motors & Gearboxes", slug: "motors-gearboxes" },
+  { label: "Power Supplies & Transformers", slug: "power-supplies-transformers" },
+  { label: "Electrical Components", slug: "electrical-components" },
+  { label: "Cables & Connectors", slug: "cables-connectors" },
+  { label: "Pneumatics & Hydraulics", slug: "pneumatics-hydraulics" },
+  { label: "Process Instrumentation", slug: "process-instrumentation" },
+  { label: "Safety & Detection", slug: "safety-detection" },
   { label: "Test & Measurement", slug: "test-measurement" },
+  { label: "Lab & Scientific", slug: "lab-scientific" },
   { label: "IT & Networking", slug: "it-networking" },
   { label: "AV & Broadcast", slug: "av-broadcast" },
-  { label: "Drives & Motion", slug: "drives-motion" },
-  { label: "Safety & Detection", slug: "safety-detection" },
-  { label: "Process Instrumentation", slug: "process-instrumentation" },
+  { label: "Machine Tools & Workshop", slug: "machine-tools-workshop" },
+  { label: "Industrial Components & Spares", slug: "industrial-components-spares" },
 ];
 
 export const CONDITION_LABELS: Record<ConditionCode, { label: string; description: string; color: string }> = {

@@ -132,6 +132,7 @@ model Product {
   leadTime         String?
   warranty         String?
   locationBin      String?
+  itemLocation     String?        @default("United Kingdom")
   hsCode           String?
   source           String?        @default("manual")
   ebayItemId       String?        @unique

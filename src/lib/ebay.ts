@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { saveProductToRepository } from "@/lib/productRepository";
+import { CATEGORIES } from "@/lib/catalog";
 
 type EbayConfig = {
   id?: string;
@@ -368,47 +369,110 @@ function firstSentence(text: string, maxLength = 360) {
   return `${slice.slice(0, sentenceEnd > 120 ? sentenceEnd + 1 : maxLength).trim()}…`;
 }
 
+function compactSentences(text: string, maxLength = 520) {
+  const cleaned = normaliseWhitespace(text || "");
+  if (!cleaned) return "";
+  if (cleaned.length <= maxLength) return cleaned;
+  const slice = cleaned.slice(0, maxLength);
+  const end = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("; "), slice.lastIndexOf(", "));
+  return `${slice.slice(0, end > 160 ? end + 1 : maxLength).trim()}…`;
+}
+
 function buildProcurementOverview(listing: NormalizedEbayListing, cleanDescription: string) {
   const specMap = Object.fromEntries(listing.specs.map((s) => [s.label, s.value]));
   const brand = listing.brand || listing.manufacturer || aspect(specMap, ["Brand", "Manufacturer", "Make"]);
   const model = listing.model || aspect(specMap, ["Model", "Model Number"]);
   const mpn = listing.mpn || aspect(specMap, ["MPN", "Manufacturer Part Number", "Part Number"]);
-  const title = normaliseWhitespace(listing.title);
   const category = listing.category && listing.category !== "eBay Import" ? listing.category : "industrial equipment";
-  const baseDescription = normaliseWhitespace(cleanDescription || "");
-  const identity = dedupeByLower([brand, model, mpn]).join(" ");
-  const intro = baseDescription
-    ? firstSentence(baseDescription, 420)
-    : `${title}${identity ? ` (${identity})` : ""} is a Combay-supplied ${category} item suitable for industrial maintenance, replacement stock, engineering stores or procurement teams requiring a clearly identified part.`;
-
+  const identityBits = dedupeByLower([brand, model, mpn]).filter(Boolean);
   const usefulSpecs = listing.specs
     .map((spec) => ({ label: normaliseWhitespace(spec.label), value: cleanSpecValue(spec.value) }))
     .filter((spec) => spec.label && spec.value)
-    .filter((spec) => !["brand", "manufacturer", "model", "mpn", "manufacturer part number", "condition"].includes(spec.label.toLowerCase()))
-    .slice(0, 8);
+    .filter((spec) => !["brand", "manufacturer", "model", "model number", "mpn", "manufacturer part number", "part number", "condition"].includes(spec.label.toLowerCase()))
+    .slice(0, 5);
 
-  const paragraphs: string[] = [];
-  paragraphs.push(intro);
+  const lines: string[] = [];
+  const opening = cleanDescription
+    ? compactSentences(cleanDescription, 420)
+    : `${listing.title}${identityBits.length ? ` (${identityBits.join(" / ")})` : ""}. Category: ${category}.`;
+  if (opening) lines.push(opening);
 
-  const detailBits = [];
-  if (brand) detailBits.push(`manufacturer/brand ${brand}`);
-  if (model) detailBits.push(`model ${model}`);
-  if (mpn) detailBits.push(`part number ${mpn}`);
-  if (listing.sku) detailBits.push(`Combay SKU ${listing.sku}`);
-  if (detailBits.length) {
-    paragraphs.push(`Key identification details include ${detailBits.join(", ")}. This helps buyers cross-check compatibility before purchase or quotation.`);
-  }
+  const identification: string[] = [];
+  if (brand) identification.push(`Brand: ${brand}`);
+  if (model) identification.push(`Model: ${model}`);
+  if (mpn) identification.push(`MPN/part number: ${mpn}`);
+  if (listing.sku) identification.push(`Combay SKU: ${listing.sku}`);
+  if (identification.length) lines.push(identification.join(" · "));
 
   if (usefulSpecs.length) {
-    const specSentence = usefulSpecs.map((spec) => `${spec.label}: ${spec.value}`).join("; ");
-    paragraphs.push(`Relevant item specifics recorded for this listing include ${specSentence}.`);
+    lines.push(`Key specifics: ${usefulSpecs.map((spec) => `${spec.label}: ${spec.value}`).join("; ")}.`);
   }
 
-  paragraphs.push("Please review the product photographs, item specifics and condition notes before ordering. For compatibility-critical equipment, request confirmation against your exact machine, system, part number or application before payment.");
-
-  return paragraphs.join("\n\n");
+  lines.push("Please verify compatibility against your system, machine or part number before purchase or quote acceptance.");
+  return lines.join("\n\n");
 }
 
+function categoryChoice(label: string, slug: string) {
+  return { label, slug };
+}
+
+function categoryFromStaticSlug(slug: string) {
+  const category = CATEGORIES.find((item) => item.slug === slug);
+  return category ? categoryChoice(category.label, category.slug) : null;
+}
+
+function inferWebsiteCategory(listing: NormalizedEbayListing) {
+  const specText = listing.specs.map((spec) => `${spec.label} ${spec.value}`).join(" ");
+  const haystack = `${listing.title} ${listing.category || ""} ${listing.brand || ""} ${listing.manufacturer || ""} ${listing.model || ""} ${listing.mpn || ""} ${specText}`.toLowerCase();
+  const rules: Array<{ slug: string; keywords: string[] }> = [
+    { slug: "plcs-industrial-controllers", keywords: ["plc", "simatic", "s7-", "cpu module", "controller", "control unit", "input module", "output module", "i/o module", "io module"] },
+    { slug: "hmi-operator-panels", keywords: ["hmi", "operator panel", "touch panel", "touchscreen", "panelview", "simatic panel"] },
+    { slug: "sensors-encoders", keywords: ["sensor", "encoder", "photoelectric", "proximity", "limit switch", "transducer", "detector", "probe"] },
+    { slug: "drives-motion", keywords: ["drive", "inverter", "vfd", "servo", "axis", "motion control", "acs", "sinamics", "powerflex"] },
+    { slug: "motors-gearboxes", keywords: ["motor", "gearbox", "gear motor", "gearmotor", "actuator"] },
+    { slug: "power-supplies-transformers", keywords: ["power supply", "psu", "transformer", "ups", "rectifier", "24vdc", "dc power", "ac adapter"] },
+    { slug: "electrical-components", keywords: ["relay", "contactor", "breaker", "mcb", "rcd", "fuse", "terminal block", "switchgear", "isolator", "enclosure"] },
+    { slug: "cables-connectors", keywords: ["cable", "connector", "plug", "socket", "cordset", "terminal", "adapter", "lead"] },
+    { slug: "pneumatics-hydraulics", keywords: ["pneumatic", "hydraulic", "valve", "cylinder", "pump", "filter", "regulator", "manifold", "festo", "smc", "rexroth"] },
+    { slug: "process-instrumentation", keywords: ["flow", "pressure", "level", "temperature", "transmitter", "instrument", "calibrator", "meter", "controller", "process"] },
+    { slug: "safety-detection", keywords: ["safety", "flame", "gas detector", "light curtain", "emergency stop", "e-stop", "interlock", "guard", "alarm"] },
+    { slug: "test-measurement", keywords: ["oscilloscope", "analyser", "analyzer", "meter", "multimeter", "tester", "calibration", "signal generator", "spectrum", "daq", "data acquisition"] },
+    { slug: "lab-scientific", keywords: ["spectrometer", "ftir", "uv/vis", "uv-vis", "microscope", "centrifuge", "laboratory", "lab", "scientific", "perkin", "thermo", "waters", "agilent"] },
+    { slug: "it-networking", keywords: ["server", "switch", "router", "firewall", "cisco", "network", "ethernet", "fibre", "fiber", "storage", "nas"] },
+    { slug: "av-broadcast", keywords: ["broadcast", "video", "audio", "projector", "lens", "camera", "matrix", "router", "intercom", "barco", "christie"] },
+    { slug: "machine-tools-workshop", keywords: ["tool", "cnc", "lathe", "milling", "workshop", "cutting", "drill", "fixture", "chuck"] },
+    { slug: "automation-control", keywords: ["automation", "industrial control", "control system", "module", "industrial automation"] },
+  ];
+
+  for (const rule of rules) {
+    if (rule.keywords.some((keyword) => haystack.includes(keyword))) {
+      const match = categoryFromStaticSlug(rule.slug);
+      if (match) return match;
+    }
+  }
+
+  const rawCategory = normaliseWhitespace(listing.category || "");
+  const banned = /^(ebay import|business office industrial|other|miscellaneous|industrial automation control|category)$/i;
+  if (rawCategory && !banned.test(rawCategory) && rawCategory.length >= 4 && rawCategory.length <= 70) {
+    const cleaned = rawCategory
+      .replace(/^industrial\s+/i, "")
+      .replace(/\s*(parts|equipment|supplies)\s*$/i, "")
+      .trim();
+    const label = cleaned.length >= 4 ? cleaned.replace(/\b\w/g, (char) => char.toUpperCase()) : rawCategory;
+    const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "industrial-components-spares";
+    return categoryChoice(label, slug);
+  }
+
+  return categoryFromStaticSlug("industrial-components-spares") || categoryChoice("Industrial Components & Spares", "industrial-components-spares");
+}
+
+async function upsertWebsiteCategory(label: string, slug: string) {
+  return prisma.category.upsert({
+    where: { slug },
+    update: { name: label },
+    create: { name: label, slug },
+  });
+}
 
 function mergeListingDetails(summary: NormalizedEbayListing | null, detail: NormalizedEbayListing | null): NormalizedEbayListing | null {
   if (!summary && !detail) return null;
@@ -503,8 +567,9 @@ async function saveEbayListing(listing: NormalizedEbayListing, options: { forceR
   const existingSpecsMissing = !existingSpecs.length;
   const existingCategoryMissing = !existing?.category?.name || existing.category.name === "eBay Import";
   const forceRichUpdate = Boolean(options.forceRichUpdate || existingDescriptionIsFallback || existingOverviewIsFallback || existingImagesMissing || existingSpecsMissing || existingCategoryMissing);
-  const category = listing.category || "eBay Import";
-  const categorySlug = category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "ebay-import";
+  const websiteCategory = inferWebsiteCategory(listing);
+  const category = websiteCategory.label;
+  const categorySlug = websiteCategory.slug;
   const sku = listing.sku?.trim() || undefined;
 
   const result = await saveProductToRepository({
@@ -528,6 +593,7 @@ async function saveEbayListing(listing: NormalizedEbayListing, options: { forceR
     productOverview: existing?.descriptionLocked && !forceRichUpdate ? existing.productOverview ?? existing.description ?? "" : generatedOverview,
     images: existing?.imagesLocked && !forceRichUpdate ? existingImages : importedImages,
     specs: existing?.specsLocked && !forceRichUpdate ? existingSpecs : listing.specs,
+    itemLocation: (existing as any)?.itemLocation || "United Kingdom",
     ebayItemId: listing.ebayItemId,
     syncExcluded: existing?.syncExcluded ?? false,
   });
@@ -972,6 +1038,63 @@ export async function repairMissingEbayDetailImports(limit = 75) {
   } catch (err: any) {
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay repair failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
     return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay repair failed."] };
+  }
+}
+
+export async function refreshEbayCategoriesAndOverviews(limit = 100) {
+  await markStaleEbayRuns();
+  const candidateLimit = Math.max(1, Math.min(250, Number(limit || 100)));
+  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Refreshing website categories and overview text for up to ${candidateLimit} eBay products.` } });
+  let updated = 0, skipped = 0;
+  const errors: string[] = [];
+  try {
+    const { token, config } = await getEbayAccessToken();
+    const total = await prisma.product.count({ where: { syncExcluded: false, OR: [{ source: "ebay" }, { ebayItemId: { not: null } }] } });
+    const products = await prisma.product.findMany({
+      where: { syncExcluded: false, OR: [{ source: "ebay" }, { ebayItemId: { not: null } }] },
+      include: { category: true, specs: true },
+      orderBy: [{ updatedAt: "asc" }],
+      take: candidateLimit,
+    });
+
+    for (const product of products) {
+      try {
+        if (!product.ebayItemId) { skipped++; continue; }
+        const xml = await getTradingItemDetails(token, config, product.ebayItemId);
+        const listing = listingFromTradingXml(xml, "active-listings");
+        if (!listing) { skipped++; errors.push(`SKU ${product.sku}: eBay detail response could not be parsed.`); continue; }
+        const websiteCategory = inferWebsiteCategory({ ...listing, sku: listing.sku || product.sku });
+        const category = await upsertWebsiteCategory(websiteCategory.label, websiteCategory.slug);
+        const cleanDescription = listing.cleanDescription || cleanEbayDescription(listing.rawDescription || product.description || "");
+        const productOverview = buildProcurementOverview({ ...listing, sku: listing.sku || product.sku }, cleanDescription);
+        const specMap = Object.fromEntries(listing.specs.map((s) => [s.label, s.value]));
+        await prisma.product.update({
+          where: { id: product.id },
+          data: {
+            categoryId: category.id,
+            productOverview,
+            itemLocation: (product as any).itemLocation || "United Kingdom",
+            brand: product.brand || listing.brand || aspect(specMap, ["Brand", "Manufacturer"]) || null,
+            manufacturer: product.manufacturer || listing.manufacturer || aspect(specMap, ["Manufacturer", "Brand"]) || null,
+            model: product.model || listing.model || aspect(specMap, ["Model"]) || null,
+            mpn: product.mpn || listing.mpn || aspect(specMap, ["MPN", "Manufacturer Part Number", "Part Number"]) || null,
+            rawEbayDescription: product.rawEbayDescription || listing.rawDescription || null,
+          },
+        });
+        updated++;
+      } catch (err: any) {
+        skipped++;
+        errors.push(`SKU ${product.sku}: ${err.message || "refresh failed"}`);
+      }
+    }
+
+    const remaining = Math.max(0, total - products.length);
+    const message = `Category/overview refresh complete. Scanned ${total} eBay products; processed ${products.length}; updated ${updated}${remaining ? `; ${remaining} remain for another run.` : "."}`;
+    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", message, updated, skipped, errors, finishedAt: new Date() } });
+    return { ok: true, updated, skipped, checked: total, processed: products.length, remaining, errors, message };
+  } catch (err: any) {
+    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay category/overview refresh failed.", updated, skipped, errors, finishedAt: new Date() } });
+    return { ok: false, updated, skipped, errors: [...errors, err.message || "eBay category/overview refresh failed."] };
   }
 }
 

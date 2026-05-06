@@ -1,0 +1,1 @@
+Phase 13D.4: eBay category mapping to website categories, dynamic shop category filters, itemLocation field default United Kingdom, admin-editable public item location, and tighter overview text. Adds /api/ebay/refresh-content and admin button to refresh categories/overviews for existing eBay products. Run npx prisma db push before deploying.
