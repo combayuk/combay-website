@@ -1,0 +1,18 @@
+Phase 13D — Product media/video and eBay content polish
+
+Cumulative patch on top of Phase 13C.5.
+
+Includes:
+- Product.videoUrl Prisma field.
+- Admin product editor one-video URL/upload support.
+- Vercel upload route permits MP4/WebM/MOV.
+- VPS upload receiver permits MP4/WebM/MOV when redeployed to VPS.
+- Public product gallery shows image gallery plus one inline product video.
+- Image zoom remains click/pan only: 100% -> 125% -> 150% -> 100%.
+- eBay description cleaner strengthened to remove Shipping/Returns/Terms/Payment/Delivery/Customs sections.
+- eBay product overview generated from cleaned description, category, brand/manufacturer, model, MPN and key item specifics.
+- eBay imported gallery images are deduplicated and capped at 15.
+
+Requires:
+- npx prisma db push, because Product.videoUrl is a new column.
+- If product video upload fails with unsupported file type, update/restart the VPS upload receiver using the included vps-upload-receiver/server.js.

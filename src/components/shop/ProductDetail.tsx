@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { FileText, HelpCircle, BookOpen, AlignLeft, X, ShieldCheck, Truck, PackageCheck, ShoppingCart, Minus, Plus } from "lucide-react";
+import { FileText, HelpCircle, BookOpen, AlignLeft, X, ShieldCheck, Truck, PackageCheck, ShoppingCart, Minus, Plus, Video } from "lucide-react";
 import { CONDITION_LABELS, type CatalogProduct, type ProductVariantOption } from "@/lib/catalog";
 import { addCartItem } from "@/lib/cart";
 
@@ -91,22 +91,28 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
 
 function ProductGallery({ product }: { product: CatalogProduct }) {
   const images = product.images?.length ? product.images.slice(0, 15) : product.image ? [{ url: product.image, alt: product.title, isPrimary: true, sortOrder: 0 }] : [];
+  const hasVideo = Boolean((product as any).videoUrl);
+  const media = [
+    ...images.map((image, index) => ({ type: "image" as const, image, index })),
+    ...(hasVideo ? [{ type: "video" as const, url: String((product as any).videoUrl), index: images.length }] : []),
+  ];
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomStep, setZoomStep] = useState<0 | 1 | 2>(0);
   const [transformOrigin, setTransformOrigin] = useState("50% 50%");
-  const active = images[activeIndex] ?? images[0];
+  const active = media[activeIndex] ?? media[0];
   const zoomScale = zoomStep === 0 ? 1 : zoomStep === 1 ? 1.25 : 1.5;
 
   useEffect(() => { setActiveIndex(0); setZoomStep(0); setTransformOrigin("50% 50%"); }, [product.id]);
   useEffect(() => { setZoomStep(0); setTransformOrigin("50% 50%"); }, [activeIndex]);
 
   function cycleZoom() {
+    if (active?.type !== "image") return;
     setZoomStep((current) => current === 0 ? 1 : current === 1 ? 2 : 0);
     if (zoomStep === 2) setTransformOrigin("50% 50%");
   }
 
   function moveZoomOrigin(event: MouseEvent<HTMLDivElement>) {
-    if (zoomScale <= 1) return;
+    if (zoomScale <= 1 || active?.type !== "image") return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - bounds.left) / bounds.width) * 100;
     const y = ((event.clientY - bounds.top) / bounds.height) * 100;
@@ -115,15 +121,17 @@ function ProductGallery({ product }: { product: CatalogProduct }) {
 
   return <div>
     <div
-      className={`bg-surface border border-gray-200 rounded-2xl aspect-square flex items-center justify-center relative overflow-hidden mb-3 select-none ${active?.url ? zoomStep === 2 ? "cursor-zoom-out" : "cursor-zoom-in" : ""}`}
-      onClick={active?.url ? cycleZoom : undefined}
+      className={`bg-surface border border-gray-200 rounded-2xl aspect-square flex items-center justify-center relative overflow-hidden mb-3 select-none ${active?.type === "image" && active.image?.url ? zoomStep === 2 ? "cursor-zoom-out" : "cursor-zoom-in" : ""}`}
+      onClick={active?.type === "image" && active.image?.url ? cycleZoom : undefined}
       onMouseMove={moveZoomOrigin}
-      title={active?.url ? "Click to zoom: 125%, 150%, reset" : undefined}
+      title={active?.type === "image" && active.image?.url ? "Click to zoom: 125%, 150%, reset" : undefined}
     >
-      {active?.url ? <img src={active.url} alt={active.alt ?? product.title} draggable={false} style={{ transform: `scale(${zoomScale})`, transformOrigin }} className="object-contain w-full h-full p-6 transition-transform duration-150 ease-out pointer-events-none" /> : <div className="text-gray-200 text-[7rem] select-none">📦</div>}
-      {active?.url && zoomStep > 0 && <div className="absolute bottom-3 right-3 bg-white/95 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] text-gray-600 shadow-sm pointer-events-none font-display font-700">{zoomStep === 1 ? "125%" : "150%"}</div>}
+      {active?.type === "image" && active.image?.url ? <img src={active.image.url} alt={active.image.alt ?? product.title} draggable={false} style={{ transform: `scale(${zoomScale})`, transformOrigin }} className="object-contain w-full h-full p-6 transition-transform duration-150 ease-out pointer-events-none" /> : null}
+      {active?.type === "video" ? <video src={active.url} controls playsInline className="w-full h-full object-contain bg-black" /> : null}
+      {!active && <div className="text-gray-200 text-[7rem] select-none">📦</div>}
+      {active?.type === "image" && active.image?.url && zoomStep > 0 && <div className="absolute bottom-3 right-3 bg-white/95 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] text-gray-600 shadow-sm pointer-events-none font-display font-700">{zoomStep === 1 ? "125%" : "150%"}</div>}
     </div>
-    <div className="flex gap-2 flex-wrap">{images.map((image, index) => <button key={`${image.url}-${index}`} onClick={() => setActiveIndex(index)} className={`w-16 h-16 bg-surface border rounded-xl flex items-center justify-center hover:border-gray-400 transition-colors ${active?.url === image.url ? "border-accent" : "border-gray-200"}`}><img src={image.url} alt={image.alt ?? product.title} className="object-contain w-full h-full p-1" /></button>)}</div>
+    <div className="flex gap-2 flex-wrap">{media.map((item, index) => <button key={item.type === "image" ? `${item.image.url}-${index}` : `video-${index}`} onClick={() => setActiveIndex(index)} className={`w-16 h-16 bg-surface border rounded-xl flex items-center justify-center hover:border-gray-400 transition-colors overflow-hidden ${activeIndex === index ? "border-accent" : "border-gray-200"}`}>{item.type === "image" ? <img src={item.image.url} alt={item.image.alt ?? product.title} className="object-contain w-full h-full p-1" /> : <span className="flex flex-col items-center gap-0.5 text-[10px] font-display font-700 text-navy-900"><Video size={18} /> Video</span>}</button>)}</div>
   </div>;
 }
 function InfoPill({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) { return <div className="border border-gray-200 bg-white rounded-xl p-3"><div className="text-accent mb-1">{icon}</div><p className="font-display font-700 text-xs text-navy-950">{title}</p><p className="text-[11px] text-gray-500">{detail}</p></div>; }

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 
-const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf", "video/mp4", "video/webm", "video/quicktime"]);
 
 function safeFolder(value: string) {
   return ["products", "docs", "avatars", "company-docs"].includes(value) ? value : "products";
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   }
 
   if (!ALLOWED.has(file.type)) {
-    return Response.json({ ok: false, error: "Unsupported file type. Use JPG, PNG, WebP or PDF." }, { status: 400 });
+    return Response.json({ ok: false, error: "Unsupported file type. Use JPG, PNG, WebP, PDF, MP4, WebM or MOV." }, { status: 400 });
   }
 
   if (file.size > maxMb * 1024 * 1024) {

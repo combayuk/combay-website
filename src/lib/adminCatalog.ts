@@ -140,6 +140,7 @@ export function createBlankAdminProduct(): AdminProduct {
     warranty: "30-day return-to-base warranty unless otherwise stated.",
     dispatchNote: "Packed for courier dispatch with serial number recorded before shipment.",
     image: null,
+    videoUrl: null,
     description: "",
     productOverview: "",
     specs: [],

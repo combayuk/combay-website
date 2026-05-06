@@ -118,6 +118,7 @@ model Product {
   stockQty         Int           @default(1)
   description      String?       @db.Text
   productOverview  String?       @db.Text
+  videoUrl         String?
   rawEbayDescription String?     @db.Text
   titleLocked      Boolean       @default(false)
   priceLocked      Boolean       @default(false)

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText, ImagePlus, Plus, Save, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, ImagePlus, Plus, Save, Star, Trash2, Video } from "lucide-react";
 import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
 
@@ -169,7 +169,11 @@ export default function ProductEditor({ mode, productId }: Props) {
       return;
     }
     if (folder === "products") {
-      setImageRows((rows) => rows.length >= MAX_PRODUCT_IMAGES ? rows : [...rows, { url: result.url, alt: product.title || file.name, isPrimary: rows.length === 0, sortOrder: rows.length }]);
+      if (file.type.startsWith("video/")) {
+        update("videoUrl" as any, result.url as any);
+      } else {
+        setImageRows((rows) => rows.length >= MAX_PRODUCT_IMAGES ? rows : [...rows, { url: result.url, alt: product.title || file.name, isPrimary: rows.length === 0, sortOrder: rows.length }]);
+      }
     } else setDocText((current) => `${current ? `${current}\n` : ""}${file.name}|${result.url}|${file.type || "Document"}`);
     setMessage(`Uploaded: ${result.url}`);
   }
@@ -279,7 +283,11 @@ export default function ProductEditor({ mode, productId }: Props) {
         {tab === "images" && (
           <div className="space-y-5">
             <div className="flex items-center justify-between gap-3"><div><h2 className="font-display font-800 text-navy-950">Product images</h2><p className="text-xs text-gray-500 mt-1">Add/edit/delete up to {MAX_PRODUCT_IMAGES} images. The primary image is used on shop cards.</p></div><button type="button" onClick={addImageRow} disabled={imageRows.length >= MAX_PRODUCT_IMAGES} className="btn-secondary text-sm"><Plus size={14} /> Add image</button></div>
-            <label className="border border-dashed border-gray-300 rounded-xl p-5 bg-surface cursor-pointer hover:border-accent block"><ImagePlus className="text-gray-400 mb-2" size={22} /><p className="font-display font-700 text-sm text-navy-950">Upload product image</p><p className="text-xs text-gray-400 mt-1">Uploaded image is appended to the gallery.</p><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "products")} /></label>
+            <div className="grid lg:grid-cols-2 gap-4">
+              <label className="border border-dashed border-gray-300 rounded-xl p-5 bg-surface cursor-pointer hover:border-accent block"><ImagePlus className="text-gray-400 mb-2" size={22} /><p className="font-display font-700 text-sm text-navy-950">Upload product image</p><p className="text-xs text-gray-400 mt-1">JPG, PNG or WebP. Uploaded image is appended to the gallery.</p><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "products")} /></label>
+              <label className="border border-dashed border-gray-300 rounded-xl p-5 bg-surface cursor-pointer hover:border-accent block"><Video className="text-gray-400 mb-2" size={22} /><p className="font-display font-700 text-sm text-navy-950">Upload product video</p><p className="text-xs text-gray-400 mt-1">MP4/WebM/MOV. One product video is shown after the image gallery.</p><input type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "products")} /></label>
+            </div>
+            <div><label className="label">Product video URL</label><input value={(product as any).videoUrl ?? ""} onChange={(e) => update("videoUrl" as any, e.target.value as any)} className="input font-mono text-xs" placeholder="https://assets.combay.co.uk/products/product-video.mp4" /><p className="text-xs text-gray-400 mt-1">Optional. Use one video per item. Direct MP4/WebM/MOV URLs play inline on the product page.</p></div>
             <div className="overflow-x-auto border border-gray-200 rounded-xl"><table className="w-full text-sm"><thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide"><tr><th className="p-3 w-20">Preview</th><th className="p-3 min-w-[320px]">Image URL</th><th className="p-3 min-w-[180px]">Alt text</th><th className="p-3 w-24">Primary</th><th className="p-3 w-16"></th></tr></thead><tbody>{imageRows.map((row, index) => <tr key={`${row.url}-${index}`} className="border-t border-gray-100 align-top"><td className="p-3"><div className="w-14 h-14 border border-gray-200 rounded-lg bg-white flex items-center justify-center overflow-hidden">{row.url ? <img src={row.url} alt="" className="w-full h-full object-contain" /> : <span className="text-gray-200">📦</span>}</div></td><td className="p-3"><input value={row.url} onChange={(e) => updateImage(index, { url: e.target.value })} className="input font-mono text-xs" placeholder="https://assets.combay.co.uk/products/..." /></td><td className="p-3"><input value={row.alt ?? ""} onChange={(e) => updateImage(index, { alt: e.target.value })} className="input text-xs" /></td><td className="p-3"><button type="button" onClick={() => makePrimaryImage(index)} className={`inline-flex items-center gap-1 text-xs font-display font-700 ${row.isPrimary ? "text-accent" : "text-gray-400 hover:text-navy-950"}`}><Star size={14} fill={row.isPrimary ? "currentColor" : "none"} /> {row.isPrimary ? "Primary" : "Set"}</button></td><td className="p-3"><button type="button" onClick={() => deleteImageRow(index)} className="text-red-600 hover:text-red-800"><Trash2 size={16} /></button></td></tr>)}{!imageRows.length && <tr><td colSpan={5} className="p-5 text-sm text-gray-500">No images yet. Add a URL row or upload an image.</td></tr>}</tbody></table></div>
             <div><label className="label">Documents</label><p className="text-xs text-gray-400 mb-2">One per line: Name|URL|File type</p><label className="inline-flex items-center gap-2 border border-dashed border-gray-300 rounded-xl px-4 py-3 bg-surface cursor-pointer hover:border-accent mb-3"><FileText className="text-gray-400" size={18} /><span className="font-display font-700 text-sm text-navy-950">Upload document</span><input type="file" accept="application/pdf" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "docs")} /></label><textarea value={docText} onChange={(e) => setDocText(e.target.value)} className="input min-h-[120px] font-mono text-xs" /></div>
           </div>

@@ -19,6 +19,7 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   dimensionsCm?: string;
   adminNotes?: string;
   image?: string | null;
+  videoUrl?: string | null;
   images?: { url: string; alt?: string; isPrimary?: boolean; sortOrder?: number }[];
   specs?: { label: string; value: string }[];
   variants?: { id?: string; sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any }[];
@@ -79,6 +80,7 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     warranty: product.warranty ?? "30-day return-to-base warranty unless otherwise stated.",
     dispatchNote: product.dispatchNote ?? "Packed for courier dispatch with serial number recorded before shipment.",
     image: primaryImage,
+    videoUrl: (product as any).videoUrl ?? null,
     images: productImages.map((image) => ({ url: image.url, alt: image.alt, isPrimary: image.isPrimary, sortOrder: image.sortOrder })),
     variants: productVariants
       .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -308,6 +310,7 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       stockQty: Number(input.stockQty ?? 0),
       description: input.description ?? null,
       productOverview: input.productOverview ?? null,
+      videoUrl: (input as any).videoUrl?.trim?.() || null,
       dispatchNote: input.dispatchNote ?? null,
       leadTime: input.leadTime ?? null,
       warranty: input.warranty ?? null,

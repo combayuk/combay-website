@@ -16,6 +16,7 @@ export interface ProductWithRelations {
   stockQty: number;
   description: string | null;
   productOverview: string | null;
+  videoUrl?: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
   addonSupport: boolean;

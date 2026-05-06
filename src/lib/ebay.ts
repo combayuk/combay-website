@@ -307,8 +307,10 @@ function cleanEbayDescription(raw: string) {
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<h[1-6][^>]*>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
     .replace(/<\/li>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/\r/g, "")
@@ -317,8 +319,9 @@ function cleanEbayDescription(raw: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  const cutoff = text.search(/(^|\n|\b)(shipping\s*&\s*returns|shipping\s+and\s+returns|terms\s*&\s*conditions|terms\s+and\s+conditions|t&c'?s|returns policy|payment|postage|delivery)(\b|\n)/i);
-  return cutoff > 0 ? text.slice(0, cutoff).trim() : text;
+  const cutoff = text.search(/(^|\n|\b)(shipping\s*&\s*returns|shipping\s+and\s+returns|shipping|returns|terms\s*&\s*conditions|terms\s+and\s+conditions|t\s*&\s*c'?s|t&c'?s|payment|postage|delivery|customs|warranty\s+and\s+returns)(\b|\n)/i);
+  const cleaned = cutoff > 0 ? text.slice(0, cutoff).trim() : text;
+  return cleaned.replace(/Imported from active eBay listing\.?/gi, "").trim();
 }
 
 function conditionFromEbay(value: string) {
@@ -327,6 +330,36 @@ function conditionFromEbay(value: string) {
   if (normalised.includes("new other") || normalised.includes("open box")) return "NEW_OPEN_BOX" as const;
   if (normalised.includes("new")) return "NEW" as const;
   return "USED" as const;
+}
+
+function firstSentence(text: string, maxLength = 360) {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  if (cleaned.length <= maxLength) return cleaned;
+  const slice = cleaned.slice(0, maxLength);
+  const sentenceEnd = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("; "));
+  return `${slice.slice(0, sentenceEnd > 120 ? sentenceEnd + 1 : maxLength).trim()}…`;
+}
+
+function buildProcurementOverview(listing: NormalizedEbayListing, cleanDescription: string) {
+  const brand = listing.brand || listing.manufacturer || "";
+  const model = listing.model || "";
+  const mpn = listing.mpn || "";
+  const specificHighlights = listing.specs
+    .filter((spec) => !["brand", "manufacturer", "model", "mpn", "manufacturer part number"].includes(spec.label.toLowerCase()))
+    .slice(0, 6)
+    .map((spec) => `${spec.label}: ${spec.value}`);
+  const introParts = [brand, model, mpn].filter(Boolean).join(" ");
+  const intro = firstSentence(cleanDescription) || `${listing.title}${introParts ? ` (${introParts})` : ""} is listed for industrial procurement, maintenance replacement or spare-stock use.`;
+  const lines = [intro, "", "Combay listing notes:"];
+  lines.push(`- SKU: ${listing.sku || listing.ebayItemId || "confirmed on request"}`);
+  if (listing.category) lines.push(`- Category: ${listing.category}`);
+  if (brand) lines.push(`- Brand/manufacturer: ${brand}`);
+  if (model) lines.push(`- Model: ${model}`);
+  if (mpn) lines.push(`- MPN / part number: ${mpn}`);
+  for (const highlight of specificHighlights) lines.push(`- ${highlight}`);
+  lines.push("", "Please check the photographs, item specifics and description before ordering. For compatibility-critical equipment, request confirmation against your exact part number or application.");
+  return lines.join("\n");
 }
 
 
@@ -405,12 +438,13 @@ async function saveEbayListing(listing: NormalizedEbayListing) {
 
   const existingImages = existing?.images?.map((image) => ({ url: image.url, alt: image.alt ?? listing.title, isPrimary: image.isPrimary, sortOrder: image.sortOrder })) ?? [];
   const existingSpecs = existing?.specs?.map((spec) => ({ label: spec.label, value: spec.value })) ?? [];
-  const importedImages = listing.images.map((url, index) => ({ url, alt: listing.title, isPrimary: index === 0, sortOrder: index }));
+  const importedImages = Array.from(new Set(listing.images.filter(Boolean))).slice(0, 15).map((url, index) => ({ url, alt: listing.title, isPrimary: index === 0, sortOrder: index }));
   const importedVariants = listing.variants ?? [];
   const variantStockTotal = importedVariants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stockQty || 0)), 0);
   const cleanDescription = listing.cleanDescription || cleanEbayDescription(listing.rawDescription || "");
   const descriptionPrefix = listing.sourceMethod === "active-listings" ? "Imported from active eBay listing." : "Imported from eBay Inventory API.";
   const description = cleanDescription || descriptionPrefix;
+  const generatedOverview = buildProcurementOverview(listing, cleanDescription);
   const category = listing.category || "eBay Import";
   const categorySlug = category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "ebay-import";
   const sku = listing.sku?.trim() || undefined;
@@ -433,7 +467,7 @@ async function saveEbayListing(listing: NormalizedEbayListing) {
     stockQty: importedVariants.length ? variantStockTotal : listing.quantity,
     variants: importedVariants,
     description: existing?.descriptionLocked ? existing.description ?? "" : description,
-    productOverview: existing?.descriptionLocked ? existing.productOverview ?? existing.description ?? "" : description,
+    productOverview: existing?.descriptionLocked ? existing.productOverview ?? existing.description ?? "" : generatedOverview,
     images: existing?.imagesLocked ? existingImages : importedImages,
     specs: existing?.specsLocked ? existingSpecs : listing.specs,
     ebayItemId: listing.ebayItemId,

@@ -19,7 +19,7 @@ const ROOT_DIR = process.env.UPLOAD_ROOT_DIR || "/var/www/combay-uploads";
 const MAX_MB = Number(process.env.UPLOAD_MAX_FILE_MB || 50);
 const MAX_BYTES = MAX_MB * 1024 * 1024;
 
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf", "video/mp4", "video/webm", "video/quicktime"]);
 const ALLOWED_FOLDERS = new Set(["products", "docs", "avatars", "company-docs"]);
 
 function json(res, status, data) {
@@ -33,7 +33,7 @@ function safeExt(filename, mime) {
   if (mime === "image/jpeg") return "jpg";
   if (mime === "image/png") return "png";
   if (mime === "image/webp") return "webp";
-  if (mime === "application/pdf") return "pdf";
+  if (mime === "application/pdf", "video/mp4", "video/webm", "video/quicktime") return "pdf";
   return "bin";
 }
 

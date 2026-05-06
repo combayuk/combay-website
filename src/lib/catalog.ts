@@ -37,6 +37,7 @@ export type CatalogProduct = {
   warranty: string;
   dispatchNote: string;
   image: string | null;
+  videoUrl?: string | null;
   images?: { url: string; alt?: string | null; isPrimary?: boolean; sortOrder?: number }[];
   variants?: ProductVariantOption[];
   description: string;
@@ -102,6 +103,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "30-day return-to-base warranty unless otherwise stated.",
     dispatchNote: "Packed for courier dispatch with serial number recorded before shipment.",
     image: null,
+    videoUrl: null,
     description: "Used Siemens S7-400 CPU module for process and plant automation. Suitable for replacement stock, breakdown support and legacy system maintenance.",
     productOverview: "The SIMATIC S7-400 range is widely used in industrial control systems where dependable PLC replacement stock is required. This listing is structured for engineering procurement with SKU, MPN, condition and dispatch information clearly visible.",
     specs: [
@@ -133,6 +135,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "30-day return-to-base warranty covering arrival as described.",
     dispatchNote: "Ships on reinforced packaging; collection welcome by appointment.",
     image: null,
+    videoUrl: null,
     description: "Compact FTIR spectrometer package for materials identification, QA laboratories and teaching environments. Supplied as used scientific equipment subject to pre-dispatch visual and power checks.",
     productOverview: "Industrial and laboratory buyers often need clear accessory details. This product record separates main instrument, accessory, condition and documents so it can later sync cleanly from eBay or CSV imports.",
     specs: [
@@ -164,6 +167,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "30-day return-to-base warranty unless sold for parts.",
     dispatchNote: "Weight and pallet requirements confirmed before dispatch.",
     image: null,
+    videoUrl: null,
     description: "ABB variable speed drive for industrial motor control, plant maintenance and spare part replacement.",
     productOverview: "Large drives require clear dispatch and condition information. This record supports weight/dimensions fields later in the admin product editor.",
     specs: [
@@ -195,6 +199,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "30-day return-to-base warranty for arrival as described.",
     dispatchNote: "Calibration status is stated only where certificate is included.",
     image: null,
+    videoUrl: null,
     description: "Mixed domain oscilloscope for electronics diagnostics, maintenance workshops and engineering labs.",
     productOverview: "Test equipment listings should clearly distinguish functionality checks from formal calibration. The site should avoid implying calibration unless documentation is uploaded.",
     specs: [
@@ -226,6 +231,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "30-day return-to-base warranty.",
     dispatchNote: "Configuration wiped where practical before dispatch.",
     image: null,
+    videoUrl: null,
     description: "Used Cisco stackable switch for replacement stock, lab use or network maintenance.",
     productOverview: "Networking products need clear reset/configuration wording and exact MPN fields to support procurement searches.",
     specs: [
@@ -257,6 +263,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "30-day return-to-base warranty unless otherwise stated.",
     dispatchNote: "Hazardous area suitability must be verified by buyer before use.",
     image: null,
+    videoUrl: null,
     description: "Specialist test lamp used for flame detection system checks in industrial and safety environments.",
     productOverview: "Safety equipment records need conservative wording and buyer verification notes to avoid overstatement of certification or suitability.",
     specs: [
@@ -288,6 +295,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "30-day return-to-base warranty for arrival as described.",
     dispatchNote: "Lens, lamp hours and accessories must be checked against listing notes.",
     image: null,
+    videoUrl: null,
     description: "Professional projector suitable for event, installation and AV replacement applications.",
     productOverview: "AV products should capture lamp hours, lens information and accessories as structured product fields during later admin build-out.",
     specs: [
@@ -319,6 +327,7 @@ export const PRODUCTS: CatalogProduct[] = [
     warranty: "Warranty/return terms confirmed with quote due to configuration-specific suitability.",
     dispatchNote: "Buyer must confirm process compatibility and exact part configuration.",
     image: null,
+    videoUrl: null,
     description: "Process flow measurement equipment for industrial plant applications. Exact configuration should be confirmed before purchase.",
     productOverview: "Process instruments often require quote-led sale because configuration, calibration and site suitability affect purchase decision.",
     specs: [
