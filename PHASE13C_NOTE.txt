@@ -1,0 +1,31 @@
+Phase 13C — eBay variations + quantity handling
+
+Adds database-backed product variations and customer quantity/variation selection.
+
+Included:
+- Prisma ProductVariant model linked to Product.
+- OrderItem variationSku and variationLabel fields.
+- QuoteRequest variationSku and variationLabel fields.
+- eBay Trading API variation extraction from GetItem Variation blocks.
+- Variation-level SKU, label, price and stock import.
+- Parent product stock becomes sum of variation stock when variations exist.
+- Product API/repository now returns variants and full image list.
+- Product page now shows gallery thumbnails, variation selector, quantity selector, variant stock and variant pricing.
+- Add to cart stores selected variation and quantity.
+- Cart displays selected variation, variant stock and validates quantity against selected variation.
+- Checkout carries selected variation through to order item and Stripe line description.
+- RFQ modal includes selected variation and requested quantity.
+- Admin product editor has a Variations tab using Label|SKU|Price|Stock rows.
+
+Required after applying:
+1) npx prisma db push
+2) git add .
+3) git commit -m "Phase 13C add eBay variations and quantity selection"
+4) git push
+
+Test:
+- Run eBay Test sync 10 for a listing with variations.
+- Open the product in admin and verify Variations tab is populated.
+- Open public product page and verify variation selector, per-variation stock and quantity selection.
+- Add variation to cart, adjust quantity, checkout, and confirm order item carries variation details.
+- Submit RFQ for a variation and confirm quote line includes selected variation.

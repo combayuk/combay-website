@@ -21,6 +21,7 @@ export type ProductWriteInput = Partial<CatalogProduct> & {
   image?: string | null;
   images?: { url: string; alt?: string; isPrimary?: boolean; sortOrder?: number }[];
   specs?: { label: string; value: string }[];
+  variants?: { id?: string; sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any }[];
   documents?: { name: string; url: string; fileType?: string }[];
 };
 
@@ -29,6 +30,7 @@ type DbProduct = Awaited<ReturnType<typeof prisma.product.findMany>>[number] & {
   images?: { url: string; alt: string | null; isPrimary: boolean; sortOrder: number }[];
   documents?: { name: string; url: string; fileType: string | null }[];
   specs?: { label: string; value: string; sortOrder: number }[];
+  variants?: { id: string; sku: string | null; label: string; optionName: string | null; optionValue: string | null; price: any; stockQty: number; sortOrder: number }[];
   tags?: { name: string }[];
 };
 
@@ -54,6 +56,7 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
   const productSpecs = (product.specs ?? []) as Array<{ label: string; value: string; sortOrder: number }>;
   const productDocs = (product.documents ?? []) as Array<{ name: string; url: string; fileType: string | null }>;
   const productTags = (product.tags ?? []) as Array<{ name: string }>;
+  const productVariants = ((product as any).variants ?? []) as Array<{ id: string; sku: string | null; label: string; optionName: string | null; optionValue: string | null; price: any; stockQty: number; sortOrder: number }>;
   const primaryImage = productImages.find((image) => image.isPrimary)?.url ?? productImages[0]?.url ?? null;
 
   return {
@@ -76,6 +79,19 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     warranty: product.warranty ?? "30-day return-to-base warranty unless otherwise stated.",
     dispatchNote: product.dispatchNote ?? "Packed for courier dispatch with serial number recorded before shipment.",
     image: primaryImage,
+    images: productImages.map((image) => ({ url: image.url, alt: image.alt, isPrimary: image.isPrimary, sortOrder: image.sortOrder })),
+    variants: productVariants
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((variant) => ({
+        id: variant.id,
+        sku: variant.sku,
+        label: variant.label,
+        optionName: variant.optionName,
+        optionValue: variant.optionValue,
+        price: variant.price === null || variant.price === undefined ? null : Number(variant.price),
+        stockQty: variant.stockQty,
+        sortOrder: variant.sortOrder,
+      })),
     description: product.description ?? "",
     productOverview: product.productOverview ?? product.description ?? "",
     specs: productSpecs
@@ -155,6 +171,19 @@ function relationPayload(input: ProductWriteInput) {
       url: doc.url,
       fileType: doc.fileType ?? "Document",
     })),
+    variants: (input.variants ?? [])
+      .filter((variant) => variant.label || variant.sku || variant.optionValue)
+      .map((variant, index) => ({
+        sku: variant.sku || null,
+        label: variant.label || [variant.optionName, variant.optionValue].filter(Boolean).join(": ") || variant.sku || `Variant ${index + 1}`,
+        optionName: variant.optionName || null,
+        optionValue: variant.optionValue || null,
+        price: variant.price === null || variant.price === undefined ? null : Number(variant.price),
+        stockQty: Math.max(0, Math.floor(Number(variant.stockQty ?? 0))),
+        sortOrder: variant.sortOrder ?? index,
+        ebayVariationSku: variant.ebayVariationSku || variant.sku || null,
+        ebayVariationData: variant.ebayVariationData ?? undefined,
+      })),
   };
 }
 
@@ -198,6 +227,7 @@ export async function getProductsFromRepository(params: {
         images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] },
         documents: true,
         specs: { orderBy: { sortOrder: "asc" } },
+        variants: { orderBy: { sortOrder: "asc" } },
         tags: true,
       },
       orderBy: { sku: "asc" },
@@ -238,7 +268,7 @@ export async function getProductByIdFromRepository(id: string) {
   const dbResult = await withDatabase(async () => {
     const product = await prisma.product.findFirst({
       where: { OR: [{ id }, { sku: id }, { slug: id }] },
-      include: { category: true, images: true, documents: true, specs: true, tags: true },
+      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true },
     });
     return product ? mapDbProduct(product) : null;
   });
@@ -318,9 +348,14 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       await prisma.productDocument.createMany({ data: relations.documents.map((document) => ({ ...document, productId: product.id })) });
     }
 
+    await prisma.productVariant.deleteMany({ where: { productId: product.id } });
+    if (relations.variants.length) {
+      await prisma.productVariant.createMany({ data: relations.variants.map((variant) => ({ ...variant, productId: product.id })) });
+    }
+
     const saved = await prisma.product.findUnique({
       where: { id: product.id },
-      include: { category: true, images: true, documents: true, specs: true, tags: true },
+      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true },
     });
 
     return saved ? mapDbProduct(saved) : product;

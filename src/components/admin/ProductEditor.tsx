@@ -8,7 +8,7 @@ import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catal
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
 
 type Props = { mode: "new" | "edit"; productId?: string };
-type Tab = "basic" | "content" | "images" | "logistics" | "seo";
+type Tab = "basic" | "content" | "images" | "logistics" | "variants" | "seo";
 
 function specsToText(specs: CatalogProduct["specs"] = []) {
   return specs.map((spec) => `${spec.label}: ${spec.value}`).join("\n");
@@ -22,6 +22,27 @@ function textToSpecs(text: string): CatalogProduct["specs"] {
 function tagsToText(tags: string[] = []) { return tags.join(", "); }
 function textToTags(text: string) { return text.split(",").map((tag) => tag.trim()).filter(Boolean); }
 function docsToText(docs: CatalogProduct["documents"] = []) { return docs.map((doc) => `${doc.name}|${doc.url}|${doc.fileType}`).join("\n"); }
+
+function variantsToText(variants: any[] = []) {
+  return variants.map((variant) => `${variant.label || "Variant"}|${variant.sku || ""}|${variant.price ?? ""}|${variant.stockQty ?? 0}`).join("\n");
+}
+function textToVariants(text: string) {
+  return text.split("\n").map((line) => line.trim()).filter(Boolean).map((line, index) => {
+    const [label, sku, price, stockQty] = line.split("|");
+    const labelText = label?.trim() || `Variant ${index + 1}`;
+    const parts = labelText.split(":");
+    return {
+      label: labelText,
+      sku: sku?.trim() || null,
+      optionName: parts.length > 1 ? parts[0].trim() : null,
+      optionValue: parts.length > 1 ? parts.slice(1).join(":").trim() : labelText,
+      price: price?.trim() ? Number(price) : null,
+      stockQty: Math.max(0, Math.floor(Number(stockQty || 0))),
+      sortOrder: index,
+    };
+  });
+}
+
 function textToDocs(text: string): CatalogProduct["documents"] {
   return text.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
     const [name, url, fileType] = line.split("|");
@@ -56,6 +77,7 @@ export default function ProductEditor({ mode, productId }: Props) {
   const [specText, setSpecText] = useState("");
   const [docText, setDocText] = useState("");
   const [tagText, setTagText] = useState("");
+  const [variantText, setVariantText] = useState("");
   const [mainImageSource, setMainImageSource] = useState("");
 
   useEffect(() => {
@@ -63,6 +85,7 @@ export default function ProductEditor({ mode, productId }: Props) {
       setSpecText(specsToText(blank.specs));
       setDocText(docsToText(blank.documents));
       setTagText(tagsToText(blank.tags));
+      setVariantText(variantsToText((blank as any).variants));
       setMainImageSource(blank.image ?? "");
       return;
     }
@@ -76,6 +99,7 @@ export default function ProductEditor({ mode, productId }: Props) {
         setSpecText(specsToText(loaded.specs));
         setDocText(docsToText(loaded.documents));
         setTagText(tagsToText(loaded.tags));
+        setVariantText(variantsToText((loaded as any).variants));
         setMainImageSource(loaded.image ?? "");
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Could not load product."))
@@ -125,6 +149,7 @@ export default function ProductEditor({ mode, productId }: Props) {
       specs: textToSpecs(specText),
       documents: textToDocs(docText),
       tags: textToTags(tagText),
+      variants: textToVariants(variantText) as any,
       source: product.source === "catalog" ? "admin" : product.source,
     };
 
@@ -151,6 +176,7 @@ export default function ProductEditor({ mode, productId }: Props) {
     { id: "content", label: "Content & specs" },
     { id: "images", label: "Images & docs" },
     { id: "logistics", label: "Stock & logistics" },
+    { id: "variants", label: "Variations" },
     { id: "seo", label: "SEO & tags" },
   ];
 
@@ -213,6 +239,9 @@ export default function ProductEditor({ mode, productId }: Props) {
         )}
 
         {tab === "logistics" && <div className="grid lg:grid-cols-2 gap-5"><div><label className="label">Price excluding VAT</label><input type="number" value={product.price ?? ""} disabled={product.priceOnRequest} onChange={(e) => update("price", e.target.value ? Number(e.target.value) : null)} className="input" /></div><div><label className="label">Stock quantity</label><input type="number" value={product.stockQty} onChange={(e) => update("stockQty", Number(e.target.value || 0))} className="input" /></div><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={product.priceOnRequest} onChange={(e) => update("priceOnRequest", e.target.checked)} /> Price on request / POA</label><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={Boolean(product.syncExcluded)} onChange={(e) => update("syncExcluded", e.target.checked as any)} /> Exclude from eBay sync updates</label><div><label className="label">Location / bin</label><input value={product.locationBin ?? ""} onChange={(e) => update("locationBin", e.target.value)} className="input" placeholder="WH-A-03" /></div><div><label className="label">eBay item / listing ID</label><input value={(product as any).ebayItemId ?? ""} onChange={(e) => update("ebayItemId", e.target.value as any)} className="input" /></div><div><label className="label">Weight (kg)</label><input value={product.weightKg ?? ""} onChange={(e) => update("weightKg", e.target.value)} className="input" /></div><div><label className="label">Dimensions (cm)</label><input value={product.dimensionsCm ?? ""} onChange={(e) => update("dimensionsCm", e.target.value)} className="input" placeholder="40 x 30 x 20" /></div><div><label className="label">HS code</label><input value={product.hsCode ?? ""} onChange={(e) => update("hsCode", e.target.value)} className="input" /></div><div><label className="label">Lead time</label><input value={product.leadTime} onChange={(e) => update("leadTime", e.target.value)} className="input" /></div><div className="lg:col-span-2"><label className="label">Dispatch note</label><textarea value={product.dispatchNote} onChange={(e) => update("dispatchNote", e.target.value)} className="input min-h-[90px]" /></div><div className="lg:col-span-2"><label className="label">Warranty statement</label><textarea value={product.warranty} onChange={(e) => update("warranty", e.target.value)} className="input min-h-[90px]" /></div></div>}
+
+
+        {tab === "variants" && <div className="space-y-5"><div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">Use this when a listing has selectable options such as size, voltage, colour, length, connector or package. Format one variation per line: <span className="font-mono">Label|SKU|Price|Stock</span>. Example: <span className="font-mono">Size: 10cm|ABC-10|25.00|3</span></div><div><label className="label">Product variations</label><textarea value={variantText} onChange={(e) => setVariantText(e.target.value)} className="input min-h-[220px] font-mono text-xs" placeholder={"Size: Small|SKU-S|25.00|2\nSize: Large|SKU-L|30.00|5"} /></div></div>}
 
         {tab === "seo" && <div className="space-y-5"><div><label className="label">Slug</label><input value={product.slug} onChange={(e) => update("slug", e.target.value)} className="input font-mono text-sm" /></div><div><label className="label">Search tags</label><input value={tagText} onChange={(e) => setTagText(e.target.value)} className="input" placeholder="PLC, Siemens, 6ES7412" /></div><div><label className="label">Admin notes</label><textarea value={product.adminNotes ?? ""} onChange={(e) => update("adminNotes", e.target.value)} className="input min-h-[120px]" /></div></div>}
       </div>

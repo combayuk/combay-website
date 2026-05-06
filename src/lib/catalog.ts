@@ -6,6 +6,17 @@ export type CatalogCategory = {
   slug: string;
 };
 
+export type ProductVariantOption = {
+  id: string;
+  sku?: string | null;
+  label: string;
+  optionName?: string | null;
+  optionValue?: string | null;
+  price?: number | null;
+  stockQty: number;
+  sortOrder?: number;
+};
+
 export type CatalogProduct = {
   id: string;
   slug: string;
@@ -26,6 +37,8 @@ export type CatalogProduct = {
   warranty: string;
   dispatchNote: string;
   image: string | null;
+  images?: { url: string; alt?: string | null; isPrimary?: boolean; sortOrder?: number }[];
+  variants?: ProductVariantOption[];
   description: string;
   productOverview: string;
   specs: { label: string; value: string }[];

@@ -150,6 +150,7 @@ model Product {
   faqs             ProductFaq[]
   documents        ProductDocument[]
   specs            ProductSpec[]
+  variants         ProductVariant[]
   orderItems       OrderItem[]
   tags             Tag[]
 
@@ -192,6 +193,27 @@ model ProductSpec {
   value     String
   sortOrder Int     @default(0)
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+
+model ProductVariant {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku         String?
+  label       String
+  optionName  String?
+  optionValue String?
+  price       Decimal? @db.Decimal(10, 2)
+  stockQty    Int      @default(0)
+  sortOrder   Int      @default(0)
+  ebayVariationSku String?
+  ebayVariationData Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([productId])
+  @@index([sku])
 }
 
 model Tag {
@@ -251,6 +273,8 @@ model OrderItem {
   product       Product  @relation(fields: [productId], references: [id])
   title         String
   sku           String
+  variationSku  String?
+  variationLabel String?
   quantity      Int      @default(1)
   unitPrice     Decimal  @db.Decimal(10, 2)
   addonSupport  Boolean  @default(false)
@@ -438,6 +462,8 @@ model QuoteRequest {
   productUrl  String?
   productSku  String?
   productTitle String?
+  variationSku String?
+  variationLabel String?
   source      String?
   description String        @db.Text
   quantity    Int           @default(1)

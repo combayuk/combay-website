@@ -70,12 +70,16 @@ export default function CheckoutClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customer: form,
-          lines: summary.lines.map(({ product, qty, lineTotal }) => ({
+          lines: summary.lines.map(({ product, variant, qty, unitPrice, lineTotal }) => ({
             sku: product.sku,
             title: product.title,
             qty,
-            unitPrice: product.price,
+            unitPrice,
             lineTotal,
+            variantId: variant?.id,
+            variantSku: variant?.sku,
+            variationSku: variant?.sku,
+            variationLabel: variant?.label,
           })),
           totals: {
             subtotal: summary.subtotal,
@@ -178,9 +182,9 @@ export default function CheckoutClient() {
         <aside className="bg-white border border-gray-200 rounded-2xl p-5 h-fit sticky top-24">
           <h2 className="font-display font-800 text-xl text-navy-950 mb-4">Summary</h2>
           <div className="space-y-3 mb-4">
-            {summary.lines.map(({ product, qty, lineTotal }) => (
-              <div key={product.sku} className="flex justify-between gap-3 text-sm">
-                <div><p className="font-display font-700 text-navy-950 leading-snug">{product.sku}</p><p className="text-xs text-gray-500">Qty {qty}</p></div>
+            {summary.lines.map(({ product, variant, qty, lineTotal }) => (
+              <div key={`${product.sku}-${variant?.id || variant?.sku || "base"}`} className="flex justify-between gap-3 text-sm">
+                <div><p className="font-display font-700 text-navy-950 leading-snug">{product.sku}</p><p className="text-xs text-gray-500">Qty {qty}{variant ? ` · ${variant.label}` : ""}</p></div>
                 <span className="font-display font-700 text-navy-950">{formatCurrency(lineTotal)}</span>
               </div>
             ))}

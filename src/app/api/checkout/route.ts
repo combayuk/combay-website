@@ -6,6 +6,10 @@ type CheckoutLine = {
   sku: string;
   qty?: number;
   quantity?: number;
+  variantId?: string;
+  variantSku?: string;
+  variationSku?: string;
+  variationLabel?: string;
 };
 
 function orderNumber() {
@@ -32,7 +36,7 @@ export async function POST(request: Request) {
     const requestedSkus = lines.map((line) => String(line.sku)).filter(Boolean);
     const products = await prisma.product.findMany({
       where: { sku: { in: requestedSkus }, status: "PUBLISHED" },
-      include: { images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] } },
+      include: { images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, variants: { orderBy: { sortOrder: "asc" } } },
     });
 
     const productBySku = new Map(products.map((product) => [product.sku, product]));
@@ -40,6 +44,8 @@ export async function POST(request: Request) {
       productId: string;
       title: string;
       sku: string;
+      variationSku?: string | null;
+      variationLabel?: string | null;
       quantity: number;
       unitPrice: number;
       lineTotal: number;
@@ -52,10 +58,26 @@ export async function POST(request: Request) {
 
       if (!product) throw new Error(`Product not found or not published: ${sku}`);
       if (product.priceOnRequest || product.price === null) throw new Error(`${sku} is price on request and cannot be checked out online.`);
-      if (product.stockQty < qty) throw new Error(`${sku} only has ${product.stockQty} available.`);
 
-      const unitPrice = Number(product.price);
-      orderItems.push({ productId: product.id, title: product.title, sku: product.sku, quantity: qty, unitPrice, lineTotal: unitPrice * qty });
+      const requestedVariantSku = String(line.variantSku || line.variationSku || "").trim();
+      const requestedVariantId = String(line.variantId || "").trim();
+      const variant = product.variants.find((item) => item.id === requestedVariantId || (requestedVariantSku && item.sku === requestedVariantSku)) ?? null;
+      if (product.variants.length && !variant) throw new Error(`${sku} has variations. Please choose a variation before checkout.`);
+
+      const availableQty = variant ? variant.stockQty : product.stockQty;
+      if (availableQty < qty) throw new Error(`${variant?.sku || sku} only has ${availableQty} available.`);
+
+      const unitPrice = variant?.price !== null && variant?.price !== undefined ? Number(variant.price) : Number(product.price);
+      orderItems.push({
+        productId: product.id,
+        title: variant ? `${product.title} — ${variant.label}` : product.title,
+        sku: product.sku,
+        variationSku: variant?.sku || requestedVariantSku || null,
+        variationLabel: variant?.label || line.variationLabel || null,
+        quantity: qty,
+        unitPrice,
+        lineTotal: unitPrice * qty,
+      });
     }
 
     const subtotal = Number(orderItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2));
@@ -89,6 +111,8 @@ export async function POST(request: Request) {
             productId: item.productId,
             title: item.title,
             sku: item.sku,
+            variationSku: item.variationSku,
+            variationLabel: item.variationLabel,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             lineTotal: item.lineTotal,
@@ -125,7 +149,7 @@ export async function POST(request: Request) {
     successUrl: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${origin}/checkout/cancel?order=${encodeURIComponent(order.orderNumber)}`,
     lines: [
-      ...orderItems.map((item) => ({ name: `${item.sku} — ${item.title}`, quantity: item.quantity, unitAmountPence: Math.round(item.unitPrice * 100) })),
+      ...orderItems.map((item) => ({ name: `${item.variationSku || item.sku} — ${item.title}`, quantity: item.quantity, unitAmountPence: Math.round(item.unitPrice * 100) })),
       ...(tax > 0 ? [{ name: "VAT estimate", quantity: 1, unitAmountPence: Math.round(tax * 100) }] : []),
     ],
   });

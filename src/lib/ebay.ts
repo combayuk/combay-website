@@ -73,6 +73,7 @@ type NormalizedEbayListing = {
   model?: string;
   mpn?: string;
   listingUrl?: string;
+  variants?: { sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any }[];
   sourceMethod: "inventory-api" | "active-listings";
 };
 
@@ -351,6 +352,7 @@ function mergeListingDetails(summary: NormalizedEbayListing | null, detail: Norm
     manufacturer: detail.manufacturer || summary.manufacturer,
     model: detail.model || summary.model,
     mpn: detail.mpn || summary.mpn,
+    variants: detail.variants?.length ? detail.variants : summary.variants,
     sourceMethod: "active-listings",
   };
 }
@@ -404,6 +406,8 @@ async function saveEbayListing(listing: NormalizedEbayListing) {
   const existingImages = existing?.images?.map((image) => ({ url: image.url, alt: image.alt ?? listing.title, isPrimary: image.isPrimary, sortOrder: image.sortOrder })) ?? [];
   const existingSpecs = existing?.specs?.map((spec) => ({ label: spec.label, value: spec.value })) ?? [];
   const importedImages = listing.images.map((url, index) => ({ url, alt: listing.title, isPrimary: index === 0, sortOrder: index }));
+  const importedVariants = listing.variants ?? [];
+  const variantStockTotal = importedVariants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stockQty || 0)), 0);
   const cleanDescription = listing.cleanDescription || cleanEbayDescription(listing.rawDescription || "");
   const descriptionPrefix = listing.sourceMethod === "active-listings" ? "Imported from active eBay listing." : "Imported from eBay Inventory API.";
   const description = cleanDescription || descriptionPrefix;
@@ -426,7 +430,8 @@ async function saveEbayListing(listing: NormalizedEbayListing) {
     source: "ebay",
     price: existing?.priceLocked ? (existing.price === null ? undefined : Number(existing.price)) : (listing.price === null ? undefined : listing.price),
     priceOnRequest: existing?.priceLocked ? existing.priceOnRequest : listing.price === null,
-    stockQty: listing.quantity,
+    stockQty: importedVariants.length ? variantStockTotal : listing.quantity,
+    variants: importedVariants,
     description: existing?.descriptionLocked ? existing.description ?? "" : description,
     productOverview: existing?.descriptionLocked ? existing.productOverview ?? existing.description ?? "" : description,
     images: existing?.imagesLocked ? existingImages : importedImages,
@@ -490,6 +495,7 @@ async function syncInventoryApiItems(token: string, config: EbayConfig, options:
           cleanDescription: cleanEbayDescription(rawDescription),
           condition: "USED",
           category: "eBay Import",
+          variants: [],
           sourceMethod: "inventory-api",
         });
         if (result === "imported") counts.imported++;
@@ -530,6 +536,39 @@ async function getTradingItemDetails(token: string, config: EbayConfig, itemId: 
   return tradingApiCall(token, config, "GetItem", body);
 }
 
+
+function variationsFromTradingXml(xml: string) {
+  const variationsBlock = xmlText(xml, "Variations") || "";
+  if (!variationsBlock) return [];
+  const variationBlocks = xmlBlocks(variationsBlock, "Variation");
+  return variationBlocks.map((block, index) => {
+    const sku = xmlText(block, "SKU") || xmlText(block, "SellerSKU") || null;
+    const specificsBlock = xmlText(block, "VariationSpecifics") || block;
+    const pairs = xmlBlocks(specificsBlock, "NameValueList").map((pairBlock) => {
+      const name = xmlText(pairBlock, "Name");
+      const value = xmlText(pairBlock, "Value");
+      return name && value ? { name, value } : null;
+    }).filter(Boolean) as { name: string; value: string }[];
+    const label = pairs.length ? pairs.map((pair) => `${pair.name}: ${pair.value}`).join(" / ") : sku || `Variation ${index + 1}`;
+    const quantity = Number(xmlText(block, "Quantity") || 0);
+    const quantitySold = Number(xmlText(block, "QuantitySold") || xmlText(xmlText(block, "SellingStatus") || block, "QuantitySold") || 0);
+    const quantityAvailable = xmlText(block, "QuantityAvailable");
+    const stockQty = quantityAvailable ? Number(quantityAvailable) : Math.max(0, quantity - quantitySold);
+    const price = asMoney(xmlText(block, "StartPrice") || xmlText(block, "CurrentPrice"));
+    return {
+      sku,
+      label,
+      optionName: pairs[0]?.name ?? null,
+      optionValue: pairs[0]?.value ?? null,
+      price,
+      stockQty: Number.isFinite(stockQty) ? stockQty : 0,
+      sortOrder: index,
+      ebayVariationSku: sku,
+      ebayVariationData: { specifics: pairs },
+    };
+  });
+}
+
 function listingFromTradingXml(itemXml: string, sourceMethod: "active-listings"): NormalizedEbayListing | null {
   const ebayItemId = xmlText(itemXml, "ItemID");
   const title = xmlText(itemXml, "Title") || ebayItemId;
@@ -547,13 +586,16 @@ function listingFromTradingXml(itemXml: string, sourceMethod: "active-listings")
   const conditionDisplay = xmlText(itemXml, "ConditionDisplayName") || xmlText(itemXml, "ConditionID");
   const primaryCategory = xmlText(itemXml, "PrimaryCategory") || itemXml;
   const category = xmlText(primaryCategory, "CategoryName") || "eBay Import";
+  const variants = variationsFromTradingXml(itemXml);
+  const variantStockTotal = variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stockQty || 0)), 0);
+  const parentSku = variants.some((variant) => variant.sku && variant.sku === sku) ? undefined : sku;
 
   return {
     ebayItemId,
-    sku,
+    sku: parentSku,
     title,
     price,
-    quantity: Number.isFinite(quantityAvailable) ? quantityAvailable : 0,
+    quantity: variants.length ? variantStockTotal : Number.isFinite(quantityAvailable) ? quantityAvailable : 0,
     images,
     specs,
     rawDescription,
@@ -564,6 +606,7 @@ function listingFromTradingXml(itemXml: string, sourceMethod: "active-listings")
     manufacturer: aspect(specMap, ["Manufacturer", "Brand"]),
     model: aspect(specMap, ["Model"]),
     mpn: aspect(specMap, ["MPN", "Manufacturer Part Number"]),
+    variants,
     sourceMethod,
   };
 }

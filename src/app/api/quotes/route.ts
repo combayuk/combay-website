@@ -47,6 +47,8 @@ export async function POST(req: Request) {
     message: String(body.message || body.description || "Quote requested from product page."),
     productSku: product.sku ? String(product.sku) : undefined,
     productTitle: product.title ? String(product.title) : undefined,
+    variationSku: product.variantSku ? String(product.variantSku) : body.selectedVariant?.sku ? String(body.selectedVariant.sku) : undefined,
+    variationLabel: product.variantLabel ? String(product.variantLabel) : body.selectedVariant?.label ? String(body.selectedVariant.label) : undefined,
     status: "NEW" as const,
     source: String(body.source || "web form (RFQ)"),
     quantity: Math.max(1, Math.floor(Number(body.quantity || 1))),
@@ -64,15 +66,18 @@ export async function POST(req: Request) {
         quantity: record.quantity,
         productSku: record.productSku,
         productTitle: record.productTitle,
+        variationSku: record.variationSku,
+        variationLabel: record.variationLabel,
         productUrl: product.slug ? `/shop/${product.slug}` : body.productUrl,
         source: record.source,
       },
     });
 
     const dbProduct = record.productSku
-      ? await prisma.product.findUnique({ where: { sku: record.productSku } }).catch(() => null)
+      ? await prisma.product.findUnique({ where: { sku: record.productSku }, include: { variants: true } }).catch(() => null)
       : null;
-    const unitPrice = dbProduct && !dbProduct.priceOnRequest && dbProduct.price !== null ? money(dbProduct.price) : money(product.price ?? 0);
+    const matchedVariant = dbProduct?.variants?.find((variant: any) => variant.sku && variant.sku === record.variationSku) ?? null;
+    const unitPrice = matchedVariant?.price !== null && matchedVariant?.price !== undefined ? money(matchedVariant.price) : dbProduct && !dbProduct.priceOnRequest && dbProduct.price !== null ? money(dbProduct.price) : money(product.price ?? 0);
     const lineTotal = money(unitPrice * record.quantity);
 
     const quote = await prisma.invoice.create({
@@ -96,8 +101,8 @@ export async function POST(req: Request) {
         paymentTerms: DEFAULT_TERMS,
         lines: {
           create: [{
-            description: record.productTitle || record.message || "Quote request item",
-            sku: record.productSku ?? null,
+            description: [record.productTitle, record.variationLabel ? `Variation: ${record.variationLabel}` : null].filter(Boolean).join(" — ") || record.message || "Quote request item",
+            sku: record.variationSku || record.productSku || null,
             quantity: record.quantity,
             unitPrice,
             lineTotal,
@@ -117,7 +122,7 @@ export async function POST(req: Request) {
       source: "web form (RFQ)",
       sourceRef: reference,
       productSku: record.productSku,
-      productTitle: record.productTitle,
+      productTitle: [record.productTitle, record.variationLabel].filter(Boolean).join(" — ") || record.productTitle,
       invoiceId: quote.id,
       notes: record.message,
     });
@@ -130,7 +135,7 @@ export async function POST(req: Request) {
       subject: `Combay quote request ${reference}`,
       title: `New quote request`,
       message: `Reference: ${reference}. A draft quote has been created in Quotes / Proformas for admin review.`,
-      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Product SKU", record.productSku || "—"], ["Product", record.productTitle || "—"], ["Message", record.message]],
+      rows: [["Name", record.name], ["Email", record.email], ["Phone", record.phone || "—"], ["Company", record.company || "—"], ["Product SKU", record.productSku || "—"], ["Variation", record.variationLabel || record.variationSku || "—"], ["Product", record.productTitle || "—"], ["Quantity", String(record.quantity)], ["Message", record.message]],
     }),
     customer: record.email && record.email !== "not-provided"
       ? await sendCustomerAcknowledgement({

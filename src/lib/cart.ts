@@ -1,4 +1,4 @@
-import { getProductBySku, type CatalogProduct } from "@/lib/catalog";
+import { getProductBySku, type CatalogProduct, type ProductVariantOption } from "@/lib/catalog";
 
 export const CART_STORAGE_KEY = "combay_cart_v1";
 
@@ -7,12 +7,18 @@ export type CartProductSnapshot = CatalogProduct;
 export type CartLine = {
   sku: string;
   qty: number;
+  variantId?: string;
+  variantSku?: string | null;
+  variantLabel?: string | null;
   product?: CartProductSnapshot;
 };
 
 export type CartProductLine = {
   product: CatalogProduct;
+  variant?: ProductVariantOption | null;
   qty: number;
+  unitPrice: number;
+  availableQty: number;
   lineTotal: number;
 };
 
@@ -24,11 +30,24 @@ export type CartSummary = {
   hasUnavailableItems: boolean;
 };
 
+function lineKey(line: Pick<CartLine, "sku" | "variantId" | "variantSku">) {
+  return `${line.sku}::${line.variantId || line.variantSku || "base"}`;
+}
+
+function findVariant(product: CatalogProduct, line: Pick<CartLine, "variantId" | "variantSku">) {
+  const variants = product.variants ?? [];
+  if (!variants.length) return null;
+  return variants.find((variant) => variant.id === line.variantId || (line.variantSku && variant.sku === line.variantSku)) ?? null;
+}
+
 function normaliseLine(line: any): CartLine | null {
   if (!line || typeof line.sku !== "string" || !Number.isFinite(Number(line.qty))) return null;
   return {
     sku: line.sku,
     qty: Math.max(1, Math.floor(Number(line.qty))),
+    variantId: typeof line.variantId === "string" ? line.variantId : undefined,
+    variantSku: typeof line.variantSku === "string" ? line.variantSku : undefined,
+    variantLabel: typeof line.variantLabel === "string" ? line.variantLabel : undefined,
     product: line.product && typeof line.product === "object" ? line.product : undefined,
   };
 }
@@ -53,34 +72,47 @@ export function writeCartLines(lines: CartLine[]) {
   window.dispatchEvent(new CustomEvent("combay-cart-updated"));
 }
 
-export function addCartItem(productOrSku: CatalogProduct | string, qty = 1) {
+export function addCartItem(productOrSku: CatalogProduct | string, qty = 1, variant?: ProductVariantOption | null) {
   const sku = typeof productOrSku === "string" ? productOrSku : productOrSku.sku;
   const product = typeof productOrSku === "string" ? undefined : productOrSku;
+  const incoming: CartLine = {
+    sku,
+    qty: Math.max(1, Math.floor(Number(qty || 1))),
+    product,
+    variantId: variant?.id,
+    variantSku: variant?.sku ?? undefined,
+    variantLabel: variant?.label ?? undefined,
+  };
   const lines = readCartLines();
-  const existing = lines.find((line) => line.sku === sku);
+  const existing = lines.find((line) => lineKey(line) === lineKey(incoming));
 
   if (existing) {
-    existing.qty += qty;
+    existing.qty += incoming.qty;
     if (product) existing.product = product;
+    if (variant) {
+      existing.variantId = variant.id;
+      existing.variantSku = variant.sku;
+      existing.variantLabel = variant.label;
+    }
   } else {
-    lines.push({ sku, qty, product });
+    lines.push(incoming);
   }
 
   writeCartLines(lines);
 }
 
-export function removeCartItem(sku: string) {
-  writeCartLines(readCartLines().filter((line) => line.sku !== sku));
+export function removeCartItem(sku: string, variantId?: string, variantSku?: string | null) {
+  writeCartLines(readCartLines().filter((line) => lineKey(line) !== lineKey({ sku, variantId, variantSku })));
 }
 
-export function updateCartItemQty(sku: string, qty: number) {
+export function updateCartItemQty(sku: string, qty: number, variantId?: string, variantSku?: string | null) {
   if (qty <= 0) {
-    removeCartItem(sku);
+    removeCartItem(sku, variantId, variantSku);
     return;
   }
 
   writeCartLines(
-    readCartLines().map((line) => (line.sku === sku ? { ...line, qty: Math.max(1, Math.floor(qty)) } : line))
+    readCartLines().map((line) => (lineKey(line) === lineKey({ sku, variantId, variantSku }) ? { ...line, qty: Math.max(1, Math.floor(qty)) } : line))
   );
 }
 
@@ -93,11 +125,16 @@ export function getCartSummary(lines: CartLine[]): CartSummary {
     .map((line) => {
       const product = line.product ?? getProductBySku(line.sku);
       if (!product) return null;
-      const price = product.priceOnRequest || product.price === null ? 0 : Number(product.price);
+      const variant = findVariant(product, line);
+      const unitPrice = variant?.price !== null && variant?.price !== undefined ? Number(variant.price) : product.priceOnRequest || product.price === null ? 0 : Number(product.price);
+      const availableQty = variant ? variant.stockQty : product.stockQty;
       return {
         product,
+        variant,
         qty: line.qty,
-        lineTotal: price * line.qty,
+        unitPrice,
+        availableQty,
+        lineTotal: unitPrice * line.qty,
       } satisfies CartProductLine;
     })
     .filter((line): line is CartProductLine => Boolean(line));
@@ -106,7 +143,7 @@ export function getCartSummary(lines: CartLine[]): CartSummary {
   const vat = subtotal * 0.2;
   const total = subtotal + vat;
   const hasUnavailableItems = productLines.some(
-    (line) => line.product.stockQty <= 0 || line.product.priceOnRequest || line.product.price === null || line.qty > line.product.stockQty
+    (line) => line.availableQty <= 0 || line.product.priceOnRequest || line.unitPrice <= 0 || line.qty > line.availableQty
   );
 
   return { lines: productLines, subtotal, vat, total, hasUnavailableItems };
