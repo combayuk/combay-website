@@ -1,0 +1,13 @@
+Phase 14B - Gemini AI content integration
+
+Adds a server-side Gemini integration for the admin product content assistant.
+
+Environment variables required in Vercel:
+GEMINI_API_KEY=<Google AI Studio API key>
+GEMINI_MODEL=gemini-2.5-flash
+
+No Prisma schema change is required.
+
+The API key is used only server-side through /api/ai/product-content. The admin UI calls this API route and never exposes the Gemini key to the browser.
+
+If GEMINI_API_KEY is not configured, the assistant falls back to the existing local rule-based generator.

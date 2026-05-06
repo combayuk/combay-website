@@ -108,6 +108,7 @@ export default function ProductEditor({ mode, productId }: Props) {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(mode === "edit");
   const [saving, setSaving] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState<"overview" | "seo" | "all" | null>(null);
   const [message, setMessage] = useState("");
   const [product, setProduct] = useState<AdminProduct>(blank);
   const [specText, setSpecText] = useState("");
@@ -159,23 +160,7 @@ export default function ProductEditor({ mode, productId }: Props) {
   function addVariantRow() { setVariantRows((rows) => [...rows, { label: `Variant ${rows.length + 1}`, sku: "", optionName: "", optionValue: "", price: null, stockQty: 0, sortOrder: rows.length }]); }
   function deleteVariantRow(index: number) { setVariantRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, sortOrder: rowIndex }))); }
 
-  function applyContentAssistant(scope: "overview" | "seo" | "all") {
-    const suggestions = generateProductContent({
-      title: product.title,
-      sku: product.sku,
-      brand: product.brand,
-      manufacturer: product.manufacturer,
-      model: product.model,
-      mpn: product.mpn,
-      category: product.category,
-      condition: product.condition,
-      description: product.description,
-      productOverview: product.productOverview,
-      itemLocation: (product as any).itemLocation,
-      specs: textToSpecs(specText),
-      tags: textToTags(tagText),
-    });
-
+  function applySuggestions(scope: "overview" | "seo" | "all", suggestions: ReturnType<typeof generateProductContent>) {
     if (scope === "overview" || scope === "all") {
       setProduct((current) => ({
         ...current,
@@ -193,8 +178,53 @@ export default function ProductEditor({ mode, productId }: Props) {
       } as AdminProduct));
       setTagText(suggestions.tags.join(", "));
     }
+  }
 
-    setMessage(scope === "seo" ? "SEO suggestions generated. Review and save the product." : "Content suggestions generated. Review and save the product.");
+  function localContentInput() {
+    return {
+      title: product.title,
+      sku: product.sku,
+      brand: product.brand,
+      manufacturer: product.manufacturer,
+      model: product.model,
+      mpn: product.mpn,
+      category: product.category,
+      condition: product.condition,
+      description: product.description,
+      productOverview: product.productOverview,
+      itemLocation: (product as any).itemLocation,
+      specs: textToSpecs(specText),
+      tags: textToTags(tagText),
+    };
+  }
+
+  function applyContentAssistant(scope: "overview" | "seo" | "all") {
+    const suggestions = generateProductContent(localContentInput());
+    applySuggestions(scope, suggestions);
+    setMessage(scope === "seo" ? "Local SEO suggestions generated. Review and save the product." : "Local content suggestions generated. Review and save the product.");
+  }
+
+  async function applyGeminiAssistant(scope: "overview" | "seo" | "all") {
+    setAiGenerating(scope);
+    setMessage("");
+    try {
+      const response = await fetch("/api/ai/product-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope, product: localContentInput() }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok || !result.suggestion) throw new Error(result.error || "AI generation failed.");
+      applySuggestions(scope, result.suggestion);
+      const provider = result.suggestion.provider === "gemini" ? `Gemini (${result.suggestion.model})` : "local fallback";
+      setMessage(`${provider} suggestions generated. Review and save the product.`);
+    } catch (error) {
+      const fallback = generateProductContent(localContentInput());
+      applySuggestions(scope, fallback);
+      setMessage(`${error instanceof Error ? error.message : "Gemini unavailable"} Local fallback suggestions were generated instead. Review before saving.`);
+    } finally {
+      setAiGenerating(null);
+    }
   }
 
   async function uploadFile(file: File | null, folder: "products" | "docs") {
@@ -323,11 +353,12 @@ export default function ProductEditor({ mode, productId }: Props) {
             <div className="bg-surface border border-gray-200 rounded-xl p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="font-display font-800 text-navy-950">Product content assistant</h2>
-                <p className="text-xs text-gray-500 mt-1">Creates concise procurement-style copy from title, brand, MPN, category and specifications. Review before saving.</p>
+                <p className="text-xs text-gray-500 mt-1">Uses Gemini when configured, with a local fallback. Generates concise procurement-style copy from title, brand, MPN, category and specifications. Review before saving.</p>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button type="button" onClick={() => applyContentAssistant("overview")} className="btn-secondary text-sm"><Sparkles size={14} /> Generate overview</button>
-                <button type="button" onClick={() => applyContentAssistant("all")} className="btn-primary text-sm"><Sparkles size={14} /> Generate content + SEO</button>
+                <button type="button" disabled={Boolean(aiGenerating)} onClick={() => applyGeminiAssistant("overview")} className="btn-secondary text-sm"><Sparkles size={14} /> {aiGenerating === "overview" ? "Generating…" : "AI overview"}</button>
+                <button type="button" disabled={Boolean(aiGenerating)} onClick={() => applyGeminiAssistant("all")} className="btn-primary text-sm"><Sparkles size={14} /> {aiGenerating === "all" ? "Generating…" : "AI content + SEO"}</button>
+                <button type="button" disabled={Boolean(aiGenerating)} onClick={() => applyContentAssistant("all")} className="btn-secondary text-sm">Local fallback</button>
               </div>
             </div>
             <div><label className="label">Short description</label><textarea value={product.description} onChange={(e) => update("description", e.target.value)} className="input min-h-[120px]" /></div>
@@ -365,9 +396,9 @@ export default function ProductEditor({ mode, productId }: Props) {
             <div className="bg-surface border border-gray-200 rounded-xl p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="font-display font-800 text-navy-950">SEO assistant</h2>
-                <p className="text-xs text-gray-500 mt-1">Generates a compact title, meta description and search tags using the current product fields.</p>
+                <p className="text-xs text-gray-500 mt-1">Uses Gemini when configured, with local fallback, to draft compact title, meta description and search tags from current product fields.</p>
               </div>
-              <button type="button" onClick={() => applyContentAssistant("seo")} className="btn-secondary text-sm"><Sparkles size={14} /> Generate SEO</button>
+              <button type="button" disabled={Boolean(aiGenerating)} onClick={() => applyGeminiAssistant("seo")} className="btn-secondary text-sm"><Sparkles size={14} /> {aiGenerating === "seo" ? "Generating…" : "AI SEO"}</button>
             </div>
             <div><label className="label">Slug</label><input value={product.slug} onChange={(e) => update("slug", e.target.value)} className="input font-mono text-sm" /></div>
             <div><label className="label">SEO title</label><input value={(product as any).seoTitle ?? ""} onChange={(e) => update("seoTitle" as any, e.target.value as any)} className="input" placeholder="Short product title for search engines" /><p className="text-xs text-gray-400 mt-1">Aim for 50–68 characters.</p></div>
