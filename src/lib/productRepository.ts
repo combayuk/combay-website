@@ -1,7 +1,7 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { CATEGORIES, PRODUCTS, searchProducts, type CatalogProduct, type ConditionCode, type StockStatus } from "@/lib/catalog";
 
-export type ProductWriteInput = Partial<CatalogProduct> & {
+export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs" | "variants" | "documents"> & {
   id?: string;
   status?: "PUBLISHED" | "DRAFT" | "ARCHIVED";
   source?: string;
