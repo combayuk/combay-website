@@ -642,6 +642,10 @@ model Promotion {
   minOrderValue Decimal?  @db.Decimal(10, 2)
   maxUses       Int?
   usedCount     Int       @default(0)
+  showOnHomepage Boolean  @default(false)
+  showOnShop     Boolean  @default(false)
+  bannerText     String?
+  displayPriority Int     @default(100)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -656,4 +660,48 @@ model SiteSetting {
   id    String @id @default(cuid())
   key   String @unique
   value String @db.Text
+}
+
+model EmailAutomationRule {
+  id          String   @id @default(cuid())
+  name        String
+  trigger     EmailAutomationTrigger
+  isActive    Boolean  @default(true)
+  subject     String
+  body        String   @db.Text
+  ctaLabel    String?
+  ctaUrl      String?
+  delayHours  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  logs        EmailAutomationLog[]
+
+  @@index([trigger])
+  @@index([isActive])
+}
+
+model EmailAutomationLog {
+  id             String   @id @default(cuid())
+  ruleId         String?
+  rule           EmailAutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  trigger        EmailAutomationTrigger
+  recipientEmail String
+  userId         String?
+  orderId        String?
+  status         String   @default("PENDING")
+  message        String?  @db.Text
+  providerId     String?
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([trigger])
+  @@index([recipientEmail])
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+enum EmailAutomationTrigger {
+  NEW_SIGNUP
+  FIRST_ORDER_COMPLETED
+  ORDER_COMPLETED
 }

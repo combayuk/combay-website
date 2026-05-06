@@ -4,6 +4,7 @@ import { prisma, withDatabase } from "@/lib/db";
 import { isStripeConfigured, verifyStripeWebhookSignature } from "@/lib/stripe";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 import { captureLead } from "@/lib/leads";
+import { runEmailAutomations } from "@/lib/emailAutomations";
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -37,6 +38,17 @@ export async function POST(request: Request) {
           ctaUrl: `${process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/orders`,
           ctaLabel: "View order",
         });
+        const paidOrderCount = await prisma.order.count({
+          where: {
+            customerEmail: order.customerEmail,
+            paymentStatus: "PAID",
+          },
+        }).catch(() => 1);
+        if (paidOrderCount <= 1) {
+          await runEmailAutomations("FIRST_ORDER_COMPLETED", { order }).catch((emailError) => console.error("[first-order-automation-failed]", emailError));
+        }
+        await runEmailAutomations("ORDER_COMPLETED", { order }).catch((emailError) => console.error("[order-automation-failed]", emailError));
+
         await sendAdminNotification({
           subject: `Paid Combay order ${order.orderNumber}`,
           title: "Paid order received",

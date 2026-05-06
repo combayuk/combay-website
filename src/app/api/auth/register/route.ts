@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { isDatabaseConfigured } from "@/lib/db";
+import { runEmailAutomations } from "@/lib/emailAutomations";
 
 const PERSONAL_EMAIL_DOMAINS = new Set([
   "gmail.com",
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
     if (existing) return NextResponse.json({ error: "An account already exists with this email address." }, { status: 409 });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         email,
         name,
@@ -85,6 +86,8 @@ export async function POST(req: NextRequest) {
         vatNumber: accountType === "company" ? vatNumber || null : null,
       },
     });
+
+    await runEmailAutomations("NEW_SIGNUP", { user }).catch((emailError) => console.error("[signup-automation-failed]", emailError));
 
     return NextResponse.json({ ok: true, message: "Account created. You can now sign in." });
   } catch (error: any) {

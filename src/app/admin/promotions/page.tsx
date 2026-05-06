@@ -30,6 +30,10 @@ type FormState = {
   endsAt: string;
   minOrderValue: string;
   maxUses: string;
+  showOnHomepage: boolean;
+  showOnShop: boolean;
+  bannerText: string;
+  displayPriority: string;
 };
 
 const emptyForm: FormState = {
@@ -44,6 +48,10 @@ const emptyForm: FormState = {
   endsAt: "",
   minOrderValue: "",
   maxUses: "",
+  showOnHomepage: false,
+  showOnShop: false,
+  bannerText: "",
+  displayPriority: "100",
 };
 
 function money(value: number) {
@@ -107,6 +115,10 @@ export default function PromotionsPage() {
       endsAt: dateInput(promotion.endsAt),
       minOrderValue: promotion.minOrderValue ? String(promotion.minOrderValue) : "",
       maxUses: promotion.maxUses ? String(promotion.maxUses) : "",
+      showOnHomepage: Boolean(promotion.showOnHomepage),
+      showOnShop: Boolean(promotion.showOnShop),
+      bannerText: promotion.bannerText || "",
+      displayPriority: String(promotion.displayPriority ?? 100),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -122,6 +134,10 @@ export default function PromotionsPage() {
         value: Number(form.value || 0),
         minOrderValue: form.minOrderValue ? Number(form.minOrderValue) : null,
         maxUses: form.maxUses ? Number(form.maxUses) : null,
+        showOnHomepage: form.showOnHomepage,
+        showOnShop: form.showOnShop,
+        bannerText: form.bannerText,
+        displayPriority: form.displayPriority ? Number(form.displayPriority) : 100,
       };
       const response = await fetch(form.id ? `/api/promotions/${form.id}` : "/api/promotions", {
         method: form.id ? "PATCH" : "POST",
@@ -184,9 +200,13 @@ export default function PromotionsPage() {
           <label className="block"><span className="label">Value {form.type === "PERCENTAGE" ? "(%)" : form.type === "FIXED_AMOUNT" ? "(GBP)" : ""}</span><input className="input" type="number" min="0" step="0.01" disabled={form.type === "FREE_SHIPPING"} value={form.type === "FREE_SHIPPING" ? "0" : form.value} onChange={(e) => update("value", e.target.value)} /></label>
           <label className="block"><span className="label">Minimum order value before VAT</span><input className="input" type="number" min="0" step="0.01" value={form.minOrderValue} onChange={(e) => update("minOrderValue", e.target.value)} placeholder="Optional" /></label>
           <label className="block"><span className="label">Maximum paid uses</span><input className="input" type="number" min="0" step="1" value={form.maxUses} onChange={(e) => update("maxUses", e.target.value)} placeholder="Optional" /></label>
+          <label className="block"><span className="label">Display priority</span><input className="input" type="number" min="0" step="1" value={form.displayPriority} onChange={(e) => update("displayPriority", e.target.value)} placeholder="100" /></label>
           <label className="block"><span className="label">Start date</span><input className="input" type="date" value={form.startsAt} onChange={(e) => update("startsAt", e.target.value)} /></label>
           <label className="block"><span className="label">End date</span><input className="input" type="date" value={form.endsAt} onChange={(e) => update("endsAt", e.target.value)} /></label>
           <label className="flex items-center gap-3 pt-7"><input type="checkbox" checked={form.isActive} onChange={(e) => update("isActive", e.target.checked)} className="h-4 w-4" /><span className="text-sm font-display font-700 text-navy-950">Active at checkout</span></label>
+          <label className="flex items-center gap-3"><input type="checkbox" checked={form.showOnHomepage} onChange={(e) => update("showOnHomepage", e.target.checked)} className="h-4 w-4" /><span className="text-sm font-display font-700 text-navy-950">Show on homepage</span></label>
+          <label className="flex items-center gap-3"><input type="checkbox" checked={form.showOnShop} onChange={(e) => update("showOnShop", e.target.checked)} className="h-4 w-4" /><span className="text-sm font-display font-700 text-navy-950">Show on shop page</span></label>
+          <label className="block lg:col-span-3"><span className="label">Public banner text</span><input className="input" value={form.bannerText} onChange={(e) => update("bannerText", e.target.value)} placeholder="Example: 10% off selected automation spares this week." /></label>
           <label className="block lg:col-span-3"><span className="label">Internal/customer note</span><textarea className="textarea min-h-[90px]" value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="Optional note shown to admin. Keep customer-facing code names professional." /></label>
         </div>
 
@@ -198,7 +218,7 @@ export default function PromotionsPage() {
         {loading ? <div className="p-6 text-sm text-gray-500">Loading promotions...</div> : promotions.length === 0 ? <div className="p-8 text-center text-sm text-gray-400">No promotions created yet.</div> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500"><tr><th className="px-5 py-3">Code</th><th className="px-5 py-3">Offer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Dates</th><th className="px-5 py-3">Usage</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
+              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500"><tr><th className="px-5 py-3">Code</th><th className="px-5 py-3">Offer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Dates</th><th className="px-5 py-3">Usage</th><th className="px-5 py-3">Public</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {promotions.map((promotion) => (
                   <tr key={promotion.id} className="hover:bg-gray-50">
@@ -207,6 +227,7 @@ export default function PromotionsPage() {
                     <td className="px-5 py-4"><span className={`rounded-full px-2 py-1 text-xs font-display font-700 ${promotion.isActive ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{promotion.isActive ? "Active" : "Inactive"}</span></td>
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.startsAt ? dateInput(promotion.startsAt) : "No start"} → {promotion.endsAt ? dateInput(promotion.endsAt) : "No end"}</td>
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.usedCount}{promotion.maxUses ? ` / ${promotion.maxUses}` : " used"}</td>
+                    <td className="px-5 py-4 text-xs text-gray-500">{promotion.showOnHomepage ? "Home" : ""}{promotion.showOnHomepage && promotion.showOnShop ? " + " : ""}{promotion.showOnShop ? "Shop" : ""}{!promotion.showOnHomepage && !promotion.showOnShop ? "Hidden" : ""}</td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => edit(promotion)} className="btn-secondary py-2 px-3"><Pencil size={14} /></button><button type="button" onClick={() => remove(promotion.id)} className="btn-secondary py-2 px-3 text-red-600"><Trash2 size={14} /></button></div></td>
                   </tr>
                 ))}

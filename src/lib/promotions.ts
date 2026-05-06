@@ -11,6 +11,10 @@ export type PromotionInput = {
   endsAt?: string | null;
   minOrderValue?: number | null;
   maxUses?: number | null;
+  showOnHomepage?: boolean;
+  showOnShop?: boolean;
+  bannerText?: string | null;
+  displayPriority?: number | null;
 };
 
 export type PromotionApplication = {
@@ -51,6 +55,10 @@ export function publicPromotion(promotion: any) {
     minOrderValue: money(promotion.minOrderValue),
     maxUses: promotion.maxUses ?? null,
     usedCount: promotion.usedCount ?? 0,
+    showOnHomepage: Boolean(promotion.showOnHomepage),
+    showOnShop: Boolean(promotion.showOnShop),
+    bannerText: promotion.bannerText ?? "",
+    displayPriority: promotion.displayPriority ?? 100,
     createdAt: promotion.createdAt ? promotion.createdAt.toISOString?.() ?? promotion.createdAt : null,
   };
 }
@@ -134,5 +142,9 @@ export function preparePromotionInput(input: PromotionInput) {
     endsAt: input.endsAt ? new Date(input.endsAt) : null,
     minOrderValue,
     maxUses,
+    showOnHomepage: Boolean(input.showOnHomepage),
+    showOnShop: Boolean(input.showOnShop),
+    bannerText: input.bannerText ? String(input.bannerText).trim() : null,
+    displayPriority: input.displayPriority === null || input.displayPriority === undefined ? 100 : Math.max(0, Math.floor(Number(input.displayPriority) || 100)),
   };
 }

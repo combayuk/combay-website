@@ -8,6 +8,9 @@ import ServiceTabs from "@/components/home/ServiceTabs";
 import TrustSection from "@/components/home/TrustSection";
 import FaqPreview from "@/components/home/FaqPreview";
 import FinalCta from "@/components/home/FinalCta";
+import PublicPromotionStrip from "@/components/promotions/PublicPromotionStrip";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Combay — Industrial Equipment Specialists",
@@ -20,6 +23,7 @@ export default function HomePage() {
       <TopBar />
       <Navigation />
       <HeroCarousel />
+      <PublicPromotionStrip placement="home" />
       <IndustryStrip />
       <ServiceTabs />
       <TrustSection />

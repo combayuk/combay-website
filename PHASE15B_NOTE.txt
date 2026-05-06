@@ -1,0 +1,8 @@
+Phase 15B — public promotion display + customer email automations
+
+Adds homepage/shop promotion banners controlled from admin promotions.
+Adds public promotion fields: showOnHomepage, showOnShop, bannerText, displayPriority.
+Adds admin Email automation page for simple action-based emails.
+Triggers: new signup, first paid order, every paid order.
+Uses Resend through existing mailer. Built-in fallback emails run for signup and first order if no custom active rule exists; every-order automation runs only if custom active rule exists to avoid duplicate confirmation emails.
+Requires: npx prisma db push.
