@@ -218,43 +218,53 @@ ${previousText}`;
 
 export async function generateGeminiProductContent(input: ProductContentInput, scope: GeminiContentScope = "all"): Promise<GeminiProductContentResult> {
   const local = generateProductContent(input);
-  const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || process.env.AI_MODEL || DEFAULT_MODEL;
 
-  if (!apiKey) {
-    return { ...local, provider: "local", model: "local-rule-based", note: "GEMINI_API_KEY is not configured, so local content assistant was used." };
-  }
-
-  const prompt = buildPrompt(input, scope);
-
-  let gemini: ProductContentSuggestion;
-  let firstText = "";
   try {
-    firstText = await requestGeminiJson(apiKey, model, prompt);
-    gemini = parseSuggestion(firstText);
-  } catch (firstError) {
-    // Some Gemini responses can still come back as prose despite JSON mode, especially with long eBay descriptions.
-    // Make one repair attempt using the raw first answer before falling back to the local assistant.
-    try {
-      const repairedText = await requestGeminiRepair(apiKey, model, prompt, firstText || String(firstError));
-      gemini = parseSuggestion(repairedText);
-    } catch (repairError) {
-      return {
-        ...local,
-        provider: "local",
-        model: "local-rule-based",
-        note: `${firstError instanceof Error ? firstError.message : "Gemini did not return usable JSON."} Local fallback was used after Gemini JSON repair failed.`,
-      };
-    }
-  }
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.GEMINI_MODEL || process.env.AI_MODEL || DEFAULT_MODEL;
 
-  return {
-    description: gemini.description || local.description,
-    productOverview: gemini.productOverview || local.productOverview,
-    seoTitle: gemini.seoTitle || local.seoTitle,
-    seoDescription: gemini.seoDescription || local.seoDescription,
-    tags: gemini.tags.length ? gemini.tags : local.tags,
-    provider: "gemini",
-    model,
-  };
+    if (!apiKey) {
+      return { ...local, provider: "local", model: "local-rule-based", note: "GEMINI_API_KEY is not configured, so local content assistant was used." };
+    }
+
+    const prompt = buildPrompt(input, scope);
+
+    let gemini: ProductContentSuggestion;
+    let firstText = "";
+    try {
+      firstText = await requestGeminiJson(apiKey, model, prompt);
+      gemini = parseSuggestion(firstText);
+    } catch (firstError) {
+      // Some Gemini responses can still come back as prose despite JSON mode, especially with long eBay descriptions.
+      // Make one repair attempt using the raw first answer before falling back to the local assistant.
+      try {
+        const repairedText = await requestGeminiRepair(apiKey, model, prompt, firstText || String(firstError));
+        gemini = parseSuggestion(repairedText);
+      } catch {
+        return {
+          ...local,
+          provider: "local",
+          model: "local-rule-based",
+          note: `${firstError instanceof Error ? firstError.message : "Gemini did not return usable JSON."} Local fallback was used after Gemini JSON repair failed.`,
+        };
+      }
+    }
+
+    return {
+      description: gemini.description || local.description,
+      productOverview: gemini.productOverview || local.productOverview,
+      seoTitle: gemini.seoTitle || local.seoTitle,
+      seoDescription: gemini.seoDescription || local.seoDescription,
+      tags: gemini.tags.length ? gemini.tags : local.tags,
+      provider: "gemini",
+      model,
+    };
+  } catch (error) {
+    return {
+      ...local,
+      provider: "local",
+      model: "local-rule-based",
+      note: `${error instanceof Error ? error.message : "Gemini generation failed."} Local fallback was used.`,
+    };
+  }
 }

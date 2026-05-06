@@ -43,6 +43,9 @@ export async function POST(request: Request) {
           message: `Stripe confirmed payment for order ${order.orderNumber}.`,
           rows: [["Order", order.orderNumber], ["Customer", order.customerName], ["Email", order.customerEmail], ["Total", `£${Number(order.total).toFixed(2)}`], ["Items", order.items.map((item: any) => `${item.quantity} x ${item.sku}`).join(", ")]],
         });
+        if (order.promotionCode) {
+          await prisma.promotion.update({ where: { code: order.promotionCode }, data: { usedCount: { increment: 1 } } }).catch(() => null);
+        }
         await captureLead({
           name: order.customerName,
           email: order.customerEmail,

@@ -1,0 +1,24 @@
+Phase 15A — Promotions and checkout codes
+
+Adds database-backed promotion code management in /admin/promotions and checkout promotion-code application.
+
+Includes:
+- Admin create/edit/delete promotion codes
+- Percentage, fixed amount, and free shipping promotion types
+- Active toggle, start/end dates, minimum order value, maximum paid uses
+- Checkout promotion code box
+- Server-side validation before order/Stripe checkout
+- Order records store discount, promotion code, and promotion name
+- Stripe checkout receives discounted order total safely without negative line items
+- Promotion usedCount increments only after Stripe payment webhook confirms payment
+
+Requires:
+- npx prisma db push
+
+Test:
+1. Create active promotion code in /admin/promotions
+2. Add item to cart and go to checkout
+3. Apply code
+4. Confirm total/VAT recalculates
+5. Complete test Stripe checkout
+6. Confirm order is paid and promotion used count increments

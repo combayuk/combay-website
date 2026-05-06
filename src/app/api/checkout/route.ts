@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 import { createStripeCheckoutSession, isStripeConfigured } from "@/lib/stripe";
+import { calculatePromotionTotals, findPromotionByCode } from "@/lib/promotions";
 
 type CheckoutLine = {
   sku: string;
@@ -81,9 +82,25 @@ export async function POST(request: Request) {
     }
 
     const subtotal = Number(orderItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2));
-    const tax = Number((subtotal * 0.2).toFixed(2));
     const shipping = 0;
-    const total = Number((subtotal + tax + shipping).toFixed(2));
+    let discount = 0;
+    let promotionCode: string | null = null;
+    let promotionName: string | null = null;
+    let tax = Number((subtotal * 0.2).toFixed(2));
+    let total = Number((subtotal + tax + shipping).toFixed(2));
+
+    const requestedPromotionCode = String(body.promotionCode || "").trim();
+    if (requestedPromotionCode) {
+      const promotion = await findPromotionByCode(requestedPromotionCode);
+      if (!promotion) throw new Error("Promotion code was not recognised.");
+      const promoTotals = calculatePromotionTotals(promotion, subtotal, shipping);
+      if (!promoTotals.ok) throw new Error(promoTotals.error || "Promotion code is not valid for this order.");
+      discount = Number((promoTotals.discount + promoTotals.shippingDiscount).toFixed(2));
+      promotionCode = promoTotals.code || promotion.code || null;
+      promotionName = promoTotals.name || promotion.name || null;
+      tax = promoTotals.vat;
+      total = promoTotals.total;
+    }
 
     const order = await prisma.order.create({
       data: {
@@ -95,6 +112,9 @@ export async function POST(request: Request) {
         status: "PENDING_PAYMENT",
         paymentStatus: "UNPAID",
         subtotal,
+        discount,
+        promotionCode,
+        promotionName,
         tax,
         shipping,
         total,
@@ -148,10 +168,15 @@ export async function POST(request: Request) {
     orderId: order.id,
     successUrl: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${origin}/checkout/cancel?order=${encodeURIComponent(order.orderNumber)}`,
-    lines: [
-      ...orderItems.map((item) => ({ name: `${item.variationSku || item.sku} — ${item.title}`, quantity: item.quantity, unitAmountPence: Math.round(item.unitPrice * 100) })),
-      ...(tax > 0 ? [{ name: "VAT estimate", quantity: 1, unitAmountPence: Math.round(tax * 100) }] : []),
-    ],
+    lines: Number(order.discount) > 0
+      ? [
+          { name: `Combay order ${order.orderNumber}${order.promotionCode ? ` after promotion ${order.promotionCode}` : ""}`, quantity: 1, unitAmountPence: Math.round((Number(order.subtotal) - Number(order.discount)) * 100) },
+          ...(tax > 0 ? [{ name: "VAT estimate", quantity: 1, unitAmountPence: Math.round(tax * 100) }] : []),
+        ]
+      : [
+          ...orderItems.map((item) => ({ name: `${item.variationSku || item.sku} — ${item.title}`, quantity: item.quantity, unitAmountPence: Math.round(item.unitPrice * 100) })),
+          ...(tax > 0 ? [{ name: "VAT estimate", quantity: 1, unitAmountPence: Math.round(tax * 100) }] : []),
+        ],
   });
 
   await prisma.order.update({ where: { id: order.id }, data: { notes: `Stripe checkout session created: ${session.id}. Total: £${total.toFixed(2)}.` } });

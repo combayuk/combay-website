@@ -37,16 +37,56 @@ export default function CheckoutClient() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ reference: string; paymentMode: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [promo, setPromo] = useState<{ code: string; name: string; discount: number; shippingDiscount: number; vat: number; total: number } | null>(null);
+  const [promoMessage, setPromoMessage] = useState<string | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
 
   useEffect(() => {
     setLines(readCartLines());
   }, []);
 
   const summary = useMemo(() => getCartSummary(lines), [lines]);
+  const displayVat = promo ? promo.vat : summary.vat;
+  const displayDiscount = promo ? promo.discount + promo.shippingDiscount : 0;
+  const displayTotal = promo ? promo.total : summary.total;
   const stripeConfigured = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
   function update<K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function applyPromotion() {
+    setPromo(null);
+    setPromoMessage(null);
+    if (!promoCode.trim()) {
+      setPromoMessage("Enter a promotion code.");
+      return;
+    }
+
+    setPromoLoading(true);
+    try {
+      const response = await fetch("/api/promotions/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCode, subtotal: summary.subtotal, shipping: 0 }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Promotion code could not be applied.");
+      setPromo({
+        code: data.code,
+        name: data.name,
+        discount: Number(data.discount || 0),
+        shippingDiscount: Number(data.shippingDiscount || 0),
+        vat: Number(data.vat || 0),
+        total: Number(data.total || 0),
+      });
+      setPromoMessage(`${data.code} applied.`);
+    } catch (err) {
+      setPromoMessage(err instanceof Error ? err.message : "Promotion code could not be applied.");
+    } finally {
+      setPromoLoading(false);
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -81,10 +121,12 @@ export default function CheckoutClient() {
             variationSku: variant?.sku,
             variationLabel: variant?.label,
           })),
+          promotionCode: promo?.code || promoCode.trim() || undefined,
           totals: {
             subtotal: summary.subtotal,
-            vat: summary.vat,
-            total: summary.total,
+            discount: displayDiscount,
+            vat: displayVat,
+            total: displayTotal,
           },
         }),
       });
@@ -191,8 +233,19 @@ export default function CheckoutClient() {
           </div>
           <div className="space-y-2 text-sm border-t border-gray-200 pt-3 mb-4">
             <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{formatCurrency(summary.subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">VAT estimate</span><span>{formatCurrency(summary.vat)}</span></div>
-            <div className="flex justify-between font-display font-900 text-lg text-navy-950"><span>Total</span><span>{formatCurrency(summary.total)}</span></div>
+            {displayDiscount > 0 ? <div className="flex justify-between text-green-700"><span>Promotion discount</span><span>-{formatCurrency(displayDiscount)}</span></div> : null}
+            <div className="flex justify-between"><span className="text-gray-500">VAT estimate</span><span>{formatCurrency(displayVat)}</span></div>
+            <div className="flex justify-between font-display font-900 text-lg text-navy-950"><span>Total</span><span>{formatCurrency(displayTotal)}</span></div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-3 mb-4">
+            <label className="block"><span className="label">Promotion code</span>
+              <div className="flex gap-2">
+                <input className="input uppercase" value={promoCode} onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromo(null); }} placeholder="ENTER CODE" />
+                <button type="button" onClick={applyPromotion} disabled={promoLoading} className="btn-secondary whitespace-nowrap">{promoLoading ? "Checking..." : "Apply"}</button>
+              </div>
+            </label>
+            {promoMessage ? <p className={`text-xs mt-2 ${promo ? "text-green-700" : "text-red-600"}`}>{promoMessage}</p> : null}
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 mb-4 flex gap-2">
             <Lock size={14} className="text-gray-400 mt-0.5" />

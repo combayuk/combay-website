@@ -250,6 +250,9 @@ model Order {
   status          OrderStatus @default(PENDING_PAYMENT)
   paymentStatus   PaymentStatus @default(UNPAID)
   subtotal        Decimal     @db.Decimal(10, 2)
+  discount        Decimal     @db.Decimal(10, 2) @default(0)
+  promotionCode   String?
+  promotionName   String?
   shipping        Decimal     @db.Decimal(10, 2) @default(0)
   tax             Decimal     @db.Decimal(10, 2) @default(0)
   total           Decimal     @db.Decimal(10, 2)
@@ -627,16 +630,20 @@ model EbaySyncRun {
 
 // ─── CONTENT ───────────────────────────────────────────
 model Promotion {
-  id          String    @id @default(cuid())
-  name        String
-  code        String?   @unique
-  type        PromotionType
-  value       Decimal   @db.Decimal(8, 2)
-  description String?
-  isActive    Boolean   @default(false)
-  startsAt    DateTime?
-  endsAt      DateTime?
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(cuid())
+  name          String
+  code          String?   @unique
+  type          PromotionType
+  value         Decimal   @db.Decimal(8, 2)
+  description   String?
+  isActive      Boolean   @default(false)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  minOrderValue Decimal?  @db.Decimal(10, 2)
+  maxUses       Int?
+  usedCount     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 enum PromotionType {

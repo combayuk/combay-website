@@ -1,5 +1,6 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { generateGeminiProductContent } from "@/lib/geminiProductWriter";
+import { generateProductContent, type ProductContentInput } from "@/lib/productContentAssistant";
 
 export const dynamic = "force-dynamic";
 
@@ -129,7 +130,7 @@ async function saveTags(productId: string, tags: string[]) {
 }
 
 async function generateForProduct(product: ProductRecord) {
-  const suggestion = await generateGeminiProductContent({
+  const input: ProductContentInput = {
     title: product.title,
     sku: product.sku,
     brand: product.brand,
@@ -143,7 +144,21 @@ async function generateForProduct(product: ProductRecord) {
     itemLocation: product.itemLocation,
     specs: (product.specs ?? []).map((spec) => ({ label: spec.label, value: spec.value })),
     tags: (product.tags ?? []).map((tag) => tag.name),
-  }, "all");
+  };
+
+  let suggestion = await generateGeminiProductContent(input, "all");
+
+  // Bulk generation must never fail a product only because Gemini returned prose or malformed JSON.
+  // If the provider helper still throws for any edge case, save the local assistant output and keep the batch moving.
+  if (!suggestion || !suggestion.productOverview || !suggestion.seoTitle || !suggestion.seoDescription) {
+    const local = generateProductContent(input);
+    suggestion = {
+      ...local,
+      provider: "local",
+      model: "local-rule-based",
+      note: "Gemini did not return complete structured content, so local fallback was used.",
+    };
+  }
 
   const description = !product.description || hasFallback(product.description) || compact(product.description).length < 35
     ? suggestion.description
@@ -191,7 +206,48 @@ export async function POST(req: Request) {
       try {
         updated.push(await generateForProduct(product));
       } catch (error) {
-        errors.push({ sku: product.sku, title: product.title, error: error instanceof Error ? error.message : "AI generation failed." });
+        // Last-resort fallback: if Gemini or JSON parsing fails outside the provider helper, still write local content.
+        try {
+          const input: ProductContentInput = {
+            title: product.title,
+            sku: product.sku,
+            brand: product.brand,
+            manufacturer: product.manufacturer,
+            model: product.model,
+            mpn: product.mpn,
+            category: product.category?.name ?? null,
+            condition: product.condition,
+            description: product.rawEbayDescription || product.description,
+            productOverview: product.productOverview,
+            itemLocation: product.itemLocation,
+            specs: (product.specs ?? []).map((spec) => ({ label: spec.label, value: spec.value })),
+            tags: (product.tags ?? []).map((tag) => tag.name),
+          };
+          const local = generateProductContent(input);
+          const description = !product.description || hasFallback(product.description) || compact(product.description).length < 35
+            ? local.description
+            : product.description;
+          await prisma.product.update({
+            where: { id: product.id },
+            data: {
+              description,
+              productOverview: local.productOverview || product.productOverview,
+              seoTitle: local.seoTitle || product.seoTitle,
+              seoDescription: local.seoDescription || product.seoDescription,
+              seoKeywords: local.tags.join(", "),
+            },
+          });
+          await saveTags(product.id, local.tags);
+          updated.push({
+            sku: product.sku,
+            title: product.title,
+            provider: "local",
+            model: "local-rule-based",
+            note: `${error instanceof Error ? error.message : "AI generation failed."} Local fallback was used.`,
+          });
+        } catch (fallbackError) {
+          errors.push({ sku: product.sku, title: product.title, error: fallbackError instanceof Error ? fallbackError.message : "AI generation failed." });
+        }
       }
     }
 
