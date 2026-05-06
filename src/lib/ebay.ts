@@ -715,21 +715,21 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
     notes.push(`Inventory API: ${inventoryCounts.records} records.`);
 
     if (inventoryCounts.records === 0) {
-      notes.push("Inventory API returned 0 records; using Active Listings fallback with per-item detail enrichment for images, descriptions, categories and item specifics.");
-      const tradingCounts = await syncTradingActiveListings(token, config, options);
-      imported += tradingCounts.imported;
-      updated += tradingCounts.updated;
-      skipped += tradingCounts.skipped;
-      records += tradingCounts.records;
-      nextPage = tradingCounts.nextPage;
-      totalPages = tradingCounts.totalPages;
-      done = Boolean(tradingCounts.done);
-      errors.push(...tradingCounts.errors);
-      notes.push(`Active Listings fallback: ${tradingCounts.records} enriched records on page ${tradingCounts.startPage}${tradingCounts.totalPages ? ` of ${tradingCounts.totalPages}` : ""}.`);
+      notes.push("Inventory API returned 0 records; using Active Listings detail enrichment.");
     } else {
-      done = true;
-      notes.push("Active Listings fallback not used because Inventory API returned records.");
+      notes.push("Inventory API returned records; running Active Listings detail enrichment as well so older/shallow products receive images, descriptions, categories and item specifics.");
     }
+
+    const tradingCounts = await syncTradingActiveListings(token, config, options);
+    imported += tradingCounts.imported;
+    updated += tradingCounts.updated;
+    skipped += tradingCounts.skipped;
+    records += tradingCounts.records;
+    nextPage = tradingCounts.nextPage;
+    totalPages = tradingCounts.totalPages;
+    done = Boolean(tradingCounts.done);
+    errors.push(...tradingCounts.errors);
+    notes.push(`Active Listings detail enrichment: ${tradingCounts.records} enriched records on page ${tradingCounts.startPage}${tradingCounts.totalPages ? ` of ${tradingCounts.totalPages}` : ""}.`);
 
     if (errors.some((error) => error.toLowerCase().includes("scope") || error.toLowerCase().includes("token"))) {
       notes.push("If Active Listings fallback reports token/scope errors, reconnect eBay OAuth so the app receives the base eBay scope as well as Inventory scopes.");

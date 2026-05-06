@@ -1,0 +1,12 @@
+Phase 13C.3 / 13D-prep patch
+
+Changes:
+- Admin product variations tab changed from pipe-delimited textarea to an editable table with Label, SKU, Option Name, Option Value, Price and Stock columns.
+- Admin image management changed to an editable product image table with preview, URL, alt text, primary selection and delete controls, up to 15 images per product.
+- Product page gallery thumbnails increased to up to 15 images.
+- Product page image viewer now supports zoom in/out and a 360-view style cycle through gallery images where multiple angles/images exist.
+- eBay sync now always runs Trading API Active Listings detail enrichment after Inventory API results for the same batch/page, so older shallow listings that only received price/stock should be updated with images, descriptions, category and item specifics.
+
+No Prisma schema change is required.
+
+After deployment, run eBay Test sync 10 / Sync first 50, then check an affected SKU such as CBUK00901.

@@ -3,12 +3,46 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText, ImagePlus, Link2, Save, Upload } from "lucide-react";
+import { ArrowLeft, FileText, ImagePlus, Plus, Save, Star, Trash2 } from "lucide-react";
 import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
 
 type Props = { mode: "new" | "edit"; productId?: string };
 type Tab = "basic" | "content" | "images" | "logistics" | "variants" | "seo";
+type ImageRow = { url: string; alt?: string | null; isPrimary?: boolean; sortOrder?: number };
+type VariantRow = { id?: string; label: string; sku?: string | null; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number };
+const MAX_PRODUCT_IMAGES = 15;
+
+function normaliseImages(product: any): ImageRow[] {
+  const seen = new Set<string>();
+  const rows: ImageRow[] = [];
+  for (const image of product.images ?? []) {
+    if (!image?.url || seen.has(image.url)) continue;
+    seen.add(image.url);
+    rows.push({ url: image.url, alt: image.alt ?? product.title ?? "Product image", isPrimary: Boolean(image.isPrimary), sortOrder: image.sortOrder ?? rows.length });
+  }
+  if (product.image && !seen.has(product.image)) rows.unshift({ url: product.image, alt: product.title ?? "Product image", isPrimary: true, sortOrder: 0 });
+  const limited = rows.slice(0, MAX_PRODUCT_IMAGES).map((row, index) => ({ ...row, sortOrder: index }));
+  if (limited.length && !limited.some((row) => row.isPrimary)) limited[0].isPrimary = true;
+  return limited;
+}
+function cleanImages(rows: ImageRow[], title: string) {
+  const filtered = rows.map((row) => ({ ...row, url: row.url.trim(), alt: row.alt?.trim() || title || "Product image" })).filter((row) => row.url).slice(0, MAX_PRODUCT_IMAGES);
+  const primary = filtered.findIndex((row) => row.isPrimary);
+  return filtered.map((row, index) => ({ ...row, isPrimary: primary >= 0 ? index === primary : index === 0, sortOrder: index }));
+}
+function normaliseVariants(variants: any[] = []): VariantRow[] {
+  return variants.map((variant, index) => ({ id: variant.id, label: variant.label || `Variant ${index + 1}`, sku: variant.sku ?? "", optionName: variant.optionName ?? "", optionValue: variant.optionValue ?? "", price: variant.price === null || variant.price === undefined || variant.price === "" ? null : Number(variant.price), stockQty: Math.max(0, Math.floor(Number(variant.stockQty ?? 0))), sortOrder: variant.sortOrder ?? index }));
+}
+function cleanVariants(rows: VariantRow[]) {
+  return rows.filter((row) => row.label.trim() || String(row.sku ?? "").trim() || String(row.optionValue ?? "").trim()).map((row, index) => {
+    const optionName = row.optionName?.trim() || null;
+    const optionValue = row.optionValue?.trim() || null;
+    const label = row.label.trim() || [optionName, optionValue].filter(Boolean).join(": ") || row.sku?.trim() || `Variant ${index + 1}`;
+    return { id: row.id, label, sku: row.sku?.trim() || null, optionName, optionValue, price: row.price === null || row.price === undefined || Number.isNaN(Number(row.price)) ? null : Number(row.price), stockQty: Math.max(0, Math.floor(Number(row.stockQty ?? 0))), sortOrder: index };
+  });
+}
+
 
 function specsToText(specs: CatalogProduct["specs"] = []) {
   return specs.map((spec) => `${spec.label}: ${spec.value}`).join("\n");
@@ -77,16 +111,16 @@ export default function ProductEditor({ mode, productId }: Props) {
   const [specText, setSpecText] = useState("");
   const [docText, setDocText] = useState("");
   const [tagText, setTagText] = useState("");
-  const [variantText, setVariantText] = useState("");
-  const [mainImageSource, setMainImageSource] = useState("");
+  const [imageRows, setImageRows] = useState<ImageRow[]>(normaliseImages(blank));
+  const [variantRows, setVariantRows] = useState<VariantRow[]>(normaliseVariants((blank as any).variants));
 
   useEffect(() => {
     if (mode !== "edit" || !productId) {
       setSpecText(specsToText(blank.specs));
       setDocText(docsToText(blank.documents));
       setTagText(tagsToText(blank.tags));
-      setVariantText(variantsToText((blank as any).variants));
-      setMainImageSource(blank.image ?? "");
+      setVariantRows(normaliseVariants((blank as any).variants));
+      setImageRows(normaliseImages(blank));
       return;
     }
 
@@ -99,8 +133,8 @@ export default function ProductEditor({ mode, productId }: Props) {
         setSpecText(specsToText(loaded.specs));
         setDocText(docsToText(loaded.documents));
         setTagText(tagsToText(loaded.tags));
-        setVariantText(variantsToText((loaded as any).variants));
-        setMainImageSource(loaded.image ?? "");
+        setVariantRows(normaliseVariants((loaded as any).variants));
+        setImageRows(normaliseImages(loaded));
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Could not load product."))
       .finally(() => setLoading(false));
@@ -115,6 +149,14 @@ export default function ProductEditor({ mode, productId }: Props) {
     setProduct((current) => ({ ...current, category: categoryLabel, categorySlug: category?.slug ?? slugifyProductTitle(categoryLabel, "category") }));
   }
 
+  function updateImage(index: number, patch: Partial<ImageRow>) { setImageRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row)); }
+  function addImageRow() { setImageRows((rows) => rows.length >= MAX_PRODUCT_IMAGES ? rows : [...rows, { url: "", alt: product.title, isPrimary: rows.length === 0, sortOrder: rows.length }]); }
+  function deleteImageRow(index: number) { setImageRows((rows) => { const next = rows.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, sortOrder: rowIndex })); if (next.length && !next.some((row) => row.isPrimary)) next[0].isPrimary = true; return next; }); }
+  function makePrimaryImage(index: number) { setImageRows((rows) => rows.map((row, rowIndex) => ({ ...row, isPrimary: rowIndex === index }))); }
+  function updateVariant(index: number, patch: Partial<VariantRow>) { setVariantRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row)); }
+  function addVariantRow() { setVariantRows((rows) => [...rows, { label: `Variant ${rows.length + 1}`, sku: "", optionName: "", optionValue: "", price: null, stockQty: 0, sortOrder: rows.length }]); }
+  function deleteVariantRow(index: number) { setVariantRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, sortOrder: rowIndex }))); }
+
   async function uploadFile(file: File | null, folder: "products" | "docs") {
     if (!file) return;
     const form = new FormData();
@@ -126,8 +168,9 @@ export default function ProductEditor({ mode, productId }: Props) {
       setMessage(result.error || "File upload is not fully configured yet. Use a URL for now.");
       return;
     }
-    if (folder === "products") setMainImageSource(result.url);
-    else setDocText((current) => `${current ? `${current}\n` : ""}${file.name}|${result.url}|${file.type || "Document"}`);
+    if (folder === "products") {
+      setImageRows((rows) => rows.length >= MAX_PRODUCT_IMAGES ? rows : [...rows, { url: result.url, alt: product.title || file.name, isPrimary: rows.length === 0, sortOrder: rows.length }]);
+    } else setDocText((current) => `${current ? `${current}\n` : ""}${file.name}|${result.url}|${file.type || "Document"}`);
     setMessage(`Uploaded: ${result.url}`);
   }
 
@@ -139,17 +182,21 @@ export default function ProductEditor({ mode, productId }: Props) {
     setSaving(true);
     setMessage("");
 
+    const preparedImages = cleanImages(imageRows, product.title);
+    const preparedVariants = cleanVariants(variantRows);
     const payload: AdminProduct = {
       ...product,
       status,
       slug: product.slug || slugifyProductTitle(product.title, product.sku),
-      image: mainImageSource || null,
+      image: preparedImages.find((image) => image.isPrimary)?.url || preparedImages[0]?.url || null,
+      images: preparedImages,
       price: product.priceOnRequest ? null : product.price,
-      stockStatus: product.stockQty <= 0 ? "OUT_OF_STOCK" : product.stockQty <= 2 ? "LOW_STOCK" : "IN_STOCK",
+      stockQty: preparedVariants.length ? preparedVariants.reduce((sum, variant) => sum + variant.stockQty, 0) : product.stockQty,
+      stockStatus: (preparedVariants.length ? preparedVariants.reduce((sum, variant) => sum + variant.stockQty, 0) : product.stockQty) <= 0 ? "OUT_OF_STOCK" : (preparedVariants.length ? preparedVariants.reduce((sum, variant) => sum + variant.stockQty, 0) : product.stockQty) <= 2 ? "LOW_STOCK" : "IN_STOCK",
       specs: textToSpecs(specText),
       documents: textToDocs(docText),
       tags: textToTags(tagText),
-      variants: textToVariants(variantText) as any,
+      variants: preparedVariants as any,
       source: product.source === "catalog" ? "admin" : product.source,
     };
 
@@ -166,6 +213,8 @@ export default function ProductEditor({ mode, productId }: Props) {
 
     const savedProduct = dbProductToAdmin(result.product);
     setProduct(savedProduct);
+    setImageRows(normaliseImages(savedProduct));
+    setVariantRows(normaliseVariants((savedProduct as any).variants));
     setSaved(true);
     setMessage("Product saved to PostgreSQL/Neon.");
     setTimeout(() => router.push("/admin/products"), 700);
@@ -229,19 +278,23 @@ export default function ProductEditor({ mode, productId }: Props) {
 
         {tab === "images" && (
           <div className="space-y-5">
-            <div><label className="label">Main image URL</label><div className="flex gap-2"><input value={mainImageSource} onChange={(e) => setMainImageSource(e.target.value)} className="input" placeholder="https://assets.combay.co.uk/products/..." /><button type="button" className="btn-secondary whitespace-nowrap"><Link2 size={14} /> Use URL</button></div></div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <label className="border border-dashed border-gray-300 rounded-xl p-5 bg-surface cursor-pointer hover:border-accent"><ImagePlus className="text-gray-400 mb-2" size={22} /><p className="font-display font-700 text-sm text-navy-950">Upload main image</p><p className="text-xs text-gray-400 mt-1">Uses /api/uploads when a VPS upload receiver/local directory is configured.</p><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "products")} /></label>
-              <label className="border border-dashed border-gray-300 rounded-xl p-5 bg-surface cursor-pointer hover:border-accent"><FileText className="text-gray-400 mb-2" size={22} /><p className="font-display font-700 text-sm text-navy-950">Upload document</p><p className="text-xs text-gray-400 mt-1">PDF/manual/catalogue upload endpoint.</p><input type="file" accept="application/pdf" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "docs")} /></label>
-            </div>
-            <div><label className="label">Documents</label><p className="text-xs text-gray-400 mb-2">One per line: Name|URL|File type</p><textarea value={docText} onChange={(e) => setDocText(e.target.value)} className="input min-h-[120px] font-mono text-xs" /></div>
+            <div className="flex items-center justify-between gap-3"><div><h2 className="font-display font-800 text-navy-950">Product images</h2><p className="text-xs text-gray-500 mt-1">Add/edit/delete up to {MAX_PRODUCT_IMAGES} images. The primary image is used on shop cards.</p></div><button type="button" onClick={addImageRow} disabled={imageRows.length >= MAX_PRODUCT_IMAGES} className="btn-secondary text-sm"><Plus size={14} /> Add image</button></div>
+            <label className="border border-dashed border-gray-300 rounded-xl p-5 bg-surface cursor-pointer hover:border-accent block"><ImagePlus className="text-gray-400 mb-2" size={22} /><p className="font-display font-700 text-sm text-navy-950">Upload product image</p><p className="text-xs text-gray-400 mt-1">Uploaded image is appended to the gallery.</p><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "products")} /></label>
+            <div className="overflow-x-auto border border-gray-200 rounded-xl"><table className="w-full text-sm"><thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide"><tr><th className="p-3 w-20">Preview</th><th className="p-3 min-w-[320px]">Image URL</th><th className="p-3 min-w-[180px]">Alt text</th><th className="p-3 w-24">Primary</th><th className="p-3 w-16"></th></tr></thead><tbody>{imageRows.map((row, index) => <tr key={`${row.url}-${index}`} className="border-t border-gray-100 align-top"><td className="p-3"><div className="w-14 h-14 border border-gray-200 rounded-lg bg-white flex items-center justify-center overflow-hidden">{row.url ? <img src={row.url} alt="" className="w-full h-full object-contain" /> : <span className="text-gray-200">📦</span>}</div></td><td className="p-3"><input value={row.url} onChange={(e) => updateImage(index, { url: e.target.value })} className="input font-mono text-xs" placeholder="https://assets.combay.co.uk/products/..." /></td><td className="p-3"><input value={row.alt ?? ""} onChange={(e) => updateImage(index, { alt: e.target.value })} className="input text-xs" /></td><td className="p-3"><button type="button" onClick={() => makePrimaryImage(index)} className={`inline-flex items-center gap-1 text-xs font-display font-700 ${row.isPrimary ? "text-accent" : "text-gray-400 hover:text-navy-950"}`}><Star size={14} fill={row.isPrimary ? "currentColor" : "none"} /> {row.isPrimary ? "Primary" : "Set"}</button></td><td className="p-3"><button type="button" onClick={() => deleteImageRow(index)} className="text-red-600 hover:text-red-800"><Trash2 size={16} /></button></td></tr>)}{!imageRows.length && <tr><td colSpan={5} className="p-5 text-sm text-gray-500">No images yet. Add a URL row or upload an image.</td></tr>}</tbody></table></div>
+            <div><label className="label">Documents</label><p className="text-xs text-gray-400 mb-2">One per line: Name|URL|File type</p><label className="inline-flex items-center gap-2 border border-dashed border-gray-300 rounded-xl px-4 py-3 bg-surface cursor-pointer hover:border-accent mb-3"><FileText className="text-gray-400" size={18} /><span className="font-display font-700 text-sm text-navy-950">Upload document</span><input type="file" accept="application/pdf" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0] ?? null, "docs")} /></label><textarea value={docText} onChange={(e) => setDocText(e.target.value)} className="input min-h-[120px] font-mono text-xs" /></div>
           </div>
         )}
 
         {tab === "logistics" && <div className="grid lg:grid-cols-2 gap-5"><div><label className="label">Price excluding VAT</label><input type="number" value={product.price ?? ""} disabled={product.priceOnRequest} onChange={(e) => update("price", e.target.value ? Number(e.target.value) : null)} className="input" /></div><div><label className="label">Stock quantity</label><input type="number" value={product.stockQty} onChange={(e) => update("stockQty", Number(e.target.value || 0))} className="input" /></div><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={product.priceOnRequest} onChange={(e) => update("priceOnRequest", e.target.checked)} /> Price on request / POA</label><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={Boolean(product.syncExcluded)} onChange={(e) => update("syncExcluded", e.target.checked as any)} /> Exclude from eBay sync updates</label><div><label className="label">Location / bin</label><input value={product.locationBin ?? ""} onChange={(e) => update("locationBin", e.target.value)} className="input" placeholder="WH-A-03" /></div><div><label className="label">eBay item / listing ID</label><input value={(product as any).ebayItemId ?? ""} onChange={(e) => update("ebayItemId", e.target.value as any)} className="input" /></div><div><label className="label">Weight (kg)</label><input value={product.weightKg ?? ""} onChange={(e) => update("weightKg", e.target.value)} className="input" /></div><div><label className="label">Dimensions (cm)</label><input value={product.dimensionsCm ?? ""} onChange={(e) => update("dimensionsCm", e.target.value)} className="input" placeholder="40 x 30 x 20" /></div><div><label className="label">HS code</label><input value={product.hsCode ?? ""} onChange={(e) => update("hsCode", e.target.value)} className="input" /></div><div><label className="label">Lead time</label><input value={product.leadTime} onChange={(e) => update("leadTime", e.target.value)} className="input" /></div><div className="lg:col-span-2"><label className="label">Dispatch note</label><textarea value={product.dispatchNote} onChange={(e) => update("dispatchNote", e.target.value)} className="input min-h-[90px]" /></div><div className="lg:col-span-2"><label className="label">Warranty statement</label><textarea value={product.warranty} onChange={(e) => update("warranty", e.target.value)} className="input min-h-[90px]" /></div></div>}
 
 
-        {tab === "variants" && <div className="space-y-5"><div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">Use this when a listing has selectable options such as size, voltage, colour, length, connector or package. Format one variation per line: <span className="font-mono">Label|SKU|Price|Stock</span>. Example: <span className="font-mono">Size: 10cm|ABC-10|25.00|3</span></div><div><label className="label">Product variations</label><textarea value={variantText} onChange={(e) => setVariantText(e.target.value)} className="input min-h-[220px] font-mono text-xs" placeholder={"Size: Small|SKU-S|25.00|2\nSize: Large|SKU-L|30.00|5"} /></div></div>}
+        {tab === "variants" && (
+          <div className="space-y-5">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">Use this for selectable options such as size, voltage, colour, length, connector or package. eBay synced variations populate here automatically where available.</div>
+            <div className="flex justify-between items-center gap-3"><h2 className="font-display font-800 text-navy-950">Product variations</h2><button type="button" onClick={addVariantRow} className="btn-secondary text-sm"><Plus size={14} /> Add variation</button></div>
+            <div className="overflow-x-auto border border-gray-200 rounded-xl"><table className="w-full text-sm"><thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide"><tr><th className="p-3 min-w-[220px]">Label</th><th className="p-3 min-w-[150px]">SKU</th><th className="p-3 min-w-[140px]">Option name</th><th className="p-3 min-w-[140px]">Option value</th><th className="p-3 w-28">Price</th><th className="p-3 w-24">Stock</th><th className="p-3 w-16"></th></tr></thead><tbody>{variantRows.map((row, index) => <tr key={row.id ?? index} className="border-t border-gray-100 align-top"><td className="p-3"><input value={row.label} onChange={(e) => updateVariant(index, { label: e.target.value })} className="input text-xs" placeholder="Size: 10cm" /></td><td className="p-3"><input value={row.sku ?? ""} onChange={(e) => updateVariant(index, { sku: e.target.value })} className="input font-mono text-xs" placeholder="SKU" /></td><td className="p-3"><input value={row.optionName ?? ""} onChange={(e) => updateVariant(index, { optionName: e.target.value })} className="input text-xs" placeholder="Size" /></td><td className="p-3"><input value={row.optionValue ?? ""} onChange={(e) => updateVariant(index, { optionValue: e.target.value })} className="input text-xs" placeholder="10cm" /></td><td className="p-3"><input type="number" value={row.price ?? ""} onChange={(e) => updateVariant(index, { price: e.target.value === "" ? null : Number(e.target.value) })} className="input text-xs" placeholder="0.00" /></td><td className="p-3"><input type="number" value={row.stockQty} onChange={(e) => updateVariant(index, { stockQty: Number(e.target.value || 0) })} className="input text-xs" /></td><td className="p-3"><button type="button" onClick={() => deleteVariantRow(index)} className="text-red-600 hover:text-red-800"><Trash2 size={16} /></button></td></tr>)}{!variantRows.length && <tr><td colSpan={7} className="p-5 text-sm text-gray-500">No variations. Add a row if this product has selectable options.</td></tr>}</tbody></table></div>
+          </div>
+        )}
 
         {tab === "seo" && <div className="space-y-5"><div><label className="label">Slug</label><input value={product.slug} onChange={(e) => update("slug", e.target.value)} className="input font-mono text-sm" /></div><div><label className="label">Search tags</label><input value={tagText} onChange={(e) => setTagText(e.target.value)} className="input" placeholder="PLC, Siemens, 6ES7412" /></div><div><label className="label">Admin notes</label><textarea value={product.adminNotes ?? ""} onChange={(e) => update("adminNotes", e.target.value)} className="input min-h-[120px]" /></div></div>}
       </div>

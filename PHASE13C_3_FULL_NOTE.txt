@@ -1,0 +1,15 @@
+Phase 13C.3 FULL cumulative patch
+
+This archive is rebuilt as a complete cumulative replacement over the current combay-website folder. It includes:
+- Phase 13C eBay variations + quantity handling
+- Phase 13C.1 cart variant build fix
+- Phase 13C.2 ProductWriteInput variant build fix
+- Phase 13C.3 variation table editor, product gallery editor, eBay detail enrichment fallback, and product image zoom/360 viewer
+
+Apply by extracting over the existing combay-website project folder, then run:
+  npx prisma db push
+  git add .
+  git commit -m "Phase 13C.3 variation table gallery eBay enrichment zoom"
+  git push
+
+Prisma db push is included in the instructions because this full cumulative patch includes the Phase 13C schema changes even if the database was already pushed previously.
