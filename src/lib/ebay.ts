@@ -1044,23 +1044,42 @@ export async function repairMissingEbayDetailImports(limit = 75) {
 export async function refreshEbayCategoriesAndOverviews(limit = 100) {
   await markStaleEbayRuns();
   const candidateLimit = Math.max(1, Math.min(250, Number(limit || 100)));
-  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Refreshing website categories and overview text for up to ${candidateLimit} eBay products.` } });
+  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Refreshing website categories and overview text for up to ${candidateLimit} remaining eBay products.` } });
   let updated = 0, skipped = 0;
   const errors: string[] = [];
   try {
     const { token, config } = await getEbayAccessToken();
-    const total = await prisma.product.count({ where: { syncExcluded: false, OR: [{ source: "ebay" }, { ebayItemId: { not: null } }] } });
-    const products = await prisma.product.findMany({
-      where: { syncExcluded: false, OR: [{ source: "ebay" }, { ebayItemId: { not: null } }] },
-      include: { category: true, specs: true },
+    const ebayWhere = { syncExcluded: false, OR: [{ source: "ebay" }, { ebayItemId: { not: null } }] };
+    const totalEbayProducts = await prisma.product.count({ where: ebayWhere });
+    const allEbayProducts = await prisma.product.findMany({
+      where: ebayWhere,
+      include: { category: true },
       orderBy: [{ updatedAt: "asc" }],
-      take: candidateLimit,
     });
+
+    const needsCategoryOrOverviewRefresh = (product: any) => {
+      const categoryLabel = `${product.category?.slug || ""} ${product.category?.name || ""}`.toLowerCase();
+      const overview = String(product.productOverview || "").trim();
+      const itemLocation = String(product.itemLocation || "").trim();
+      const hasGenericCategory = !product.categoryId || categoryLabel.includes("ebay-import") || categoryLabel.includes("uncategorised") || categoryLabel.includes("uncategorized");
+      const hasWeakOverview = !overview || overview.toLowerCase().includes("imported from active ebay listing") || overview.length < 40;
+      return hasGenericCategory || hasWeakOverview || !itemLocation;
+    };
+
+    const refreshCandidates = allEbayProducts.filter(needsCategoryOrOverviewRefresh);
+    const products = refreshCandidates.slice(0, candidateLimit);
+    const missingItemId = products.some((product) => !product.ebayItemId && product.sku);
+    const activeIndex = missingItemId ? await buildActiveListingIndex(token, config) : new Map<string, string>();
 
     for (const product of products) {
       try {
-        if (!product.ebayItemId) { skipped++; continue; }
-        const xml = await getTradingItemDetails(token, config, product.ebayItemId);
+        const itemId = product.ebayItemId || (product.sku ? activeIndex.get(String(product.sku).toLowerCase()) : undefined);
+        if (!itemId) {
+          skipped++;
+          errors.push(`SKU ${product.sku || product.id}: could not find eBay item ID for category/overview refresh.`);
+          continue;
+        }
+        const xml = await getTradingItemDetails(token, config, itemId);
         const listing = listingFromTradingXml(xml, "active-listings");
         if (!listing) { skipped++; errors.push(`SKU ${product.sku}: eBay detail response could not be parsed.`); continue; }
         const websiteCategory = inferWebsiteCategory({ ...listing, sku: listing.sku || product.sku });
@@ -1071,9 +1090,10 @@ export async function refreshEbayCategoriesAndOverviews(limit = 100) {
         await prisma.product.update({
           where: { id: product.id },
           data: {
+            ebayItemId: product.ebayItemId || itemId,
             categoryId: category.id,
             productOverview,
-            itemLocation: (product as any).itemLocation || "United Kingdom",
+            itemLocation: product.itemLocation || "United Kingdom",
             brand: product.brand || listing.brand || aspect(specMap, ["Brand", "Manufacturer"]) || null,
             manufacturer: product.manufacturer || listing.manufacturer || aspect(specMap, ["Manufacturer", "Brand"]) || null,
             model: product.model || listing.model || aspect(specMap, ["Model"]) || null,
@@ -1088,10 +1108,11 @@ export async function refreshEbayCategoriesAndOverviews(limit = 100) {
       }
     }
 
-    const remaining = Math.max(0, total - products.length);
-    const message = `Category/overview refresh complete. Scanned ${total} eBay products; processed ${products.length}; updated ${updated}${remaining ? `; ${remaining} remain for another run.` : "."}`;
+    const remaining = Math.max(0, refreshCandidates.length - products.length);
+    const skippedNote = skipped ? `; skipped ${skipped} (${errors.slice(0, 3).join(" | ")}${errors.length > 3 ? " | see latest sync log for more" : ""})` : "";
+    const message = `Category/overview refresh complete. Scanned ${totalEbayProducts} eBay products; found ${refreshCandidates.length} still needing refresh; processed ${products.length}; updated ${updated}${skippedNote}${remaining ? `; ${remaining} remain for another run.` : "."}`;
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", message, updated, skipped, errors, finishedAt: new Date() } });
-    return { ok: true, updated, skipped, checked: total, processed: products.length, remaining, errors, message };
+    return { ok: true, updated, skipped, checked: totalEbayProducts, candidates: refreshCandidates.length, processed: products.length, remaining, errors, message };
   } catch (err: any) {
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay category/overview refresh failed.", updated, skipped, errors, finishedAt: new Date() } });
     return { ok: false, updated, skipped, errors: [...errors, err.message || "eBay category/overview refresh failed."] };

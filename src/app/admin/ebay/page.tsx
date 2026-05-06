@@ -123,7 +123,7 @@ export default function EbayAdminPage() {
 
   async function refreshCategoriesAndOverviews() {
     setSyncing("refresh");
-    setMessage("Refreshing website categories and tighter overview text for eBay imports. Run again if the message says products remain.");
+    setMessage("Refreshing only the remaining eBay imports that still need category/overview work. Run again only if the message says products remain.");
     try {
       const response = await fetch("/api/ebay/refresh-content", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 100 }) });
       const result = await response.json().catch(() => ({}));
