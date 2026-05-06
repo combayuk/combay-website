@@ -13,9 +13,13 @@ type Promotion = {
   isActive: boolean;
   startsAt: string | null;
   endsAt: string | null;
-  minOrderValue: number;
+  minOrderValue: number | null;
   maxUses: number | null;
   usedCount: number;
+  showOnHomepage: boolean;
+  showOnShop: boolean;
+  bannerText: string | null;
+  displayPriority: number;
 };
 
 type FormState = {
