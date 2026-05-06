@@ -1,0 +1,12 @@
+Phase 13C.5 - Product image click zoom behaviour
+
+This cumulative patch builds on Phase 13C.4.
+
+Changes:
+- Removes button-based zoom controls from the product image area.
+- Main product image click cycle is now: 100% -> 125% -> 150% -> 100%.
+- When zoomed at 125% or 150%, moving the cursor within the image area pans the zoomed image by updating transform-origin.
+- Gallery image changes reset zoom back to 100%.
+- No 360/auto-cycle feature is present.
+
+No Prisma schema changes are required.
