@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound, MessageSquare, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound, MessageSquare, RefreshCw, Sparkles } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 const NAV = [
   { href:"/admin",            label:"Dashboard",         icon:<LayoutDashboard size={15}/> },
   { href:"/admin/products",   label:"Products",          icon:<Package size={15}/> },
   { href:"/admin/ebay",       label:"eBay Sync",         icon:<RefreshCw size={15}/> },
+  { href:"/admin/products/ai", label:"Product AI",        icon:<Sparkles size={15}/> },
   { href:"/admin/orders",     label:"Orders",            icon:<ShoppingCart size={15}/> },
   { href:"/admin/invoices",   label:"Invoices & Quotes", icon:<Receipt size={15}/> },
   { href:"/admin/leads",      label:"Leads",             icon:<UsersRound size={15}/> },

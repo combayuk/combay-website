@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Copy, Download, Edit, Eye, Package, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Copy, Download, Edit, Eye, Package, Plus, Search, Sparkles, Trash2, Upload } from "lucide-react";
 import { CATEGORIES, CONDITION_LABELS, type CatalogProduct } from "@/lib/catalog";
 
 type AdminProduct = CatalogProduct & {
@@ -120,6 +120,7 @@ export default function AdminProducts() {
           <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => handleCsvUpload(event.target.files?.[0] ?? null)} />
           <button type="button" onClick={() => csvInputRef.current?.click()} className="btn-secondary text-sm py-2"><Upload size={14} /> Upload CSV</button>
           <a href="/stock-list-template.csv" download className="btn-secondary text-sm py-2"><Download size={14} /> CSV Template</a>
+          <Link href="/admin/products/ai" className="btn-secondary text-sm py-2"><Sparkles size={14} /> Product AI</Link>
           <Link href="/admin/products/new" className="btn-primary text-sm py-2"><Plus size={14} /> Add Product</Link>
         </div>
       </div>
