@@ -254,8 +254,10 @@ export default function VisualContentBuilderPage() {
     setSelected({ kind: "step", index: page.steps.length });
   }
 
-  const selectedBlock = selected?.kind === "block" && page ? page.blocks[selected.index] : null;
-  const selectedStep = selected?.kind === "step" && page ? page.steps[selected.index] : null;
+  const selectedBlockIndex = selected?.kind === "block" ? selected.index : -1;
+  const selectedStepIndex = selected?.kind === "step" ? selected.index : -1;
+  const selectedBlock = selectedBlockIndex >= 0 && page ? page.blocks[selectedBlockIndex] : null;
+  const selectedStep = selectedStepIndex >= 0 && page ? page.steps[selectedStepIndex] : null;
 
   if (!content || !page) {
     return <div className="bg-white border border-gray-200 rounded-xl p-6 text-sm text-gray-500">Loading visual website builder…</div>;
@@ -357,24 +359,24 @@ export default function VisualContentBuilderPage() {
 
             {selectedBlock ? (
               <div className="space-y-3">
-                <Field label="Icon or emoji" value={selectedBlock.icon} onChange={(value) => updateBlock(selected.index, { ...selectedBlock, icon: value })} />
-                <Field label="Heading" value={selectedBlock.title} onChange={(value) => updateBlock(selected.index, { ...selectedBlock, title: value })} />
-                <Field label="Sub-heading" value={selectedBlock.subtitle} onChange={(value) => updateBlock(selected.index, { ...selectedBlock, subtitle: value })} />
-                <Field label="Body text" textarea value={selectedBlock.body} onChange={(value) => updateBlock(selected.index, { ...selectedBlock, body: value })} />
-                <MiniImageField value={selectedBlock.imageUrl} onChange={(value) => updateBlock(selected.index, { ...selectedBlock, imageUrl: value })} />
+                <Field label="Icon or emoji" value={selectedBlock.icon} onChange={(value) => updateBlock(selectedBlockIndex, { ...selectedBlock, icon: value })} />
+                <Field label="Heading" value={selectedBlock.title} onChange={(value) => updateBlock(selectedBlockIndex, { ...selectedBlock, title: value })} />
+                <Field label="Sub-heading" value={selectedBlock.subtitle} onChange={(value) => updateBlock(selectedBlockIndex, { ...selectedBlock, subtitle: value })} />
+                <Field label="Body text" textarea value={selectedBlock.body} onChange={(value) => updateBlock(selectedBlockIndex, { ...selectedBlock, body: value })} />
+                <MiniImageField value={selectedBlock.imageUrl} onChange={(value) => updateBlock(selectedBlockIndex, { ...selectedBlock, imageUrl: value })} />
                 <div className="grid md:grid-cols-2 gap-3">
-                  <Field label="Button text" value={selectedBlock.linkLabel} onChange={(value) => updateBlock(selected.index, { ...selectedBlock, linkLabel: value })} />
-                  <Field label="Button link" value={selectedBlock.linkHref} onChange={(value) => updateBlock(selected.index, { ...selectedBlock, linkHref: value })} />
+                  <Field label="Button text" value={selectedBlock.linkLabel} onChange={(value) => updateBlock(selectedBlockIndex, { ...selectedBlock, linkLabel: value })} />
+                  <Field label="Button link" value={selectedBlock.linkHref} onChange={(value) => updateBlock(selectedBlockIndex, { ...selectedBlock, linkHref: value })} />
                 </div>
               </div>
             ) : null}
 
             {selectedStep ? (
               <div className="space-y-3">
-                <Field label="Step number" value={selectedStep.number} onChange={(value) => updateStep(selected.index, { ...selectedStep, number: value })} />
-                <Field label="Heading" value={selectedStep.title} onChange={(value) => updateStep(selected.index, { ...selectedStep, title: value })} />
-                <Field label="Body text" textarea value={selectedStep.body} onChange={(value) => updateStep(selected.index, { ...selectedStep, body: value })} />
-                <MiniImageField value={selectedStep.imageUrl} onChange={(value) => updateStep(selected.index, { ...selectedStep, imageUrl: value })} />
+                <Field label="Step number" value={selectedStep.number} onChange={(value) => updateStep(selectedStepIndex, { ...selectedStep, number: value })} />
+                <Field label="Heading" value={selectedStep.title} onChange={(value) => updateStep(selectedStepIndex, { ...selectedStep, title: value })} />
+                <Field label="Body text" textarea value={selectedStep.body} onChange={(value) => updateStep(selectedStepIndex, { ...selectedStep, body: value })} />
+                <MiniImageField value={selectedStep.imageUrl} onChange={(value) => updateStep(selectedStepIndex, { ...selectedStep, imageUrl: value })} />
               </div>
             ) : null}
           </div>
