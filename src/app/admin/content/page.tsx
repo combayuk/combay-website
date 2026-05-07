@@ -1,57 +1,35 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type HeroSlide = { eyebrow:string; heading:string; accent:string; body:string; cta1Label:string; cta1Href:string; cta2Label:string; cta2Href:string; stat1Value:string; stat1Label:string; stat2Value:string; stat2Label:string; stat3Value:string; stat3Label:string };
+type SiteContent = { heroSlides: HeroSlide[]; trust: { eyebrow:string; heading:string; accent:string; clients:string[] }; finalCta: { eyebrow:string; heading:string; body:string; primaryLabel:string; primaryHref:string; secondaryLabel:string; secondaryHref:string; tertiaryLabel:string; tertiaryHref:string }; contact: { salesEmail:string; repairEmail:string; procurementEmail:string; phone:string; location:string; whatsapp:string }; footer: { description:string } };
+const emptyContent: SiteContent = { heroSlides: [], trust: { eyebrow:"", heading:"", accent:"", clients:[] }, finalCta: { eyebrow:"", heading:"", body:"", primaryLabel:"", primaryHref:"", secondaryLabel:"", secondaryHref:"", tertiaryLabel:"", tertiaryHref:"" }, contact: { salesEmail:"", repairEmail:"", procurementEmail:"", phone:"", location:"", whatsapp:"" }, footer: { description:"" } };
+function Field({ label, value, onChange, textarea = false }: { label:string; value:string; onChange:(value:string)=>void; textarea?:boolean }) { return <div><label className="label text-xs">{label}</label>{textarea ? <textarea className="textarea text-sm" rows={3} value={value || ""} onChange={(e)=>onChange(e.target.value)} /> : <input className="input text-sm" value={value || ""} onChange={(e)=>onChange(e.target.value)} />}</div>; }
 
 export default function AdminContent() {
-  const [saved, setSaved] = useState(false);
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-display font-800 text-navy-900 text-2xl">Content Manager</h1>
-        <button onClick={() => setSaved(true)} className="btn-primary">Save Changes →</button>
-      </div>
-      {saved && <div className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">✅ Changes saved</div>}
-      <div className="grid lg:grid-cols-2 gap-5">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="font-display font-700 text-navy-900 mb-4">Homepage Hero</h2>
-          <div className="space-y-3">
-            <div><label className="label text-xs">Slide 1 — Heading</label><input className="input text-sm" defaultValue="Mission-critical equipment, delivered."/></div>
-            <div><label className="label text-xs">Slide 1 — Body Text</label><textarea className="textarea text-sm" rows={2} defaultValue="Tested, warranted industrial equipment. 30-day warranty. Dispatch within 48 hours."/></div>
-            <div><label className="label text-xs">Slide 2 — Heading</label><input className="input text-sm" defaultValue="Don't replace — repair instead."/></div>
-            <div><label className="label text-xs">Slide 3 — Heading</label><input className="input text-sm" defaultValue="Recover cash on unwanted equipment."/></div>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="font-display font-700 text-navy-900 mb-4">Trust Stats</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {[["Stock count","~10,000 items"],["Warranty period","30 days"],["Repair warranty","60 days"],["Below OEM cost","40%"]].map(([l,v]) => (
-              <div key={l}>
-                <label className="label text-xs">{l}</label>
-                <input className="input text-sm" defaultValue={v}/>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="font-display font-700 text-navy-900 mb-4">Client Logos</h2>
-          <div className="space-y-2">
-            {["Nutrein","AG Solutions","Fiber Logic","Poole IT","Transend (UK) Ltd"].map(c => (
-              <div key={c} className="flex items-center gap-2">
-                <input className="input text-sm flex-1" defaultValue={c}/>
-                <button className="text-red-400 hover:text-red-600 text-sm">✕</button>
-              </div>
-            ))}
-            <button className="text-xs text-accent font-600">+ Add Client</button>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="font-display font-700 text-navy-900 mb-4">Contact Information</h2>
-          <div className="space-y-3">
-            {[["Sales Email","info@combay.co.uk"],["Repair Email","service@combay.co.uk"],["Procurement Email","procurement@combay.co.uk"],["Phone","+44 7340 383334"],["Location","Chelmsford, Essex, UK"]].map(([l,v]) => (
-              <div key={l}><label className="label text-xs">{l}</label><input className="input text-sm" defaultValue={v}/></div>
-            ))}
-          </div>
-        </div>
-      </div>
+  const [content, setContent] = useState<SiteContent>(emptyContent);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [clientDraft, setClientDraft] = useState("");
+  const slide = useMemo(() => content.heroSlides[activeSlide] || content.heroSlides[0], [content.heroSlides, activeSlide]);
+  useEffect(() => { let cancelled = false; fetch("/api/admin/content", { cache:"no-store" }).then(r=>r.json()).then(data => { if (!cancelled && data?.content) setContent(data.content); }).catch(()=>setMessage("Could not load saved content.")).finally(()=>!cancelled && setLoading(false)); return () => { cancelled = true; }; }, []);
+  const update = <K extends keyof SiteContent>(section: K, value: SiteContent[K]) => setContent(c => ({ ...c, [section]: value }));
+  const updateSlide = (field: keyof HeroSlide, value: string) => setContent(c => ({ ...c, heroSlides: c.heroSlides.map((item, i) => i === activeSlide ? { ...item, [field]: value } : item) }));
+  const save = async () => { setSaving(true); setMessage(""); try { const res = await fetch("/api/admin/content", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ content }) }); const data = await res.json(); if (!res.ok || !data?.ok) throw new Error(data?.error || "Could not save content."); setContent(data.content); setMessage("Content saved. Refresh the public homepage to see the update."); } catch (e) { setMessage(e instanceof Error ? e.message : "Could not save content."); } finally { setSaving(false); } };
+  const reset = async () => { if (!confirm("Reset CMS content to the built-in default copy?")) return; setSaving(true); try { const res = await fetch("/api/admin/content", { method:"DELETE" }); const data = await res.json(); if (!res.ok || !data?.ok) throw new Error(data?.error || "Could not reset content."); setContent(data.content); setMessage("Content reset to defaults."); } catch(e) { setMessage(e instanceof Error ? e.message : "Could not reset content."); } finally { setSaving(false); } };
+  const addClient = () => { const name = clientDraft.trim(); if (!name) return; update("trust", { ...content.trust, clients:[...content.trust.clients, name].slice(0,12) }); setClientDraft(""); };
+  if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-6 text-sm text-gray-500">Loading content manager…</div>;
+  return <div>
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-6"><div><h1 className="font-display font-800 text-navy-900 text-2xl">Content Manager</h1><p className="text-sm text-gray-500 mt-1">Edit public homepage hero copy, CTA, footer contact details and client logos without changing code.</p></div><div className="flex gap-2"><button onClick={reset} disabled={saving} className="btn-outline">Reset defaults</button><button onClick={save} disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save Changes →"}</button></div></div>
+    {message && <div className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">{message}</div>}
+    <div className="grid xl:grid-cols-[1.1fr_.9fr] gap-5">
+      <div className="bg-white border border-gray-200 rounded-xl p-5"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-700 text-navy-900">Homepage Hero Slides</h2><div className="flex gap-1">{content.heroSlides.map((_, i)=><button key={i} onClick={()=>setActiveSlide(i)} className={`px-3 py-1.5 rounded text-xs font-display font-700 border ${activeSlide===i ? "bg-navy-950 text-white border-navy-950" : "bg-white text-gray-600 border-gray-200"}`}>Slide {i+1}</button>)}</div></div>{slide && <div className="space-y-3"><Field label="Eyebrow" value={slide.eyebrow} onChange={v=>updateSlide("eyebrow", v)} /><div className="grid md:grid-cols-2 gap-3"><Field label="Main heading" value={slide.heading} onChange={v=>updateSlide("heading", v)} /><Field label="Accent heading" value={slide.accent} onChange={v=>updateSlide("accent", v)} /></div><Field label="Body text" value={slide.body} textarea onChange={v=>updateSlide("body", v)} /><div className="grid md:grid-cols-2 gap-3"><Field label="Primary button label" value={slide.cta1Label} onChange={v=>updateSlide("cta1Label", v)} /><Field label="Primary button link" value={slide.cta1Href} onChange={v=>updateSlide("cta1Href", v)} /><Field label="Secondary button label" value={slide.cta2Label} onChange={v=>updateSlide("cta2Label", v)} /><Field label="Secondary button link" value={slide.cta2Href} onChange={v=>updateSlide("cta2Href", v)} /></div><div className="grid md:grid-cols-3 gap-3"><Field label="Stat 1 value" value={slide.stat1Value} onChange={v=>updateSlide("stat1Value", v)} /><Field label="Stat 2 value" value={slide.stat2Value} onChange={v=>updateSlide("stat2Value", v)} /><Field label="Stat 3 value" value={slide.stat3Value} onChange={v=>updateSlide("stat3Value", v)} /><Field label="Stat 1 label" value={slide.stat1Label} onChange={v=>updateSlide("stat1Label", v)} /><Field label="Stat 2 label" value={slide.stat2Label} onChange={v=>updateSlide("stat2Label", v)} /><Field label="Stat 3 label" value={slide.stat3Label} onChange={v=>updateSlide("stat3Label", v)} /></div></div>}</div>
+      <div className="space-y-5"><div className="bg-white border border-gray-200 rounded-xl p-5"><h2 className="font-display font-700 text-navy-900 mb-4">Live Hero Preview</h2>{slide && <div className="bg-navy-950 text-white rounded-xl p-5"><p className="font-mono text-accent text-[10px] tracking-[0.2em] uppercase mb-2">{slide.eyebrow}</p><h3 className="font-display font-800 text-2xl leading-tight">{slide.heading}</h3><h3 className="font-display font-800 text-2xl leading-tight text-accent mb-3">{slide.accent}</h3><p className="text-white/65 text-sm leading-relaxed mb-4">{slide.body}</p><div className="flex gap-2 text-xs mb-4"><span className="bg-accent text-navy-950 px-3 py-2 rounded font-700">{slide.cta1Label}</span><span className="border border-white/20 px-3 py-2 rounded">{slide.cta2Label}</span></div><div className="grid grid-cols-3 gap-2">{[[slide.stat1Value,slide.stat1Label],[slide.stat2Value,slide.stat2Label],[slide.stat3Value,slide.stat3Label]].map(([v,l])=><div key={l} className="bg-white/5 border border-white/10 rounded p-3 text-center"><div className="text-accent font-800">{v}</div><div className="text-white/45 text-[10px]">{l}</div></div>)}</div></div>}</div>
+      <div className="bg-white border border-gray-200 rounded-xl p-5"><h2 className="font-display font-700 text-navy-900 mb-4">Footer / Contact Information</h2><div className="space-y-3"><Field label="Footer description" textarea value={content.footer.description} onChange={v=>update("footer", { description:v })} /><Field label="Sales email" value={content.contact.salesEmail} onChange={v=>update("contact", { ...content.contact, salesEmail:v })} /><Field label="Repair email" value={content.contact.repairEmail} onChange={v=>update("contact", { ...content.contact, repairEmail:v })} /><Field label="Procurement email" value={content.contact.procurementEmail} onChange={v=>update("contact", { ...content.contact, procurementEmail:v })} /><Field label="Phone" value={content.contact.phone} onChange={v=>update("contact", { ...content.contact, phone:v })} /><Field label="WhatsApp number without +" value={content.contact.whatsapp} onChange={v=>update("contact", { ...content.contact, whatsapp:v })} /><Field label="Location" value={content.contact.location} onChange={v=>update("contact", { ...content.contact, location:v })} /></div></div></div>
     </div>
-  );
+    <div className="grid lg:grid-cols-2 gap-5 mt-5"><div className="bg-white border border-gray-200 rounded-xl p-5"><h2 className="font-display font-700 text-navy-900 mb-4">Homepage Final CTA</h2><div className="space-y-3"><Field label="Eyebrow" value={content.finalCta.eyebrow} onChange={v=>update("finalCta", { ...content.finalCta, eyebrow:v })} /><Field label="Heading" value={content.finalCta.heading} onChange={v=>update("finalCta", { ...content.finalCta, heading:v })} /><Field label="Body" textarea value={content.finalCta.body} onChange={v=>update("finalCta", { ...content.finalCta, body:v })} /><div className="grid md:grid-cols-2 gap-3"><Field label="Primary label" value={content.finalCta.primaryLabel} onChange={v=>update("finalCta", { ...content.finalCta, primaryLabel:v })} /><Field label="Primary link" value={content.finalCta.primaryHref} onChange={v=>update("finalCta", { ...content.finalCta, primaryHref:v })} /><Field label="Secondary label" value={content.finalCta.secondaryLabel} onChange={v=>update("finalCta", { ...content.finalCta, secondaryLabel:v })} /><Field label="Secondary link" value={content.finalCta.secondaryHref} onChange={v=>update("finalCta", { ...content.finalCta, secondaryHref:v })} /><Field label="Tertiary label" value={content.finalCta.tertiaryLabel} onChange={v=>update("finalCta", { ...content.finalCta, tertiaryLabel:v })} /><Field label="Tertiary link" value={content.finalCta.tertiaryHref} onChange={v=>update("finalCta", { ...content.finalCta, tertiaryHref:v })} /></div></div></div>
+    <div className="bg-white border border-gray-200 rounded-xl p-5"><h2 className="font-display font-700 text-navy-900 mb-4">Client Logos / Names</h2><div className="space-y-2 mb-4">{content.trust.clients.map((client, i)=><div key={`${client}-${i}`} className="flex items-center gap-2"><input className="input text-sm flex-1" value={client} onChange={e=>update("trust", { ...content.trust, clients: content.trust.clients.map((x, idx)=>idx===i ? e.target.value : x) })} /><button className="text-red-500 text-sm" onClick={()=>update("trust", { ...content.trust, clients: content.trust.clients.filter((_, idx)=>idx!==i) })}>Delete</button></div>)}</div><div className="flex gap-2 mb-5"><input className="input text-sm flex-1" placeholder="Add company name" value={clientDraft} onChange={e=>setClientDraft(e.target.value)} /><button className="btn-outline" onClick={addClient}>Add</button></div><div className="grid md:grid-cols-3 gap-3"><Field label="Trust eyebrow" value={content.trust.eyebrow} onChange={v=>update("trust", { ...content.trust, eyebrow:v })} /><Field label="Trust heading" value={content.trust.heading} onChange={v=>update("trust", { ...content.trust, heading:v })} /><Field label="Trust accent" value={content.trust.accent} onChange={v=>update("trust", { ...content.trust, accent:v })} /></div></div></div>
+  </div>;
 }

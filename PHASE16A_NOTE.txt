@@ -1,0 +1,15 @@
+Phase 16A — CMS homepage/content manager
+
+Adds a real database-backed admin content manager on /admin/content using the existing SiteSetting table.
+
+Included:
+- /api/admin/content GET/PUT/DELETE
+- src/lib/siteContent.ts default content and safe normalisation
+- homepage hero slides editable from admin
+- homepage trust heading/client names editable from admin
+- homepage final CTA editable from admin
+- footer description/contact details editable from admin
+- live hero preview in admin
+- reset to defaults option
+
+No Prisma schema change is required because the existing SiteSetting key/value table is used.

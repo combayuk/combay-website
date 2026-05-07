@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const SLIDES = [
+const DEFAULT_SLIDES = [
   {
     eyebrow: "10,000+ Items In Stock",
     heading: "Mission-critical equipment,",
@@ -37,8 +37,48 @@ const SLIDES = [
   },
 ];
 
-export default function HeroCarousel() {
+type HeroSlideInput = {
+  eyebrow: string;
+  heading: string;
+  accent: string;
+  body: string;
+  cta1Label: string;
+  cta1Href: string;
+  cta2Label: string;
+  cta2Href: string;
+  stat1Value: string;
+  stat1Label: string;
+  stat2Value: string;
+  stat2Label: string;
+  stat3Value: string;
+  stat3Label: string;
+};
+
+function buildSlides(contentSlides?: HeroSlideInput[]) {
+  if (!Array.isArray(contentSlides) || !contentSlides.length) return DEFAULT_SLIDES;
+  return DEFAULT_SLIDES.map((fallback, index) => {
+    const input = contentSlides[index];
+    if (!input) return fallback;
+    return {
+      ...fallback,
+      eyebrow: input.eyebrow || fallback.eyebrow,
+      heading: input.heading || fallback.heading,
+      accent: input.accent || fallback.accent,
+      body: input.body || fallback.body,
+      cta1: { label: input.cta1Label || fallback.cta1.label, href: input.cta1Href || fallback.cta1.href },
+      cta2: { label: input.cta2Label || fallback.cta2.label, href: input.cta2Href || fallback.cta2.href },
+      stats: [
+        { v: input.stat1Value || fallback.stats[0].v, l: input.stat1Label || fallback.stats[0].l },
+        { v: input.stat2Value || fallback.stats[1].v, l: input.stat2Label || fallback.stats[1].l },
+        { v: input.stat3Value || fallback.stats[2].v, l: input.stat3Label || fallback.stats[2].l },
+      ],
+    };
+  });
+}
+
+export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroSlideInput[] }) {
   const router = useRouter();
+  const SLIDES = buildSlides(contentSlides);
   const [active, setActive] = useState(0);
   const [fading, setFading] = useState(false);
   const [query,  setQuery]  = useState("");

@@ -9,6 +9,7 @@ import TrustSection from "@/components/home/TrustSection";
 import FaqPreview from "@/components/home/FaqPreview";
 import FinalCta from "@/components/home/FinalCta";
 import PublicPromotionStrip from "@/components/promotions/PublicPromotionStrip";
+import { getSiteContent } from "@/lib/siteContent";
 
 export const dynamic = "force-dynamic";
 
@@ -17,19 +18,20 @@ export const metadata: Metadata = {
   description: "Buy, repair or sell surplus industrial and commercial equipment. 10,000+ tested items, 30-day warranty, UK-based engineers. Serving every industry.",
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const content = await getSiteContent();
   return (
     <main>
       <TopBar />
       <Navigation />
-      <HeroCarousel />
+      <HeroCarousel slides={content.heroSlides} />
       <PublicPromotionStrip placement="home" />
       <IndustryStrip />
       <ServiceTabs />
-      <TrustSection />
+      <TrustSection content={content.trust} />
       <FaqPreview />
-      <FinalCta />
-      <Footer />
+      <FinalCta content={content.finalCta} />
+      <Footer content={{ description: content.footer.description, contact: content.contact }} />
     </main>
   );
 }

@@ -9,15 +9,16 @@ const reasons = [
   { icon:"⚙",  title:"Engineer Founded",  sub:"We understand operations.",   desc:"Combay was built by engineers who understand operational deadlocks. We help you get back up fast.",              stat:"24h",  sl:"average quote response time" },
 ];
 
-export default function TrustSection() {
+export default function TrustSection({ content }: { content?: { eyebrow?: string; heading?: string; accent?: string; clients?: string[] } }) {
+  const visibleClients = Array.isArray(content?.clients) && content.clients.length ? content.clients : clients;
   return (
     <>
       <section className="py-16 bg-navy-950 text-white">
         <div className="max-w-7xl mx-auto px-4">
           <div className="mb-10">
-            <p className="section-label">Why Businesses Use Combay</p>
+            <p className="section-label">{content?.eyebrow || "Why Businesses Use Combay"}</p>
             <h2 className="section-heading text-3xl lg:text-4xl text-white">
-              Built by engineers, <em className="not-italic text-accent">for engineers.</em>
+              {content?.heading || "Built by engineers,"} <em className="not-italic text-accent">{content?.accent || "for engineers."}</em>
             </h2>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -39,7 +40,7 @@ export default function TrustSection() {
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="font-mono text-xs tracking-widest uppercase text-gray-400 mb-5">Top Companies We Supply To</p>
           <div className="flex flex-wrap justify-center gap-3">
-            {clients.map(c => (
+            {visibleClients.map(c => (
               <div key={c} className="bg-gray-50 border border-gray-200 rounded px-5 py-2.5 font-display font-600 text-sm text-navy-900">{c}</div>
             ))}
           </div>
