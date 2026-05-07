@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Input, Textarea, Select } from "@/components/ui/FormField";
 
 const STEPS = [
-  { n:"01", t:"Submit Request",        d:"Fill our online form or email service@combay.co.uk. Tell us what you have and the fault — no obligation." },
+  { n:"01", t:"Submit Request",        d:"Fill our online form or email sales@combay.co.uk. Tell us what you have and the fault — no obligation." },
   { n:"02", t:"Quote Within 48 Hours", d:"We send a detailed repair quote. All-inclusive pricing, no hidden charges." },
   { n:"03", t:"Book & Make Payment",   d:"Confirm the repair and make payment. We then arrange collection at your convenience." },
   { n:"04", t:"Free Collection",       d:"Our courier collects from your site at zero cost. You get a tracking number immediately." },
@@ -174,7 +174,7 @@ export default function RepairContent() {
                 <p className="text-xs text-gray-400">No obligation · Free collection · 48h response</p>
               </div>
               <p className="text-xs text-gray-400">
-                Or email directly: <a href="mailto:service@combay.co.uk" className="text-accent hover:text-accent-dark font-600">service@combay.co.uk</a>
+                Or email directly: <a href="mailto:sales@combay.co.uk" className="text-accent hover:text-accent-dark font-600">sales@combay.co.uk</a>
               </p>
             </form>
           )}

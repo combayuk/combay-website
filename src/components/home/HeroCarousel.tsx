@@ -52,6 +52,8 @@ type HeroSlideInput = {
   stat2Label: string;
   stat3Value: string;
   stat3Label: string;
+  imageUrl?: string;
+  backgroundImageUrl?: string;
 };
 
 function buildSlides(contentSlides?: HeroSlideInput[]) {
@@ -72,6 +74,8 @@ function buildSlides(contentSlides?: HeroSlideInput[]) {
         { v: input.stat2Value || fallback.stats[1].v, l: input.stat2Label || fallback.stats[1].l },
         { v: input.stat3Value || fallback.stats[2].v, l: input.stat3Label || fallback.stats[2].l },
       ],
+      imageUrl: input.imageUrl || "",
+      backgroundImageUrl: input.backgroundImageUrl || "",
     };
   });
 }
@@ -104,7 +108,7 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
 
   return (
     <section className={`relative bg-gradient-to-br ${s.bg} text-white overflow-hidden transition-all duration-700`}
-      style={{minHeight:"520px"}}>
+      style={{minHeight:"520px", backgroundImage: s.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${s.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center"}}>
       {/* Grid texture */}
       <div className="absolute inset-0 opacity-[0.035]" style={{
         backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 47px,rgba(255,255,255,.4) 48px),repeating-linear-gradient(90deg,transparent,transparent 47px,rgba(255,255,255,.4) 48px)"
@@ -146,7 +150,7 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
 
           {/* Right stats panel */}
           <div className={`hidden lg:block transition-all duration-280 ${fading?"opacity-0 translate-x-2":"opacity-100 translate-x-0"}`}>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+            {s.imageUrl ? <div className="bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-sm"><img src={s.imageUrl} alt="Homepage hero" className="w-full h-80 object-cover rounded-xl"/></div> : <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
               <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-accent mb-4">
                 {["01 · Equipment","02 · Repair","03 · Recovery"][active]}
               </p>
@@ -203,7 +207,7 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
               <Link href={s.cta1.href} className="block text-center text-accent font-display font-600 text-xs mt-4 hover:text-accent-light transition-colors">
                 {s.cta1.label} →
               </Link>
-            </div>
+            </div>}
           </div>
         </div>
 

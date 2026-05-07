@@ -9,7 +9,7 @@ export default function TopBar() {
         <div className="flex items-center gap-5">
           <span className="flex items-center gap-1.5">
             <span className="text-accent font-display font-600">Sales:</span>
-            <a href="mailto:info@combay.co.uk" className="hover:text-accent transition-colors">
+            <a href="mailto:sales@combay.co.uk" className="hover:text-accent transition-colors">
               info@combay.co.uk
             </a>
           </span>

@@ -13,10 +13,10 @@ export default function TopBar() {
     <div className="bg-navy-950 text-white text-xs py-2 border-b border-white/5">
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-5 min-w-0">
-          <a href="mailto:info@combay.co.uk" className="flex items-center gap-1.5 hover:text-accent transition-colors min-w-0">
+          <a href="mailto:sales@combay.co.uk" className="flex items-center gap-1.5 hover:text-accent transition-colors min-w-0">
             <Mail size={11} className="text-accent flex-shrink-0" />
-            <span className="text-white/60 font-display font-600 hidden sm:inline">Sales:</span>
-            <span className="truncate">info@combay.co.uk</span>
+            <span className="text-white/60 font-display font-600 hidden sm:inline">Order’s/Quotes:</span>
+            <span className="truncate">sales@combay.co.uk</span>
           </a>
           <a href="tel:+447340383334" className="hidden sm:flex items-center gap-1.5 hover:text-accent transition-colors">
             <Phone size={11} className="text-steel" />

@@ -27,11 +27,11 @@ export default async function HomePage() {
       <HeroCarousel slides={content.heroSlides} />
       <PublicPromotionStrip placement="home" />
       <IndustryStrip />
-      <ServiceTabs />
+      <ServiceTabs content={content.pages.home} />
       <TrustSection content={content.trust} />
-      <FaqPreview />
+      <FaqPreview items={content.faq.previewItems} />
       <FinalCta content={content.finalCta} />
-      <Footer content={{ description: content.footer.description, contact: content.contact }} />
+      <Footer content={{ description: content.footer.description, backgroundImageUrl: content.footer.backgroundImageUrl, contact: content.contact }} />
     </main>
   );
 }

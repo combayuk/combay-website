@@ -1,208 +1,53 @@
 import { prisma, withDatabase } from "@/lib/db";
 
-export type SiteHeroSlide = {
-  eyebrow: string;
-  heading: string;
-  accent: string;
-  body: string;
-  cta1Label: string;
-  cta1Href: string;
-  cta2Label: string;
-  cta2Href: string;
-  stat1Value: string;
-  stat1Label: string;
-  stat2Value: string;
-  stat2Label: string;
-  stat3Value: string;
-  stat3Label: string;
-};
-
+export type SiteHeroSlide = { eyebrow:string; heading:string; accent:string; body:string; cta1Label:string; cta1Href:string; cta2Label:string; cta2Href:string; stat1Value:string; stat1Label:string; stat2Value:string; stat2Label:string; stat3Value:string; stat3Label:string; imageUrl:string; backgroundImageUrl:string };
+export type CmsBlock = { icon:string; title:string; subtitle:string; body:string; imageUrl:string; linkLabel:string; linkHref:string };
+export type CmsStep = { number:string; title:string; body:string; imageUrl:string };
+export type CmsPage = { eyebrow:string; heading:string; accent:string; body:string; backgroundImageUrl:string; heroImageUrl:string; primaryLabel:string; primaryHref:string; secondaryLabel:string; secondaryHref:string; sectionEyebrow:string; sectionHeading:string; sectionBody:string; blocks:CmsBlock[]; steps:CmsStep[]; ctaHeading:string; ctaBody:string; ctaPrimaryLabel:string; ctaPrimaryHref:string; ctaSecondaryLabel:string; ctaSecondaryHref:string };
+export type FaqItem = { question:string; answer:string };
+export type FaqGroup = { key:string; label:string; items:FaqItem[] };
 export type SiteContent = {
   heroSlides: SiteHeroSlide[];
-  trust: { eyebrow: string; heading: string; accent: string; clients: string[] };
-  finalCta: {
-    eyebrow: string;
-    heading: string;
-    body: string;
-    primaryLabel: string;
-    primaryHref: string;
-    secondaryLabel: string;
-    secondaryHref: string;
-    tertiaryLabel: string;
-    tertiaryHref: string;
-  };
-  contact: { salesEmail: string; repairEmail: string; procurementEmail: string; phone: string; location: string; whatsapp: string };
-  footer: { description: string };
+  trust: { eyebrow:string; heading:string; accent:string; clients:string[]; backgroundImageUrl:string };
+  finalCta: { eyebrow:string; heading:string; body:string; primaryLabel:string; primaryHref:string; secondaryLabel:string; secondaryHref:string; tertiaryLabel:string; tertiaryHref:string; backgroundImageUrl:string };
+  contact: { salesEmail:string; infoEmail:string; phone:string; location:string; whatsapp:string; businessHours:string; mapEmbedUrl:string };
+  footer: { description:string; backgroundImageUrl:string };
+  pages: { home:CmsPage; repair:CmsPage; assetRecovery:CmsPage; about:CmsPage; contact:CmsPage };
+  faq: { eyebrow:string; heading:string; body:string; backgroundImageUrl:string; groups:FaqGroup[]; previewItems:FaqItem[]; ctaHeading:string; ctaBody:string; ctaLabel:string; ctaHref:string };
 };
-
 export const SITE_CONTENT_KEY = "site.content.v1";
-
+const block=(icon:string,title:string,subtitle:string,body:string,linkLabel="",linkHref=""):CmsBlock=>({icon,title,subtitle,body,imageUrl:"",linkLabel,linkHref});
+const step=(number:string,title:string,body:string):CmsStep=>({number,title,body,imageUrl:""});
+const page=(p:Partial<CmsPage>):CmsPage=>({ eyebrow:"",heading:"",accent:"",body:"",backgroundImageUrl:"",heroImageUrl:"",primaryLabel:"",primaryHref:"#",secondaryLabel:"",secondaryHref:"#",sectionEyebrow:"",sectionHeading:"",sectionBody:"",blocks:[],steps:[],ctaHeading:"",ctaBody:"",ctaPrimaryLabel:"",ctaPrimaryHref:"#",ctaSecondaryLabel:"",ctaSecondaryHref:"#",...p });
 export const defaultSiteContent: SiteContent = {
-  heroSlides: [
-    {
-      eyebrow: "10,000+ Items In Stock",
-      heading: "Mission-critical equipment,",
-      accent: "ready to dispatch.",
-      body: "Tested, warranted industrial and commercial equipment. 30-day warranty. Trusted by UK businesses across every industry.",
-      cta1Label: "Browse Equipment",
-      cta1Href: "/shop",
-      cta2Label: "View Categories",
-      cta2Href: "/shop",
-      stat1Value: "10K+",
-      stat1Label: "In stock",
-      stat2Value: "30d",
-      stat2Label: "Warranty",
-      stat3Value: "48h",
-      stat3Label: "Dispatch",
-    },
-    {
-      eyebrow: "Repair Service",
-      heading: "40% lower than",
-      accent: "manufacturer quotes.",
-      body: "Free collection. 60-day checking warranty. Calibration, repair, PPM and installation — all covered by our engineers.",
-      cta1Label: "Book a Repair",
-      cta1Href: "/repair",
-      cta2Label: "How It Works",
-      cta2Href: "/repair#how",
-      stat1Value: "40%",
-      stat1Label: "Below OEM",
-      stat2Value: "60d",
-      stat2Label: "Warranty",
-      stat3Value: "Free",
-      stat3Label: "Collection",
-    },
-    {
-      eyebrow: "Asset Recovery",
-      heading: "Cash for your",
-      accent: "surplus equipment.",
-      body: "Fair value. Free collection from anywhere. Payment before goods leave your site. No stock list needed.",
-      cta1Label: "Get Cash for Goods",
-      cta1Href: "/asset-recovery",
-      cta2Label: "How It Works",
-      cta2Href: "/asset-recovery#how",
-      stat1Value: "Same Day",
-      stat1Label: "Collection",
-      stat2Value: "Cash",
-      stat2Label: "On-site",
-      stat3Value: "24h",
-      stat3Label: "Response",
-    },
+  heroSlides:[
+    {eyebrow:"10,000+ Items In Stock",heading:"Mission-critical equipment,",accent:"ready to dispatch.",body:"Tested, warranted industrial and commercial equipment. 30-day warranty. Trusted by UK businesses across every industry.",cta1Label:"Browse Equipment",cta1Href:"/shop",cta2Label:"View Categories",cta2Href:"/shop",stat1Value:"10K+",stat1Label:"In stock",stat2Value:"30d",stat2Label:"Warranty",stat3Value:"48h",stat3Label:"Dispatch",imageUrl:"",backgroundImageUrl:""},
+    {eyebrow:"Repair Service",heading:"40% lower than",accent:"manufacturer quotes.",body:"Free collection. 60-day checking warranty. Calibration, repair, PPM and installation — all covered by our engineers.",cta1Label:"Book a Repair",cta1Href:"/repair",cta2Label:"How It Works",cta2Href:"/repair#how",stat1Value:"40%",stat1Label:"Below OEM",stat2Value:"60d",stat2Label:"Warranty",stat3Value:"Free",stat3Label:"Collection",imageUrl:"",backgroundImageUrl:""},
+    {eyebrow:"Asset Recovery",heading:"Cash for your",accent:"surplus equipment.",body:"Fair value. Free collection from anywhere. Payment before goods leave your site. No stock list needed.",cta1Label:"Get Cash for Goods",cta1Href:"/asset-recovery",cta2Label:"How It Works",cta2Href:"/asset-recovery#how",stat1Value:"Same Day",stat1Label:"Collection",stat2Value:"Cash",stat2Label:"On-site",stat3Value:"24h",stat3Label:"Response",imageUrl:"",backgroundImageUrl:""}
   ],
-  trust: {
-    eyebrow: "Why Businesses Use Combay",
-    heading: "Built by engineers,",
-    accent: "for engineers.",
-    clients: ["Nutrein", "AG Solutions", "Fiber Logic", "Poole IT", "Transend (UK) Ltd"],
+  trust:{eyebrow:"Why Businesses Use Combay",heading:"Built by engineers,",accent:"for engineers.",clients:["Nutrein","AG Solutions","Fiber Logic","Poole IT","Transend (UK) Ltd"],backgroundImageUrl:""},
+  finalCta:{eyebrow:"Get Started Today",heading:"Ready to keep things running?",body:"Whether you need equipment, a repair, or want to recover cash on surplus stock — Combay responds within 24 hours.",primaryLabel:"Browse Stock →",primaryHref:"/shop",secondaryLabel:"Book a Repair",secondaryHref:"/repair",tertiaryLabel:"Sell Your Stock",tertiaryHref:"/asset-recovery",backgroundImageUrl:""},
+  contact:{salesEmail:"sales@combay.co.uk",infoEmail:"info@combay.co.uk",phone:"+44 7340 383334",location:"Chelmsford, Essex, UK",whatsapp:"447340383334",businessHours:"Monday–Friday: 9:00am–5:30pm GMT. Enquiries outside hours are answered the next working day.",mapEmbedUrl:"https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d79876.47!2d0.4736!3d51.7343!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47d8945a6c3d53ad%3A0xe3a6e3d6c09c82d9!2sChelmsford%2C%20UK!5e0!3m2!1sen!2suk!4v1"},
+  footer:{description:"UK-based industrial and commercial equipment specialists. Buy, repair, or sell surplus stock — backed by engineers.",backgroundImageUrl:""},
+  pages:{
+    home:page({eyebrow:"What We Do",heading:"Everything you need to keep",accent:"things running.",body:"Buy, repair and sell industrial equipment through one procurement-friendly platform.",sectionEyebrow:"Homepage services",sectionHeading:"Service tabs",sectionBody:"Edit the service cards shown on the homepage.",blocks:[block("🛒","Replace or Buy Equipment","Buy tested stock","Buy affordable and reliable equipment to keep operations running.","Browse Categories","/shop"),block("🔧","Repair Your Goods","Engineering support","Free collection, 60-day checking warranty and competitive repair quotes.","Book a Repair","/repair"),block("💷","Sell Your Unwanted Goods","Asset recovery","Recover cash on surplus stock with free collection and fair value.","Sell to Combay","/asset-recovery")]}),
+    repair:page({eyebrow:"Repair Services",heading:"Don't replace —",accent:"repair instead.",body:"Our engineers repair, calibrate, and service industrial and commercial equipment at up to 40% below manufacturer cost.",primaryLabel:"Get a Free Quote →",primaryHref:"#request",secondaryLabel:"Call Us",secondaryHref:"tel:+447340383334",sectionEyebrow:"Our Services",sectionHeading:"What we repair & service.",sectionBody:"Repair, calibration, installation and preventative maintenance for critical industrial equipment.",blocks:[block("🔧","Component Repair","Board-level diagnostics","Board-level repair of PLCs, drives, HMIs, test instruments and scientific equipment."),block("📐","Calibration","Traceable testing","Calibration to manufacturer specification with traceability certificates."),block("🔩","Installation & Setup","On-site commissioning","On-site commissioning of new or refurbished equipment."),block("🛡","Preventative Maintenance","Scheduled PPM","Scheduled visits to reduce breakdowns and extend asset life.")],steps:[step("01","Submit a request","Fill in the form or email sales@combay.co.uk."),step("02","Receive a quote","We send a detailed quote within 48 hours."),step("03","Free collection","Our courier collects from your site."),step("04","Repair and test","Every repaired unit is tested before return.")],ctaHeading:"Request a repair quote.",ctaBody:"No obligation. We respond within 48 hours. Collection is always free."}),
+    assetRecovery:page({eyebrow:"Asset Recovery Program",heading:"Recover cash on your",accent:"unwanted equipment.",body:"Fair value for surplus stock. Free collection. Payment before goods leave your site.",primaryLabel:"Start Recovery Request →",primaryHref:"#request",secondaryLabel:"Email sales",secondaryHref:"mailto:sales@combay.co.uk",sectionEyebrow:"How It Works",sectionHeading:"It's that simple.",sectionBody:"We collect from warehouses, offices, and homes — any location, any quantity.",blocks:[block("📦","Single items","One-off disposal","Send photos and we can quote for single machines, instruments or controls."),block("🏭","Warehouse clearances","Bulk stock","We review mixed stock, surplus parts and warehouse clearances."),block("🔁","Trade-in","Offset against purchases","Use asset value as credit against your next Combay purchase."),block("🚚","Free collection","UK collection","We collect from your site around your operation.")],steps:[step("01","Send a disposal request","Send a stock list or a few photos."),step("02","We visit & quote","We arrange a visit if needed and send a fair value quote."),step("03","We collect — free","Same day or as preferred."),step("04","You get paid","Payment before goods leave your site.")],ctaHeading:"Start your recovery request.",ctaBody:"Upload a stock list or send a few photos. We will respond quickly."}),
+    about:page({eyebrow:"About Combay",heading:"Engineer founded.",accent:"Operationally focused.",body:"Combay was built by engineers who understand what happens when critical equipment stops running.",primaryLabel:"Browse Stock →",primaryHref:"/shop",secondaryLabel:"Contact Us",secondaryHref:"/contact",sectionEyebrow:"Our Story",sectionHeading:"Built to solve a real problem.",sectionBody:"Combay offers a faster route to tested stock, repair and asset recovery.",blocks:[block("🛒","Buy Equipment","Tested stock","Source tested industrial and commercial equipment across all categories.","Browse Stock","/shop"),block("🔧","Repair Equipment","Engineering support","Cost-effective repair service with free collection and warranty.","Book a Repair","/repair"),block("💷","Sell Surplus Stock","Asset recovery","Recover cash on unwanted or surplus equipment.","Sell to Combay","/asset-recovery")],ctaHeading:"Ready to work with us?",ctaBody:"Browse our stock, book a repair, or sell your surplus equipment today.",ctaPrimaryLabel:"Browse Stock →",ctaPrimaryHref:"/shop",ctaSecondaryLabel:"Contact Us",ctaSecondaryHref:"/contact"}),
+    contact:page({eyebrow:"Contact",heading:"Get in",accent:"touch.",body:"We respond to all enquiries within 24 hours.",primaryLabel:"Send message",primaryHref:"#form",secondaryLabel:"Call Us",secondaryHref:"tel:+447340383334",sectionEyebrow:"Contact Combay",sectionHeading:"Send us a message",sectionBody:"For orders, quotes, general enquiries or media requests, use the correct contact route below.",ctaHeading:"Need a quote or support?",ctaBody:"Use the form and our team will respond within 24 hours."})
   },
-  finalCta: {
-    eyebrow: "Get Started Today",
-    heading: "Ready to keep things running?",
-    body: "Whether you need equipment, a repair, or want to recover cash on surplus stock — Combay responds within 24 hours.",
-    primaryLabel: "Browse Stock →",
-    primaryHref: "/shop",
-    secondaryLabel: "Book a Repair",
-    secondaryHref: "/repair",
-    tertiaryLabel: "Sell Your Stock",
-    tertiaryHref: "/asset-recovery",
-  },
-  contact: {
-    salesEmail: "info@combay.co.uk",
-    repairEmail: "service@combay.co.uk",
-    procurementEmail: "procurement@combay.co.uk",
-    phone: "+44 7340 383334",
-    location: "Chelmsford, Essex, UK",
-    whatsapp: "447340383334",
-  },
-  footer: {
-    description: "UK-based industrial and commercial equipment specialists. Buy, repair, or sell surplus stock — backed by engineers.",
-  },
+  faq:{eyebrow:"Support",heading:"Frequently Asked Questions",body:"Can't find what you need? Email info@combay.co.uk and we'll respond within 24 hours.",backgroundImageUrl:"",groups:[{key:"sales",label:"Sales",items:[{question:"What is your delivery time for UK orders?",answer:"UK deliveries typically take 1–3 working days."},{question:"Do all items come with a warranty?",answer:"Every item sold carries a 30-day return to base warranty unless sold for parts."}]},{key:"repairs",label:"Repairs",items:[{question:"Do repaired items have warranty?",answer:"Repaired items carry a 60-day checking warranty."}]}],previewItems:[{question:"What is your delivery time for UK orders?",answer:"UK deliveries typically take 1–3 working days."},{question:"Do all items come with a warranty?",answer:"Every item sold carries a 30-day return to base warranty unless sold for parts."}],ctaHeading:"Still have questions?",ctaBody:"Our team responds within 24 hours.",ctaLabel:"Contact Us →",ctaHref:"/contact"}
 };
-
-function asText(value: unknown, fallback: string) {
-  const text = typeof value === "string" ? value.trim() : "";
-  return text || fallback;
-}
-
-function safeHref(value: unknown, fallback: string) {
-  const text = asText(value, fallback);
-  if (text.startsWith("/") || text.startsWith("https://") || text.startsWith("http://") || text.startsWith("mailto:") || text.startsWith("tel:")) return text;
-  return fallback;
-}
-
-function mergeSlide(input: any, fallback: SiteHeroSlide): SiteHeroSlide {
-  return {
-    eyebrow: asText(input?.eyebrow, fallback.eyebrow),
-    heading: asText(input?.heading, fallback.heading),
-    accent: asText(input?.accent, fallback.accent),
-    body: asText(input?.body, fallback.body),
-    cta1Label: asText(input?.cta1Label, fallback.cta1Label),
-    cta1Href: safeHref(input?.cta1Href, fallback.cta1Href),
-    cta2Label: asText(input?.cta2Label, fallback.cta2Label),
-    cta2Href: safeHref(input?.cta2Href, fallback.cta2Href),
-    stat1Value: asText(input?.stat1Value, fallback.stat1Value),
-    stat1Label: asText(input?.stat1Label, fallback.stat1Label),
-    stat2Value: asText(input?.stat2Value, fallback.stat2Value),
-    stat2Label: asText(input?.stat2Label, fallback.stat2Label),
-    stat3Value: asText(input?.stat3Value, fallback.stat3Value),
-    stat3Label: asText(input?.stat3Label, fallback.stat3Label),
-  };
-}
-
-export function normaliseSiteContent(input: unknown): SiteContent {
-  const raw = typeof input === "object" && input ? (input as any) : {};
-  const rawSlides = Array.isArray(raw.heroSlides) ? raw.heroSlides : [];
-  return {
-    heroSlides: defaultSiteContent.heroSlides.map((slide, index) => mergeSlide(rawSlides[index], slide)),
-    trust: {
-      eyebrow: asText(raw.trust?.eyebrow, defaultSiteContent.trust.eyebrow),
-      heading: asText(raw.trust?.heading, defaultSiteContent.trust.heading),
-      accent: asText(raw.trust?.accent, defaultSiteContent.trust.accent),
-      clients: Array.isArray(raw.trust?.clients)
-        ? raw.trust.clients.map((item: unknown) => String(item || "").trim()).filter(Boolean).slice(0, 12)
-        : defaultSiteContent.trust.clients,
-    },
-    finalCta: {
-      eyebrow: asText(raw.finalCta?.eyebrow, defaultSiteContent.finalCta.eyebrow),
-      heading: asText(raw.finalCta?.heading, defaultSiteContent.finalCta.heading),
-      body: asText(raw.finalCta?.body, defaultSiteContent.finalCta.body),
-      primaryLabel: asText(raw.finalCta?.primaryLabel, defaultSiteContent.finalCta.primaryLabel),
-      primaryHref: safeHref(raw.finalCta?.primaryHref, defaultSiteContent.finalCta.primaryHref),
-      secondaryLabel: asText(raw.finalCta?.secondaryLabel, defaultSiteContent.finalCta.secondaryLabel),
-      secondaryHref: safeHref(raw.finalCta?.secondaryHref, defaultSiteContent.finalCta.secondaryHref),
-      tertiaryLabel: asText(raw.finalCta?.tertiaryLabel, defaultSiteContent.finalCta.tertiaryLabel),
-      tertiaryHref: safeHref(raw.finalCta?.tertiaryHref, defaultSiteContent.finalCta.tertiaryHref),
-    },
-    contact: {
-      salesEmail: asText(raw.contact?.salesEmail, defaultSiteContent.contact.salesEmail),
-      repairEmail: asText(raw.contact?.repairEmail, defaultSiteContent.contact.repairEmail),
-      procurementEmail: asText(raw.contact?.procurementEmail, defaultSiteContent.contact.procurementEmail),
-      phone: asText(raw.contact?.phone, defaultSiteContent.contact.phone),
-      location: asText(raw.contact?.location, defaultSiteContent.contact.location),
-      whatsapp: asText(raw.contact?.whatsapp, defaultSiteContent.contact.whatsapp),
-    },
-    footer: { description: asText(raw.footer?.description, defaultSiteContent.footer.description) },
-  };
-}
-
-export async function getSiteContent(): Promise<SiteContent> {
-  const dbResult = await withDatabase(async () => {
-    const row = await prisma.siteSetting.findUnique({ where: { key: SITE_CONTENT_KEY } });
-    if (!row?.value) return defaultSiteContent;
-    try {
-      return normaliseSiteContent(JSON.parse(row.value));
-    } catch {
-      return defaultSiteContent;
-    }
-  });
-  return dbResult.ok ? dbResult.data : defaultSiteContent;
-}
-
-export async function saveSiteContent(content: SiteContent): Promise<SiteContent> {
-  const safe = normaliseSiteContent(content);
-  await prisma.siteSetting.upsert({
-    where: { key: SITE_CONTENT_KEY },
-    update: { value: JSON.stringify(safe) },
-    create: { key: SITE_CONTENT_KEY, value: JSON.stringify(safe) },
-  });
-  return safe;
-}
+function text(v:unknown,f:string){return typeof v==="string"&&v.trim()?v.trim():f}
+function opt(v:unknown){return typeof v==="string"?v.trim():""}
+function href(v:unknown,f:string){const t=text(v,f);return t.startsWith("/")||t.startsWith("#")||t.startsWith("mailto:")||t.startsWith("tel:")||t.startsWith("http")?t:f}
+function mergeBlock(i:any,f:CmsBlock):CmsBlock{return{icon:text(i?.icon,f.icon),title:text(i?.title,f.title),subtitle:text(i?.subtitle,f.subtitle),body:text(i?.body,f.body),imageUrl:opt(i?.imageUrl)||f.imageUrl,linkLabel:opt(i?.linkLabel)||f.linkLabel,linkHref:href(i?.linkHref,f.linkHref||"#")}}
+function mergeStep(i:any,f:CmsStep):CmsStep{return{number:text(i?.number,f.number),title:text(i?.title,f.title),body:text(i?.body,f.body),imageUrl:opt(i?.imageUrl)||f.imageUrl}}
+function arr<T>(raw:any,f:T[],fn:(i:any,f:T)=>T,max=20){const input=Array.isArray(raw)?raw:[];const len=Math.max(input.length,f.length);return Array.from({length:len}).map((_,i)=>fn(input[i],f[i]||input[i])).filter(Boolean).slice(0,max)}
+function mergePage(i:any,f:CmsPage):CmsPage{return{eyebrow:text(i?.eyebrow,f.eyebrow),heading:text(i?.heading,f.heading),accent:text(i?.accent,f.accent),body:text(i?.body,f.body),backgroundImageUrl:opt(i?.backgroundImageUrl)||f.backgroundImageUrl,heroImageUrl:opt(i?.heroImageUrl)||f.heroImageUrl,primaryLabel:text(i?.primaryLabel,f.primaryLabel),primaryHref:href(i?.primaryHref,f.primaryHref),secondaryLabel:text(i?.secondaryLabel,f.secondaryLabel),secondaryHref:href(i?.secondaryHref,f.secondaryHref),sectionEyebrow:text(i?.sectionEyebrow,f.sectionEyebrow),sectionHeading:text(i?.sectionHeading,f.sectionHeading),sectionBody:text(i?.sectionBody,f.sectionBody),blocks:arr(i?.blocks,f.blocks,mergeBlock,20),steps:arr(i?.steps,f.steps,mergeStep,20),ctaHeading:text(i?.ctaHeading,f.ctaHeading),ctaBody:text(i?.ctaBody,f.ctaBody),ctaPrimaryLabel:text(i?.ctaPrimaryLabel,f.ctaPrimaryLabel),ctaPrimaryHref:href(i?.ctaPrimaryHref,f.ctaPrimaryHref),ctaSecondaryLabel:text(i?.ctaSecondaryLabel,f.ctaSecondaryLabel),ctaSecondaryHref:href(i?.ctaSecondaryHref,f.ctaSecondaryHref)}}
+function mergeSlide(i:any,f:SiteHeroSlide):SiteHeroSlide{return{...f,eyebrow:text(i?.eyebrow,f.eyebrow),heading:text(i?.heading,f.heading),accent:text(i?.accent,f.accent),body:text(i?.body,f.body),cta1Label:text(i?.cta1Label,f.cta1Label),cta1Href:href(i?.cta1Href,f.cta1Href),cta2Label:text(i?.cta2Label,f.cta2Label),cta2Href:href(i?.cta2Href,f.cta2Href),stat1Value:text(i?.stat1Value,f.stat1Value),stat1Label:text(i?.stat1Label,f.stat1Label),stat2Value:text(i?.stat2Value,f.stat2Value),stat2Label:text(i?.stat2Label,f.stat2Label),stat3Value:text(i?.stat3Value,f.stat3Value),stat3Label:text(i?.stat3Label,f.stat3Label),imageUrl:opt(i?.imageUrl)||f.imageUrl,backgroundImageUrl:opt(i?.backgroundImageUrl)||f.backgroundImageUrl}}
+function mergeFaqItem(i:any,f:FaqItem):FaqItem{return{question:text(i?.question,f.question),answer:text(i?.answer,f.answer)}}
+function mergeFaqGroup(i:any,f:FaqGroup):FaqGroup{return{key:text(i?.key,f.key).toLowerCase().replace(/[^a-z0-9-]/g,"-")||f.key,label:text(i?.label,f.label),items:arr(i?.items,f.items,mergeFaqItem,40)}}
+export function normaliseSiteContent(input: unknown): SiteContent { const raw:any=typeof input==="object"&&input?input:{}; const f=defaultSiteContent; return { heroSlides:f.heroSlides.map((x,i)=>mergeSlide(raw.heroSlides?.[i],x)), trust:{eyebrow:text(raw.trust?.eyebrow,f.trust.eyebrow),heading:text(raw.trust?.heading,f.trust.heading),accent:text(raw.trust?.accent,f.trust.accent),clients:Array.isArray(raw.trust?.clients)?raw.trust.clients.map((x:any)=>String(x||"").trim()).filter(Boolean):f.trust.clients,backgroundImageUrl:opt(raw.trust?.backgroundImageUrl)||f.trust.backgroundImageUrl}, finalCta:{eyebrow:text(raw.finalCta?.eyebrow,f.finalCta.eyebrow),heading:text(raw.finalCta?.heading,f.finalCta.heading),body:text(raw.finalCta?.body,f.finalCta.body),primaryLabel:text(raw.finalCta?.primaryLabel,f.finalCta.primaryLabel),primaryHref:href(raw.finalCta?.primaryHref,f.finalCta.primaryHref),secondaryLabel:text(raw.finalCta?.secondaryLabel,f.finalCta.secondaryLabel),secondaryHref:href(raw.finalCta?.secondaryHref,f.finalCta.secondaryHref),tertiaryLabel:text(raw.finalCta?.tertiaryLabel,f.finalCta.tertiaryLabel),tertiaryHref:href(raw.finalCta?.tertiaryHref,f.finalCta.tertiaryHref),backgroundImageUrl:opt(raw.finalCta?.backgroundImageUrl)||f.finalCta.backgroundImageUrl}, contact:{salesEmail:text(raw.contact?.salesEmail,f.contact.salesEmail),infoEmail:text(raw.contact?.infoEmail,f.contact.infoEmail),phone:text(raw.contact?.phone,f.contact.phone),location:text(raw.contact?.location,f.contact.location),whatsapp:text(raw.contact?.whatsapp,f.contact.whatsapp),businessHours:text(raw.contact?.businessHours,f.contact.businessHours),mapEmbedUrl:text(raw.contact?.mapEmbedUrl,f.contact.mapEmbedUrl)}, footer:{description:text(raw.footer?.description,f.footer.description),backgroundImageUrl:opt(raw.footer?.backgroundImageUrl)||f.footer.backgroundImageUrl}, pages:{home:mergePage(raw.pages?.home,f.pages.home),repair:mergePage(raw.pages?.repair,f.pages.repair),assetRecovery:mergePage(raw.pages?.assetRecovery,f.pages.assetRecovery),about:mergePage(raw.pages?.about,f.pages.about),contact:mergePage(raw.pages?.contact,f.pages.contact)}, faq:{eyebrow:text(raw.faq?.eyebrow,f.faq.eyebrow),heading:text(raw.faq?.heading,f.faq.heading),body:text(raw.faq?.body,f.faq.body),backgroundImageUrl:opt(raw.faq?.backgroundImageUrl)||f.faq.backgroundImageUrl,groups:arr(raw.faq?.groups,f.faq.groups,mergeFaqGroup,12),previewItems:arr(raw.faq?.previewItems,f.faq.previewItems,mergeFaqItem,10),ctaHeading:text(raw.faq?.ctaHeading,f.faq.ctaHeading),ctaBody:text(raw.faq?.ctaBody,f.faq.ctaBody),ctaLabel:text(raw.faq?.ctaLabel,f.faq.ctaLabel),ctaHref:href(raw.faq?.ctaHref,f.faq.ctaHref)} } }
+export async function getSiteContent(): Promise<SiteContent> { const dbResult=await withDatabase(async()=>{ const row=await prisma.siteSetting.findUnique({where:{key:SITE_CONTENT_KEY}}); if(!row?.value) return defaultSiteContent; try{return normaliseSiteContent(JSON.parse(row.value))}catch{return defaultSiteContent} }); return dbResult.ok?dbResult.data:defaultSiteContent }
+export async function saveSiteContent(content: SiteContent): Promise<SiteContent> { const safe=normaliseSiteContent(content); await prisma.siteSetting.upsert({where:{key:SITE_CONTENT_KEY},update:{value:JSON.stringify(safe)},create:{key:SITE_CONTENT_KEY,value:JSON.stringify(safe)}}); return safe }

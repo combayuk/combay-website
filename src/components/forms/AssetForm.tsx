@@ -52,7 +52,7 @@ export default function AssetForm() {
       <div>
         <label className="label">Describe Your Stock *</label>
         <textarea name="description" required className="textarea" rows={4}
-          placeholder="Tell us what you have — brand, model, quantity, condition. A rough description is fine.\n\nYou can also email photos to procurement@combay.co.uk"/>
+          placeholder="Tell us what you have — brand, model, quantity, condition. A rough description is fine.\n\nYou can also email photos to sales@combay.co.uk"/>
       </div>
       <div>
         <label className="label">Approximate Quantity</label>
@@ -88,7 +88,7 @@ export default function AssetForm() {
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="bg-accent/10 border border-accent/20 rounded-xl px-4 py-3 text-xs text-navy-950">
-        💡 No stock list? No problem — send a few photos to <strong>procurement@combay.co.uk</strong> and we&apos;ll assess for free.
+        💡 No stock list? No problem — send a few photos to <strong>sales@combay.co.uk</strong> and we&apos;ll assess for free.
       </div>
 
       <button type="submit" disabled={loading} className="btn-primary w-full py-3">

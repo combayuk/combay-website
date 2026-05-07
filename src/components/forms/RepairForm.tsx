@@ -82,7 +82,7 @@ export default function RepairForm() {
         <button type="submit" disabled={loading} className="btn-primary">
           {loading ? "Sending..." : "Send Quote Request →"}
         </button>
-        <p className="text-xs text-gray-400 hidden sm:block">Or email <a href="mailto:service@combay.co.uk" className="text-accent">service@combay.co.uk</a></p>
+        <p className="text-xs text-gray-400 hidden sm:block">Or email <a href="mailto:sales@combay.co.uk" className="text-accent">sales@combay.co.uk</a></p>
       </div>
     </form>
   );

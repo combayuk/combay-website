@@ -10,11 +10,12 @@ type FinalCtaContent = {
   secondaryHref?: string;
   tertiaryLabel?: string;
   tertiaryHref?: string;
+  backgroundImageUrl?: string;
 };
 
 export default function FinalCta({ content }: { content?: FinalCtaContent }) {
   return (
-    <section className="py-16 bg-accent">
+    <section className="py-16 bg-accent" style={{ backgroundImage: content?.backgroundImageUrl ? `linear-gradient(rgba(238,179,44,.88),rgba(238,179,44,.88)), url(${content.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
       <div className="max-w-7xl mx-auto px-4 text-center">
         <p className="font-mono text-xs tracking-widest uppercase text-navy-900/50 mb-2">{content?.eyebrow || "Get Started Today"}</p>
         <h2 className="font-display font-900 text-3xl lg:text-4xl text-navy-900 mb-4">{content?.heading || "Ready to keep things running?"}</h2>
