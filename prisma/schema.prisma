@@ -78,8 +78,19 @@ model MarketingPrefs {
   userId              String   @unique
   newStockEmails      Boolean  @default(true)
   promotionEmails     Boolean  @default(true)
+  monthlyEmails       Boolean  @default(true)
+  seasonalEmails      Boolean  @default(true)
+  orderFollowupEmails Boolean  @default(true)
+  allMarketingEmails  Boolean  @default(true)
   categories          String[] // category slugs
+  unsubscribeToken    String   @unique @default(cuid())
+  unsubscribedAt      DateTime?
+  consentSource       String?
+  consentUpdatedAt    DateTime @default(now())
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([unsubscribeToken])
+  @@index([unsubscribedAt])
 }
 
 enum Role {
@@ -706,15 +717,21 @@ model EmailAutomationLog {
   recipientEmail String
   userId         String?
   orderId        String?
+  subject        String?
+  preview        String?  @db.Text
+  category       String?
   status         String   @default("PENDING")
   message        String?  @db.Text
   providerId     String?
   sentAt         DateTime?
+  skippedReason  String?  @db.Text
   createdAt      DateTime @default(now())
 
   @@index([trigger])
   @@index([recipientEmail])
   @@index([orderId])
+  @@index([status])
+  @@index([category])
   @@index([createdAt])
 }
 

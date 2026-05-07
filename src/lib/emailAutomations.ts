@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { emailButton, escapeHtml, htmlShell, sendEmail, siteUrl, type EmailSendResult } from "@/lib/mailer";
+import { automationConsentCategory, canSendAutomationToUser, ensureMarketingPrefs, isMarketingAutomation, unsubscribeUrl } from "@/lib/marketingConsent";
 
 export const AUTOMATION_TRIGGERS = [
   "NEW_SIGNUP", "FIRST_ORDER_COMPLETED", "ORDER_COMPLETED",
@@ -46,12 +47,59 @@ function recipientFor(_trigger: AutomationTrigger, context: AutomationContext) {
 function tokenMap(trigger: AutomationTrigger, context: AutomationContext) { const recipient = recipientFor(trigger, context); const order = context.order; const date = context.scheduledAt || new Date(); return { name: recipient.name || "Customer", email: recipient.email, company: recipient.company || "", orderNumber: recipient.orderNumber || "", orderTotal: recipient.orderTotal || "", portalUrl: `${siteUrl().replace(/\/$/, "")}/portal`, orderUrl: `${siteUrl().replace(/\/$/, "")}/portal/orders`, shopUrl: `${siteUrl().replace(/\/$/, "")}/shop`, contactUrl: `${siteUrl().replace(/\/$/, "")}/contact`, promotionCode: order?.promotionCode || "", month: MONTH_NAMES[trigger] || date.toLocaleString("en-GB", { month: "long" }), year: String(date.getFullYear()) }; }
 export function renderTemplate(template: string, trigger: AutomationTrigger, context: AutomationContext) { const tokens = tokenMap(trigger, context); return String(template || "").replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => String((tokens as any)[key] ?? "")); }
 function bodyHtml(body: string) { if (hasHtmlMarkup(body)) return sanitizeLimitedHtml(body).replace(/\n{2,}/g, "</p><p>").replace(/(?<!>)\n/g, "<br/>"); return body.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean).map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br/>")}</p>`).join(""); }
+function previewText(value: string) { return String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 260); }
+function unsubscribeFooter(trigger: AutomationTrigger, context: AutomationContext) { const user = context.user; if (!isMarketingAutomation(trigger) || !user?.id) return ""; const prefs = user.marketingPrefs || null; const token = prefs?.unsubscribeToken; if (!token) return ""; const url = unsubscribeUrl(token, trigger); return `<div style="margin-top:26px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.6;color:#64748b;">You are receiving this because your Combay marketing preferences allow ${escapeHtml(automationConsentCategory(trigger))} emails. <a href="${escapeHtml(url)}" style="color:#475569;text-decoration:underline;">Unsubscribe or manage preferences</a>.</div>`; }
 async function getRulesForTrigger(trigger: AutomationTrigger) { try { const rules = await prisma.emailAutomationRule.findMany({ where: { trigger, isActive: true }, orderBy: [{ createdAt: "asc" }] }); if (rules.length) return rules; } catch (error) { console.error("[automation-rules-load-failed]", error); } if (trigger === "ORDER_COMPLETED") return []; return [{ id: null, ...defaultAutomationRule(trigger) }]; }
 function startOfDay(date: Date) { return new Date(date.getFullYear(), date.getMonth(), date.getDate()); }
 async function shouldSkipDuplicate(ruleId: string | null, trigger: AutomationTrigger, email: string, context: AutomationContext) { const orderId = context.order?.id || null; const where: any = { trigger, recipientEmail: email, status: "SENT" }; if (ruleId) where.ruleId = ruleId; if (orderId) where.orderId = orderId; const scheduled = Boolean(context.scheduledAt) || trigger.startsWith("MONTHLY_") || ["NEW_YEAR", "SUMMER", "EASTER", "CHRISTMAS", "BOXING_DAY"].includes(trigger); if (scheduled) { const day = startOfDay(context.scheduledAt || new Date()); const nextDay = new Date(day.getTime()); nextDay.setDate(day.getDate() + 1); where.createdAt = { gte: day, lt: nextDay }; } else if (trigger !== "ORDER_COMPLETED") { /* signup and first-order remain once-per-rule/customer */ } const existing = await prisma.emailAutomationLog.findFirst({ where, select: { id: true } }).catch(() => null); return Boolean(existing); }
-export async function runEmailAutomations(trigger: AutomationTrigger, context: AutomationContext): Promise<EmailSendResult[]> { const recipient = recipientFor(trigger, context); if (!recipient.email) return []; const rules = await getRulesForTrigger(trigger); const results: EmailSendResult[] = []; for (const rule of rules as any[]) { const ruleId = rule.id || null; if (await shouldSkipDuplicate(ruleId, trigger, recipient.email, context)) continue; const subject = renderTemplate(rule.subject, trigger, context); const renderedBody = renderTemplate(rule.body, trigger, context); const ctaUrlRaw = renderTemplate(rule.ctaUrl || "", trigger, context).trim(); const ctaUrl = ctaUrlRaw ? (ctaUrlRaw.startsWith("http") ? ctaUrlRaw : `${siteUrl().replace(/\/$/, "")}${ctaUrlRaw.startsWith("/") ? "" : "/"}${ctaUrlRaw}`) : ""; const cta = ctaUrl ? emailButton(ctaUrl, rule.ctaLabel || "View details") : ""; const html = htmlShell(subject, `${bodyHtml(renderedBody)}${cta}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>`, subject); const log = await prisma.emailAutomationLog.create({ data: { ruleId, trigger, recipientEmail: recipient.email, userId: context.user?.id || context.order?.userId || null, orderId: context.order?.id || null, status: "PENDING" } }).catch(() => null); const result = await sendEmail({ to: recipient.email, subject, html, headers: { "X-Combay-Automation": trigger } }); results.push(result); if (log) await prisma.emailAutomationLog.update({ where: { id: log.id }, data: { status: result.sent ? "SENT" : "FAILED", message: result.error || result.message, providerId: result.id || null, sentAt: result.sent ? new Date() : null } }).catch(() => null); } return results; }
+export async function runEmailAutomations(trigger: AutomationTrigger, context: AutomationContext): Promise<EmailSendResult[]> {
+  const recipient = recipientFor(trigger, context);
+  if (!recipient.email) return [];
+  if (context.user?.id && !context.user.marketingPrefs) {
+    context.user.marketingPrefs = await ensureMarketingPrefs(context.user.id, "automation-send").catch(() => null);
+  }
+  const consent = await canSendAutomationToUser(trigger, context.user);
+  if (!consent.ok) {
+    await prisma.emailAutomationLog.create({ data: { trigger, recipientEmail: recipient.email, userId: context.user?.id || context.order?.userId || null, orderId: context.order?.id || null, category: automationConsentCategory(trigger), status: "SKIPPED", message: consent.reason, skippedReason: consent.reason } }).catch(() => null);
+    return [];
+  }
+  const rules = await getRulesForTrigger(trigger);
+  const results: EmailSendResult[] = [];
+  for (const rule of rules as any[]) {
+    const ruleId = rule.id || null;
+    if (await shouldSkipDuplicate(ruleId, trigger, recipient.email, context)) continue;
+    const subject = renderTemplate(rule.subject, trigger, context);
+    const renderedBody = renderTemplate(rule.body, trigger, context);
+    const ctaUrlRaw = renderTemplate(rule.ctaUrl || "", trigger, context).trim();
+    const ctaUrl = ctaUrlRaw ? (ctaUrlRaw.startsWith("http") ? ctaUrlRaw : `${siteUrl().replace(/\/$/, "")}${ctaUrlRaw.startsWith("/") ? "" : "/"}${ctaUrlRaw}`) : "";
+    const cta = ctaUrl ? emailButton(ctaUrl, rule.ctaLabel || "View details") : "";
+    const html = htmlShell(subject, `${bodyHtml(renderedBody)}${cta}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>${unsubscribeFooter(trigger, context)}`, subject);
+    const headers: Record<string, string> = { "X-Combay-Automation": trigger, "X-Combay-Email-Category": automationConsentCategory(trigger) };
+    const token = context.user?.marketingPrefs?.unsubscribeToken;
+    if (token && isMarketingAutomation(trigger)) headers["List-Unsubscribe"] = `<${unsubscribeUrl(token, trigger)}>`;
+    const log = await prisma.emailAutomationLog.create({ data: { ruleId, trigger, recipientEmail: recipient.email, userId: context.user?.id || context.order?.userId || null, orderId: context.order?.id || null, subject, preview: previewText(renderedBody), category: automationConsentCategory(trigger), status: "PENDING" } }).catch(() => null);
+    const result = await sendEmail({ to: recipient.email, subject, html, headers });
+    results.push(result);
+    if (log) await prisma.emailAutomationLog.update({ where: { id: log.id }, data: { status: result.sent ? "SENT" : "FAILED", message: result.error || result.message, providerId: result.id || null, sentAt: result.sent ? new Date() : null } }).catch(() => null);
+  }
+  return results;
+}
 function firstWeekdayOfMonth(year: number, monthIndex: number, weekday: number) { const date = new Date(year, monthIndex, 1); const diff = (weekday - date.getDay() + 7) % 7; date.setDate(1 + diff); return date; }
 function easterSunday(year: number) { const a = year % 19; const b = Math.floor(year / 100); const c = year % 100; const d = Math.floor(b / 4); const e = b % 4; const f = Math.floor((b + 8) / 25); const g = Math.floor((b - f + 1) / 3); const h = (19 * a + b - d - g + 15) % 30; const i = Math.floor(c / 4); const k = c % 4; const l = (32 + 2 * e + 2 * i - h - k) % 7; const m = Math.floor((a + 11 * h + 22 * l) / 451); const month = Math.floor((h + l - 7 * m + 114) / 31) - 1; const day = ((h + l - 7 * m + 114) % 31) + 1; return new Date(year, month, day); }
 function sameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 export function dueAutomationTriggers(today = new Date()): AutomationTrigger[] { const due: AutomationTrigger[] = []; const year = today.getFullYear(); const monthlyTriggers = Object.keys(MONTH_NAMES) as AutomationTrigger[]; monthlyTriggers.forEach((trigger, index) => { if (sameDay(today, firstWeekdayOfMonth(year, index, 2))) due.push(trigger); }); if (today.getMonth() === 11 && today.getDate() === 31) due.push("NEW_YEAR"); if ((today.getMonth() === 5 && sameDay(today, firstWeekdayOfMonth(year, 5, 5))) || (today.getMonth() === 6 && sameDay(today, firstWeekdayOfMonth(year, 6, 5)))) due.push("SUMMER"); const easter = easterSunday(year); const easterSend = new Date(easter.getTime()); easterSend.setDate(easter.getDate() - 3); if (sameDay(today, easterSend)) due.push("EASTER"); if (today.getMonth() === 11 && (today.getDate() === 20 || today.getDate() === 25)) due.push("CHRISTMAS"); if (today.getMonth() === 11 && (today.getDate() === 20 || today.getDate() === 26)) due.push("BOXING_DAY"); return due; }
-export async function runScheduledEmailAutomations(today = new Date()) { const triggers = dueAutomationTriggers(today); if (!triggers.length) return { triggers, checkedCustomers: 0, sent: 0, failed: 0 }; const users = await prisma.user.findMany({ where: { role: "CUSTOMER", email: { not: "" }, OR: [{ emailVerified: { not: null } }, { requiresEmailVerification: false }] }, take: 5000, include: { marketingPrefs: true } }); let sent = 0; let failed = 0; for (const trigger of triggers) { for (const user of users) { if (user.marketingPrefs && user.marketingPrefs.promotionEmails === false) continue; const results = await runEmailAutomations(trigger, { user, scheduledAt: today }); sent += results.filter((result) => result.sent).length; failed += results.filter((result) => !result.sent).length; } } return { triggers, checkedCustomers: users.length, sent, failed }; }
+export async function runScheduledEmailAutomations(today = new Date()) {
+  const triggers = dueAutomationTriggers(today);
+  if (!triggers.length) return { triggers, checkedCustomers: 0, sent: 0, failed: 0 };
+  const users = await prisma.user.findMany({ where: { role: "CUSTOMER", email: { not: "" }, OR: [{ emailVerified: { not: null } }, { requiresEmailVerification: false }] }, take: 5000, include: { marketingPrefs: true } });
+  let sent = 0;
+  let failed = 0;
+  for (const trigger of triggers) {
+    for (const user of users) {
+      const results = await runEmailAutomations(trigger, { user, scheduledAt: today });
+      sent += results.filter((result) => result.sent).length;
+      failed += results.filter((result) => !result.sent).length;
+    }
+  }
+  return { triggers, checkedCustomers: users.length, sent, failed };
+}

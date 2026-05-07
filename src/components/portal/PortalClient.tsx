@@ -1055,28 +1055,92 @@ function PaymentsPanel({ savedCardPreview, onSavePreview }: { savedCardPreview: 
 }
 
 function MarketingPanel() {
+  const [prefs, setPrefs] = useState({
+    newStockEmails: true,
+    promotionEmails: true,
+    monthlyEmails: true,
+    seasonalEmails: true,
+    orderFollowupEmails: true,
+    allMarketingEmails: true,
+    categories: [] as string[],
+  });
+  const [categories, setCategories] = useState<string[]>(["Lab & Scientific", "Automation & Control", "Test & Detection", "IT & Networking", "Display & AV", "Oil & Gas", "Audio & Broadcast", "Manufacturing"]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/account/marketing-preferences", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.ok) throw new Error(data.error || "Could not load marketing preferences.");
+        if (data.prefs) setPrefs((current) => ({ ...current, ...data.prefs, categories: Array.isArray(data.prefs.categories) ? data.prefs.categories : [] }));
+        if (Array.isArray(data.categories)) setCategories(data.categories);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load marketing preferences."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function update(key: keyof typeof prefs, value: boolean | string[]) {
+    setPrefs((current) => ({ ...current, [key]: value }));
+    setNotice("");
+    setError("");
+  }
+
+  function toggleCategory(category: string) {
+    const next = prefs.categories.includes(category) ? prefs.categories.filter((item) => item !== category) : [...prefs.categories, category];
+    update("categories", next);
+  }
+
+  async function savePreferences() {
+    setSaving(true);
+    setNotice("");
+    setError("");
+    const response = await fetch("/api/account/marketing-preferences", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(prefs) });
+    const data = await response.json().catch(() => ({}));
+    setSaving(false);
+    if (!response.ok || !data.ok) { setError(data.error || "Marketing preferences could not be saved."); return; }
+    if (data.prefs) setPrefs((current) => ({ ...current, ...data.prefs, categories: Array.isArray(data.prefs.categories) ? data.prefs.categories : current.categories }));
+    setNotice(data.message || "Marketing preferences saved.");
+  }
+
   return (
     <section>
-      <SectionHeader title="Marketing Preferences" subtitle="Control product alerts and category interest emails." />
+      <SectionHeader title="Marketing Preferences" subtitle="Control product alerts, campaign emails and category interest emails." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
-        {[
-          ["New stock notifications", "Email alerts when matching inventory is added."],
-          ["Promotions and discounts", "Seasonal offers and discount codes."],
-        ].map(([title, detail]) => (
-          <label key={title} className="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" defaultChecked className="mt-0.5 w-4 h-4 accent-accent" />
-            <div><p className="font-display font-600 text-sm text-navy-950">{title}</p><p className="text-gray-400 text-xs">{detail}</p></div>
-          </label>
-        ))}
-        <div>
-          <p className="font-display font-700 text-sm text-navy-950 mb-3">Categories of interest</p>
-          <div className="grid sm:grid-cols-2 gap-2">
-            {["Lab & Scientific", "Automation & Control", "Test & Detection", "IT & Networking", "Display & AV", "Oil & Gas", "Audio & Broadcast", "Manufacturing"].map((cat) => (
-              <label key={cat} className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-accent" /><span className="text-sm text-gray-600 font-display font-600">{cat}</span></label>
-            ))}
+        {loading ? <p className="text-sm text-gray-500">Loading preferences...</p> : null}
+        <label className="flex items-start gap-3 cursor-pointer border border-gray-200 rounded-xl p-4 bg-gray-50">
+          <input type="checkbox" checked={prefs.allMarketingEmails} onChange={(event) => update("allMarketingEmails", event.target.checked)} className="mt-0.5 w-4 h-4 accent-accent" />
+          <div><p className="font-display font-700 text-sm text-navy-950">Allow marketing emails</p><p className="text-gray-500 text-xs">Turn this off to stop all promotional, seasonal, monthly and stock-interest marketing emails.</p></div>
+        </label>
+        <div className={!prefs.allMarketingEmails ? "opacity-50 pointer-events-none space-y-4" : "space-y-4"}>
+          {[
+            ["newStockEmails", "New stock notifications", "Email alerts when matching inventory is added."],
+            ["promotionEmails", "Promotions and discounts", "Discount codes and selected offer messages."],
+            ["monthlyEmails", "Monthly updates", "First-Tuesday monthly stock and sourcing updates."],
+            ["seasonalEmails", "Seasonal campaigns", "New Year, summer, Easter, Christmas and Boxing Day emails."],
+            ["orderFollowupEmails", "Order follow-up emails", "Useful post-order follow-ups separate from mandatory order confirmations."],
+          ].map(([key, title, detail]) => (
+            <label key={key} className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked={Boolean((prefs as any)[key])} onChange={(event) => update(key as keyof typeof prefs, event.target.checked)} className="mt-0.5 w-4 h-4 accent-accent" />
+              <div><p className="font-display font-600 text-sm text-navy-950">{title}</p><p className="text-gray-400 text-xs">{detail}</p></div>
+            </label>
+          ))}
+          <div>
+            <p className="font-display font-700 text-sm text-navy-950 mb-3">Categories of interest</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {categories.map((cat) => (
+                <label key={cat} className="flex items-center gap-2 cursor-pointer"><input checked={prefs.categories.includes(cat)} onChange={() => toggleCategory(cat)} type="checkbox" className="w-4 h-4 accent-accent" /><span className="text-sm text-gray-600 font-display font-600">{cat}</span></label>
+              ))}
+            </div>
           </div>
         </div>
-        <button className="btn-primary">Save preferences →</button>
+        {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
+        {notice && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">{notice}</p>}
+        <button disabled={saving || loading} onClick={savePreferences} className="btn-primary">{saving ? "Saving..." : "Save preferences →"}</button>
+        <p className="text-xs text-gray-400">Transactional emails about orders, quotes, returns, support, account security and verification may still be sent even if marketing is disabled.</p>
       </div>
     </section>
   );

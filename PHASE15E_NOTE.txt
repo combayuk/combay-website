@@ -1,0 +1,19 @@
+Phase 15E — Marketing consent, unsubscribe links and preference controls
+
+Built on top of deployed Phase 15D.
+
+Adds:
+- DB-backed customer marketing preferences in the customer portal.
+- Separate consent switches for all marketing, new stock, promotions, monthly campaigns, seasonal campaigns and order follow-up emails.
+- Category interest preferences saved to MarketingPrefs.
+- One-click unsubscribe link for marketing automation emails.
+- Public /unsubscribe page for customers who click email footer links.
+- /api/marketing/unsubscribe endpoint for token lookup and unsubscribe updates.
+- /api/account/marketing-preferences endpoint for portal preference load/save.
+- Marketing automation consent checks before scheduled/monthly/seasonal campaign sends.
+- Transactional emails such as signup/order/account emails remain allowed even when marketing is disabled.
+- EmailAutomationLog now stores subject, preview, category, status, skipped reason and provider metadata.
+- Admin automation API now reports customer/opt-in/unsubscribe/log summary stats.
+- Marketing emails include List-Unsubscribe header and visible footer preference link.
+
+Requires Prisma db push because MarketingPrefs and EmailAutomationLog were expanded.
