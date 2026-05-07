@@ -1,0 +1,16 @@
+Phase 15F - checkout address prefill, registered customer addresses, broadcast emails, unsubscribe footer, and promotion targeting.
+
+Deploy with:
+npx prisma db push
+git add .
+git commit -m "Phase 15F checkout addresses broadcast email and promotion targeting"
+git push
+
+Main changes:
+- CustomerAddress model and APIs.
+- Checkout session endpoint and registered-customer checkout prefill.
+- Orders link to signed-in user where possible.
+- Broadcast email endpoint and admin page at /admin/marketing/broadcast with unsubscribe/footer support.
+- Promotion product include/exclude backend targeting and server-side checkout validation.
+
+Note: marketing broadcast page is available directly from /admin/marketing/broadcast and linked from /admin/marketing.

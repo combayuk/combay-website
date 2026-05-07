@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
-import { preparePromotionInput, publicPromotion } from "@/lib/promotions";
+import { preparePromotionInput, publicPromotion, replacePromotionTargets } from "@/lib/promotions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const data = preparePromotionInput(body);
     const dbResult = await withDatabase(async () => {
       const promotion = await prisma.promotion.update({ where: { id: params.id }, data });
-      return publicPromotion(promotion);
+      await replacePromotionTargets(promotion.id, Array.isArray(body.includeProductIds) ? body.includeProductIds : [], Array.isArray(body.excludeProductIds) ? body.excludeProductIds : []);
+      const reloaded = await prisma.promotion.findUnique({ where: { id: promotion.id }, include: { productTargets: true } });
+      return publicPromotion(reloaded || promotion);
     });
     if (!dbResult.ok) return NextResponse.json({ ok: false, error: dbResult.reason }, { status: 500 });
     return NextResponse.json({ ok: true, promotion: dbResult.data });

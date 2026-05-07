@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { AlertTriangle, Bold, CheckCircle2, CopyPlus, Eye, Italic, Mail, Palette, Pencil, Plus, Save, Trash2, Type, Underline } from "lucide-react";
 
 type Trigger = string;

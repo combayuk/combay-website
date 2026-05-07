@@ -15,6 +15,8 @@ export type PromotionInput = {
   showOnShop?: boolean;
   bannerText?: string | null;
   displayPriority?: number | null;
+  includeProductIds?: string[];
+  excludeProductIds?: string[];
 };
 
 export type PromotionApplication = {
@@ -59,6 +61,9 @@ export function publicPromotion(promotion: any) {
     showOnShop: Boolean(promotion.showOnShop),
     bannerText: promotion.bannerText ?? "",
     displayPriority: promotion.displayPriority ?? 100,
+    includeProductIds: Array.isArray(promotion.productTargets) ? promotion.productTargets.filter((target: any) => target.mode === "INCLUDE").map((target: any) => target.productId) : [],
+    excludeProductIds: Array.isArray(promotion.productTargets) ? promotion.productTargets.filter((target: any) => target.mode === "EXCLUDE").map((target: any) => target.productId) : [],
+    productTargets: Array.isArray(promotion.productTargets) ? promotion.productTargets : [],
     createdAt: promotion.createdAt ? promotion.createdAt.toISOString?.() ?? promotion.createdAt : null,
   };
 }
@@ -111,10 +116,25 @@ export function calculatePromotionTotals(promotion: any, subtotalRaw: number, sh
   };
 }
 
+export function checkPromotionProductTargets(promotion: any, productIds: string[]) {
+  const targets = Array.isArray(promotion?.productTargets) ? promotion.productTargets : [];
+  const include = new Set(targets.filter((target: any) => target.mode === "INCLUDE").map((target: any) => target.productId));
+  const exclude = new Set(targets.filter((target: any) => target.mode === "EXCLUDE").map((target: any) => target.productId));
+  const ids = productIds.filter(Boolean);
+  if (ids.some((id) => exclude.has(id))) return { ok: false, error: "This promotion does not apply to one or more items in your cart." };
+  if (include.size > 0 && !ids.some((id) => include.has(id))) return { ok: false, error: "This promotion only applies to selected products." };
+  return { ok: true };
+}
 export async function findPromotionByCode(code: string) {
   const normalised = normaliseCode(code);
   if (!normalised) return null;
-  return prisma.promotion.findUnique({ where: { code: normalised } });
+  return prisma.promotion.findUnique({ where: { code: normalised }, include: { productTargets: true } });
+}
+export async function replacePromotionTargets(promotionId: string, includeProductIds: string[] = [], excludeProductIds: string[] = []) {
+  const include = Array.from(new Set(includeProductIds.map(String).filter(Boolean)));
+  const exclude = Array.from(new Set(excludeProductIds.map(String).filter(Boolean))).filter((id) => !include.includes(id));
+  await prisma.promotionProductTarget.deleteMany({ where: { promotionId } });
+  if (include.length + exclude.length) await prisma.promotionProductTarget.createMany({ data: [...include.map((productId) => ({ promotionId, productId, mode: "INCLUDE" })), ...exclude.map((productId) => ({ promotionId, productId, mode: "EXCLUDE" }))], skipDuplicates: true });
 }
 
 export function preparePromotionInput(input: PromotionInput) {

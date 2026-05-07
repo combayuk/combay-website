@@ -5,6 +5,8 @@ import Link from "next/link";
 import { CheckCircle2, Lock, AlertTriangle } from "lucide-react";
 import { clearCart, formatCurrency, getCartSummary, readCartLines, type CartLine } from "@/lib/cart";
 
+type SavedAddress = { id: string; label?: string | null; fullName?: string | null; company?: string | null; phone?: string | null; address1: string; address2?: string | null; city: string; postcode: string; country: string; isPrimary: boolean; };
+
 type CheckoutForm = {
   fullName: string;
   email: string;
@@ -41,9 +43,19 @@ export default function CheckoutClient() {
   const [promo, setPromo] = useState<{ code: string; name: string; discount: number; shippingDiscount: number; vat: number; total: number } | null>(null);
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
 
   useEffect(() => {
     setLines(readCartLines());
+    fetch("/api/checkout/session", { cache: "no-store" }).then((r) => r.json()).then((data) => {
+      if (!data?.ok || !data.signedIn) return;
+      const addresses: SavedAddress[] = Array.isArray(data.addresses) ? data.addresses : [];
+      const primary = addresses.find((a) => a.isPrimary) || addresses[0] || null;
+      setSavedAddresses(addresses);
+      if (primary) setSelectedAddressId(primary.id);
+      setForm((cur) => ({ ...cur, fullName: data.customer?.fullName || primary?.fullName || cur.fullName, email: data.customer?.email || cur.email, phone: data.customer?.phone || primary?.phone || cur.phone, company: data.customer?.company || primary?.company || cur.company, address1: primary?.address1 || cur.address1, address2: primary?.address2 || cur.address2, city: primary?.city || cur.city, postcode: primary?.postcode || cur.postcode, country: primary?.country || cur.country }));
+    }).catch(() => undefined);
   }, []);
 
   const summary = useMemo(() => getCartSummary(lines), [lines]);
@@ -52,9 +64,8 @@ export default function CheckoutClient() {
   const displayTotal = promo ? promo.total : summary.total;
   const stripeConfigured = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
-  function update<K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
-  }
+  function update<K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) { setForm((current) => ({ ...current, [key]: value })); }
+  function useSavedAddress(id: string) { setSelectedAddressId(id); const a = savedAddresses.find((item) => item.id === id); if (!a) return; setForm((cur) => ({ ...cur, fullName: a.fullName || cur.fullName, phone: a.phone || cur.phone, company: a.company || cur.company, address1: a.address1, address2: a.address2 || "", city: a.city, postcode: a.postcode, country: a.country || "United Kingdom" })); }
 
   async function applyPromotion() {
     setPromo(null);
@@ -69,7 +80,7 @@ export default function CheckoutClient() {
       const response = await fetch("/api/promotions/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoCode, subtotal: summary.subtotal, shipping: 0 }),
+        body: JSON.stringify({ code: promoCode, subtotal: summary.subtotal, shipping: 0, productIds: summary.lines.map(({ product }) => product.id).filter(Boolean) }),
       });
       const data = await response.json();
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Promotion code could not be applied.");
@@ -210,6 +221,7 @@ export default function CheckoutClient() {
 
           <section className="bg-white border border-gray-200 rounded-2xl p-6">
             <h2 className="font-display font-800 text-xl text-navy-950 mb-4">Delivery address</h2>
+            {savedAddresses.length > 0 ? <label className="block mb-4"><span className="label">Use saved address</span><select className="input" value={selectedAddressId} onChange={(e) => useSavedAddress(e.target.value)}><option value="">Enter a different address</option>{savedAddresses.map((address) => <option key={address.id} value={address.id}>{address.isPrimary ? "Primary — " : ""}{address.label || address.address1}, {address.city}, {address.postcode}</option>)}</select></label> : null}
             <div className="grid md:grid-cols-2 gap-4">
               <label className="block md:col-span-2"><span className="label">Address line 1 *</span><input required className="input" value={form.address1} onChange={(e) => update("address1", e.target.value)} /></label>
               <label className="block md:col-span-2"><span className="label">Address line 2</span><input className="input" value={form.address2} onChange={(e) => update("address2", e.target.value)} /></label>
