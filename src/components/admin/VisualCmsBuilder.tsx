@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import type { DragEvent, FocusEvent, ReactNode } from "react";
 import type { CmsBlock, CmsPage, CmsStep, SiteContent } from "@/lib/siteContent";
 
 type PageKey = keyof SiteContent["pages"];
@@ -12,12 +13,28 @@ type SelectTarget =
   | { kind: "step"; index: number }
   | { kind: "contact" }
   | { kind: "footer" }
-  | { kind: "homeHero"; index: number }
-  | { kind: "faq" };
+  | { kind: "homeHero"; index: number };
 
-type DragTarget = { kind: "section"; index: number } | { kind: "block"; index: number } | { kind: "step"; index: number } | null;
+type DragTarget =
+  | { kind: "section"; index: number }
+  | { kind: "block"; index: number }
+  | { kind: "step"; index: number }
+  | { kind: "widget"; template: WidgetTemplate }
+  | null;
 
-type AddBlockTemplate = { label: string; blockType: string; icon: string; title: string; subtitle: string; body: string; width?: string; background?: string; animation?: string; linkLabel?: string; linkHref?: string };
+type WidgetTemplate = {
+  label: string;
+  blockType: string;
+  icon: string;
+  title: string;
+  subtitle: string;
+  body: string;
+  width?: string;
+  background?: string;
+  animation?: string;
+  linkLabel?: string;
+  linkHref?: string;
+};
 
 const PAGES: Array<{ key: PageKey; label: string; path: string }> = [
   { key: "home", label: "Home", path: "/" },
@@ -28,31 +45,63 @@ const PAGES: Array<{ key: PageKey; label: string; path: string }> = [
 ];
 
 const SECTION_META: Record<string, { label: string; hint: string }> = {
-  hero: { label: "Hero / top section", hint: "Main heading, intro, buttons and background." },
-  contactBar: { label: "Contact details strip", hint: "Public contact cards for contact-style pages." },
-  content: { label: "Content cards", hint: "Cards, banners, icons, image blocks and sliders." },
-  process: { label: "Process steps", hint: "Step-by-step blocks." },
-  formOrCta: { label: "Form / final call-to-action", hint: "Repair form, asset form, or CTA block." },
+  hero: { label: "Hero / top area", hint: "Click text directly to edit. Drag the whole section to reorder." },
+  contactBar: { label: "Contact strip", hint: "Public email, phone and location cards." },
+  content: { label: "Main content", hint: "Cards, images, icons, videos, banners, sliders and text blocks." },
+  process: { label: "Process steps", hint: "Step-by-step cards. Drag steps to reorder." },
+  formOrCta: { label: "Form / call-to-action", hint: "Form intro or final CTA block." },
 };
 
-const ADD_BLOCKS: AddBlockTemplate[] = [
-  { label: "Text block", blockType: "text", icon: "✦", title: "New text block", subtitle: "Editable text", body: "Add clear website copy here.", width: "half", background: "white" },
-  { label: "Image block", blockType: "image", icon: "🖼", title: "New image block", subtitle: "Image and text", body: "Upload an image and add supporting text.", width: "half", background: "white" },
-  { label: "Icon feature", blockType: "icon", icon: "⚙️", title: "New feature", subtitle: "Feature highlight", body: "Use this for a service, benefit, category or trust point.", width: "quarter", background: "white" },
-  { label: "Promotion banner", blockType: "promotion", icon: "🏷", title: "Promotion banner", subtitle: "Offer / campaign", body: "Highlight an offer, discount code, seasonal campaign or landing page CTA.", width: "full", background: "accent", linkLabel: "View offer", linkHref: "/shop" },
-  { label: "Slider item", blockType: "slider", icon: "▣", title: "Slider item", subtitle: "Carousel content", body: "Create several slider items together for a carousel-style content area.", width: "half", background: "soft" },
-  { label: "Animation cue", blockType: "animation", icon: "✨", title: "Animation / visual cue", subtitle: "Animated highlight", body: "Use this for a motion-style highlight, icon animation or interactive cue.", width: "quarter", background: "soft", animation: "float" },
+const WIDGETS: WidgetTemplate[] = [
+  { label: "Text", blockType: "text", icon: "T", title: "New text heading", subtitle: "Short supporting line", body: "Click this text in the website canvas and type your content.", width: "half", background: "white" },
+  { label: "Image", blockType: "image", icon: "🖼", title: "Image block", subtitle: "Image with text", body: "Upload an image, then edit the heading and text directly.", width: "half", background: "white" },
+  { label: "Video", blockType: "video", icon: "▶", title: "Video block", subtitle: "Product or service video", body: "Paste a video URL using the quick toolbar after selecting this block.", width: "half", background: "dark", linkLabel: "Watch video", linkHref: "" },
+  { label: "Button", blockType: "button", icon: "↗", title: "Call to action", subtitle: "Clickable button", body: "Use this to send customers to a page, product, form, or promotion.", width: "half", background: "accent", linkLabel: "Button text", linkHref: "/shop" },
+  { label: "Icon", blockType: "icon", icon: "⚙️", title: "Feature", subtitle: "Feature highlight", body: "Use icons for benefits, services, categories or trust points.", width: "quarter", background: "white" },
+  { label: "Shape", blockType: "shape", icon: "■", title: "Visual shape", subtitle: "Divider / design element", body: "Use shapes to break up content or highlight a section.", width: "quarter", background: "soft" },
+  { label: "Animation", blockType: "animation", icon: "✨", title: "Animated highlight", subtitle: "Motion cue", body: "Use subtle animation for an important feature or service.", width: "quarter", background: "soft", animation: "float" },
+  { label: "Slider", blockType: "slider", icon: "▣", title: "Slider item", subtitle: "Carousel content", body: "Create multiple slider items together for campaign or service highlights.", width: "half", background: "soft" },
+  { label: "Promo banner", blockType: "promotion", icon: "🏷", title: "Promotion banner", subtitle: "Offer / campaign", body: "Highlight discount codes, seasonal sales or stock campaigns.", width: "full", background: "accent", linkLabel: "View offer", linkHref: "/shop" },
+  { label: "Spacer", blockType: "spacer", icon: "—", title: "Spacer", subtitle: "Spacing block", body: "Use this as a visual gap between sections.", width: "full", background: "white" },
 ];
 
-const emptyPage: CmsPage = { eyebrow: "", heading: "", accent: "", body: "", backgroundImageUrl: "", heroImageUrl: "", primaryLabel: "", primaryHref: "#", secondaryLabel: "", secondaryHref: "#", sectionEyebrow: "", sectionHeading: "", sectionBody: "", blocks: [], steps: [], ctaHeading: "", ctaBody: "", ctaPrimaryLabel: "", ctaPrimaryHref: "#", ctaSecondaryLabel: "", ctaSecondaryHref: "#", sectionOrder: ["hero", "contactBar", "content", "process", "formOrCta"] };
+const emptyPage: CmsPage = {
+  eyebrow: "",
+  heading: "",
+  accent: "",
+  body: "",
+  backgroundImageUrl: "",
+  heroImageUrl: "",
+  primaryLabel: "",
+  primaryHref: "#",
+  secondaryLabel: "",
+  secondaryHref: "#",
+  sectionEyebrow: "",
+  sectionHeading: "",
+  sectionBody: "",
+  blocks: [],
+  steps: [],
+  ctaHeading: "",
+  ctaBody: "",
+  ctaPrimaryLabel: "",
+  ctaPrimaryHref: "#",
+  ctaSecondaryLabel: "",
+  ctaSecondaryHref: "#",
+  sectionOrder: ["hero", "contactBar", "content", "process", "formOrCta"],
+};
 
 function safeOrder(page: CmsPage) {
   const allowed = ["hero", "contactBar", "content", "process", "formOrCta"];
   const existing = Array.isArray(page.sectionOrder) ? page.sectionOrder.filter((item) => allowed.includes(item)) : [];
-  return (existing.length ? existing : allowed).filter((item, index, arr) => arr.indexOf(item) === index);
+  const unique = (existing.length ? existing : allowed).filter((item, index, arr) => arr.indexOf(item) === index);
+  return [...unique, ...allowed.filter((item) => !unique.includes(item))];
 }
 
-function makeBlock(template: AddBlockTemplate): CmsBlock {
+function pagePath(key: PageKey) {
+  return PAGES.find((item) => item.key === key)?.path || "/";
+}
+
+function makeBlock(template: WidgetTemplate): CmsBlock {
   return {
     icon: template.icon,
     title: template.title,
@@ -70,46 +119,154 @@ function makeBlock(template: AddBlockTemplate): CmsBlock {
 }
 
 function makeStep(index: number): CmsStep {
-  return { number: String(index + 1).padStart(2, "0"), title: "New step", body: "Describe this step for customers.", imageUrl: "" };
+  return { number: String(index + 1).padStart(2, "0"), title: "New step", body: "Click this text to describe the step.", imageUrl: "" };
 }
 
-function pagePath(key: PageKey) {
-  return PAGES.find((item) => item.key === key)?.path || "/";
+function move<T>(items: T[], from: number, to: number) {
+  const next = [...items];
+  if (from < 0 || from >= next.length || to < 0 || to >= next.length) return next;
+  const [picked] = next.splice(from, 1);
+  next.splice(to, 0, picked);
+  return next;
 }
 
-function Field({ label, value, onChange, textarea = false, placeholder = "" }: { label: string; value: string; onChange: (value: string) => void; textarea?: boolean; placeholder?: string }) {
-  return <label className="block space-y-1"><span className="text-[11px] font-display font-800 uppercase tracking-wide text-gray-500">{label}</span>{textarea ? <textarea className="textarea text-sm" rows={4} value={value || ""} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /> : <input className="input text-sm" value={value || ""} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />}</label>;
+function textFromEvent(event: FocusEvent<HTMLElement>) {
+  return event.currentTarget.innerText.replace(/\u00a0/g, " ").trim();
 }
 
-function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<[string, string]> }) {
-  return <label className="block space-y-1"><span className="text-[11px] font-display font-800 uppercase tracking-wide text-gray-500">{label}</span><select className="input text-sm" value={value || ""} onChange={(event) => onChange(event.target.value)}>{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>;
+function EditableText({
+  value,
+  onChange,
+  className,
+  as = "div",
+  multiline = false,
+  placeholder = "Click to edit",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  as?: "p" | "h1" | "h2" | "h3" | "h4" | "div" | "span";
+  multiline?: boolean;
+  placeholder?: string;
+}) {
+  const Tag = as;
+  return (
+    <Tag
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label={placeholder}
+      onBlur={(event) => onChange(textFromEvent(event) || value || placeholder)}
+      onKeyDown={(event) => {
+        if (!multiline && event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      className={`${className || ""} min-h-[1em] cursor-text rounded outline-none ring-accent/0 transition hover:ring-2 hover:ring-accent/40 focus:bg-white/95 focus:px-1 focus:text-navy-950 focus:ring-2 focus:ring-accent`}
+    >
+      {value || placeholder}
+    </Tag>
+  );
 }
 
-function ImageField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function DesktopShell({ children, zoom }: { children: ReactNode; zoom: number }) {
+  const width = 1180;
+  return (
+    <div className="h-full overflow-auto bg-slate-200 p-6">
+      <div className="mx-auto rounded-t-2xl border border-slate-400 bg-slate-800 p-3 shadow-2xl" style={{ width: width * zoom + 28 }}>
+        <div className="mb-2 flex items-center gap-2 px-2">
+          <span className="h-3 w-3 rounded-full bg-red-400" />
+          <span className="h-3 w-3 rounded-full bg-yellow-400" />
+          <span className="h-3 w-3 rounded-full bg-green-400" />
+          <div className="ml-3 flex-1 rounded bg-white/10 px-3 py-1 text-center text-[10px] text-white/60">Desktop preview · 1180px wide · editable canvas</div>
+        </div>
+        <div className="origin-top-left overflow-hidden rounded-lg bg-white" style={{ width, transform: `scale(${zoom})`, height: `calc(100% / ${zoom})` }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageUploadButton({ onUploaded, label = "Upload" }: { onUploaded: (url: string) => void; label?: string }) {
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
   async function upload(file: File | null) {
     if (!file) return;
-    setUploading(true); setError("");
+    setUploading(true);
     try {
       const form = new FormData();
       form.set("folder", "company-docs");
       form.set("file", file);
       const response = await fetch("/api/uploads", { method: "POST", body: form });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.ok || !data?.url) throw new Error(data?.error || "Upload failed.");
-      onChange(data.url);
+      if (!response.ok || !data?.ok || !data?.url) throw new Error(data?.error || "Upload failed");
+      onUploaded(data.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
-    } finally { setUploading(false); }
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
   }
-  return <div className="space-y-2"><span className="text-[11px] font-display font-800 uppercase tracking-wide text-gray-500">{label}</span><div className="grid grid-cols-[1fr_auto] gap-2"><input className="input text-sm" value={value || ""} placeholder="Paste image URL" onChange={(event)=>onChange(event.target.value)} /><label className="btn-outline text-xs cursor-pointer whitespace-nowrap">{uploading ? "Uploading…" : "Upload image"}<input className="hidden" type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={(event)=>upload(event.target.files?.[0] || null)} /></label></div>{value ? <div className="flex items-center gap-3"><img src={value} alt="CMS preview" className="h-16 w-24 rounded border border-gray-200 object-cover" /><button type="button" className="text-xs text-red-600" onClick={()=>onChange("")}>Remove</button></div> : null}{error ? <p className="text-xs text-red-600">{error}</p> : null}</div>;
+  return (
+    <label className="cursor-pointer rounded bg-white px-3 py-1 text-[11px] font-display font-800 text-navy-950 shadow hover:bg-accent">
+      {uploading ? "Uploading…" : label}
+      <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={uploading} onChange={(event) => upload(event.target.files?.[0] || null)} />
+    </label>
+  );
 }
 
-function CanvasBlock({ block, selected, onClick, draggable, onDragStart, onDrop, onDragOver }: { block: CmsBlock; selected: boolean; onClick: () => void; draggable?: boolean; onDragStart?: () => void; onDrop?: () => void; onDragOver?: (event: React.DragEvent) => void }) {
-  const bg = block.background === "dark" ? "bg-navy-950 text-white border-navy-950" : block.background === "accent" ? "bg-accent/10 border-accent/40" : block.background === "soft" ? "bg-gray-50 border-gray-200" : "bg-white border-gray-200";
-  const width = block.width === "full" ? "md:col-span-4" : block.width === "half" ? "md:col-span-2" : "";
-  return <div draggable={draggable} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onClick={onClick} className={`${width} ${bg} group relative cursor-move rounded-xl border p-4 transition-all ${selected ? "ring-2 ring-accent shadow-lg" : "hover:ring-2 hover:ring-accent/30"}`}><div className="absolute right-2 top-2 rounded bg-white/90 px-2 py-1 text-[10px] font-display font-800 uppercase text-navy-900 shadow-sm opacity-0 group-hover:opacity-100">Drag / edit</div>{block.imageUrl ? <img src={block.imageUrl} className="mb-3 h-28 w-full rounded-lg object-cover" alt="" /> : <div className="mb-3 text-2xl">{block.icon}</div>}<p className="font-mono text-[10px] uppercase tracking-widest text-accent">{block.blockType || "block"}</p><h4 className="font-display font-900 text-sm">{block.title}</h4><p className="text-xs text-accent font-700">{block.subtitle}</p><p className="mt-2 line-clamp-3 text-xs opacity-75">{block.body}</p>{block.linkLabel ? <span className="mt-3 inline-block text-xs font-display font-800 text-accent">{block.linkLabel} →</span> : null}</div>;
+function QuickButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="rounded border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-display font-800 text-navy-900 hover:border-accent hover:bg-accent/10">{children}</button>;
+}
+
+function BlockCard({
+  block,
+  index,
+  selected,
+  onSelect,
+  onPatch,
+  onDropBlock,
+  onStartDrag,
+}: {
+  block: CmsBlock;
+  index: number;
+  selected: boolean;
+  onSelect: () => void;
+  onPatch: (patch: Partial<CmsBlock>) => void;
+  onDropBlock: () => void;
+  onStartDrag: () => void;
+}) {
+  const isDark = block.background === "dark";
+  const bg = block.background === "dark" ? "bg-navy-950 text-white border-navy-950" : block.background === "accent" ? "bg-accent/15 border-accent/40" : block.background === "soft" ? "bg-gray-50 border-gray-200" : "bg-white border-gray-200";
+  const width = block.width === "full" ? "col-span-4" : block.width === "half" ? "col-span-2" : block.width === "third" ? "col-span-2 xl:col-span-1" : "col-span-1";
+  const align = block.align === "center" ? "text-center" : block.align === "right" ? "text-right" : "text-left";
+  const isVideo = block.blockType === "video";
+  const isShape = block.blockType === "shape" || block.blockType === "spacer";
+
+  return (
+    <div
+      draggable
+      onDragStart={onStartDrag}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => { event.preventDefault(); onDropBlock(); }}
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      className={`${width} ${bg} ${align} group relative min-h-[120px] cursor-move rounded-xl border p-6 transition-all ${selected ? "ring-4 ring-accent shadow-xl" : "hover:ring-2 hover:ring-accent/30"}`}
+    >
+      <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition group-hover:opacity-100">
+        <span className="rounded bg-white/95 px-2 py-1 text-[10px] font-display font-800 text-navy-950 shadow">Drag</span>
+      </div>
+      {isShape ? <div className={`${block.background === "accent" ? "bg-accent" : "bg-gray-300"} mb-4 h-12 rounded-xl`} /> : null}
+      {block.imageUrl && !isVideo ? <img src={block.imageUrl} alt="" className="mb-4 h-40 w-full rounded-lg object-cover" /> : null}
+      {isVideo ? <div className="mb-4 flex h-40 items-center justify-center rounded-lg bg-black text-white"><span className="text-4xl">▶</span></div> : null}
+      {!block.imageUrl && !isShape && !isVideo ? <div className="mb-3 text-3xl">{block.icon}</div> : null}
+      <EditableText as="p" value={block.blockType || "block"} onChange={(v) => onPatch({ blockType: v.toLowerCase().replace(/\s+/g, "-") })} className="font-mono text-[10px] uppercase tracking-widest text-accent" />
+      <EditableText as="h3" value={block.title} onChange={(v) => onPatch({ title: v })} className={`mt-1 font-display text-xl font-900 ${isDark ? "text-white" : "text-navy-950"}`} />
+      <EditableText as="p" value={block.subtitle} onChange={(v) => onPatch({ subtitle: v })} className="mt-1 text-sm font-700 text-accent" />
+      <EditableText as="p" multiline value={block.body} onChange={(v) => onPatch({ body: v })} className={`mt-3 whitespace-pre-line text-sm leading-relaxed ${isDark ? "text-white/70" : "text-gray-600"}`} />
+      {block.linkLabel ? <EditableText as="span" value={block.linkLabel} onChange={(v) => onPatch({ linkLabel: v })} className="mt-4 inline-block rounded bg-navy-950 px-4 py-2 text-xs font-display font-800 text-white" /> : null}
+    </div>
+  );
 }
 
 export default function VisualCmsBuilder() {
@@ -119,94 +276,364 @@ export default function VisualCmsBuilder() {
   const [drag, setDrag] = useState<DragTarget>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [zoom, setZoom] = useState(0.78);
   const [homeHeroIndex, setHomeHeroIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/content", { cache: "no-store" }).then((response) => response.json()).then((data) => { if (!cancelled && data?.content) setContent(data.content); }).catch(() => setMessage("Could not load website content."));
+    fetch("/api/admin/content", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => { if (!cancelled && data?.content) setContent(data.content); })
+      .catch(() => setMessage("Could not load website content."));
     return () => { cancelled = true; };
   }, []);
 
   const page = content?.pages?.[pageKey] || emptyPage;
   const order = safeOrder(page);
-  const previewHref = pagePath(pageKey);
+  const selectedBlockIndex = selected.kind === "block" ? selected.index : -1;
+  const selectedBlock = selectedBlockIndex >= 0 ? page.blocks[selectedBlockIndex] : null;
+  const selectedStepIndex = selected.kind === "step" ? selected.index : -1;
+  const selectedStep = selectedStepIndex >= 0 ? page.steps[selectedStepIndex] : null;
+  const publicPath = pagePath(pageKey);
+
+  const selectedLabel = useMemo(() => {
+    if (selected.kind === "hero") return "Hero section";
+    if (selected.kind === "homeHero") return `Homepage slide ${selected.index + 1}`;
+    if (selected.kind === "block") return `Content item ${selected.index + 1}`;
+    if (selected.kind === "step") return `Process step ${selected.index + 1}`;
+    if (selected.kind === "section") return SECTION_META[selected.section]?.label || selected.section;
+    if (selected.kind === "contact") return "Contact details";
+    return "Footer";
+  }, [selected]);
 
   function updateContent(next: SiteContent) { setContent(next); }
   function updatePage(next: CmsPage) { if (!content) return; updateContent({ ...content, pages: { ...content.pages, [pageKey]: next } }); }
   function updatePagePatch(patch: Partial<CmsPage>) { updatePage({ ...page, ...patch }); }
-  function updateBlock(index: number, patch: Partial<CmsBlock>) { updatePage({ ...page, blocks: page.blocks.map((block, i) => i === index ? { ...block, ...patch } : block) }); }
-  function updateStep(index: number, patch: Partial<CmsStep>) { updatePage({ ...page, steps: page.steps.map((step, i) => i === index ? { ...step, ...patch } : step) }); }
-  function move<T>(items: T[], from: number, to: number) { const next = [...items]; const [picked] = next.splice(from, 1); next.splice(to, 0, picked); return next; }
-  function addBlock(template: AddBlockTemplate) { const next = makeBlock(template); updatePage({ ...page, blocks: [...page.blocks, next] }); setSelected({ kind: "block", index: page.blocks.length }); }
-  function addStep() { const next = makeStep(page.steps.length); updatePage({ ...page, steps: [...page.steps, next] }); setSelected({ kind: "step", index: page.steps.length }); }
-  function removeBlock(index: number) { updatePage({ ...page, blocks: page.blocks.filter((_, i) => i !== index) }); setSelected({ kind: "section", section: "content" }); }
-  function removeStep(index: number) { updatePage({ ...page, steps: page.steps.filter((_, i) => i !== index) }); setSelected({ kind: "section", section: "process" }); }
+  function updateBlock(index: number, patch: Partial<CmsBlock>) { updatePage({ ...page, blocks: page.blocks.map((block, i) => (i === index ? { ...block, ...patch } : block)) }); }
+  function updateStep(index: number, patch: Partial<CmsStep>) { updatePage({ ...page, steps: page.steps.map((step, i) => (i === index ? { ...step, ...patch } : step)) }); }
+
+  function addBlock(template: WidgetTemplate, index?: number) {
+    const next = makeBlock(template);
+    const blocks = [...page.blocks];
+    const insertAt = typeof index === "number" ? Math.max(0, Math.min(index, blocks.length)) : blocks.length;
+    blocks.splice(insertAt, 0, next);
+    updatePage({ ...page, blocks });
+    setSelected({ kind: "block", index: insertAt });
+  }
+
+  function addStep(index?: number) {
+    const steps = [...page.steps];
+    const insertAt = typeof index === "number" ? Math.max(0, Math.min(index, steps.length)) : steps.length;
+    steps.splice(insertAt, 0, makeStep(steps.length));
+    updatePage({ ...page, steps });
+    setSelected({ kind: "step", index: insertAt });
+  }
+
+  function removeSelected() {
+    if (selected.kind === "block") {
+      updatePage({ ...page, blocks: page.blocks.filter((_, i) => i !== selected.index) });
+      setSelected({ kind: "section", section: "content" });
+    }
+    if (selected.kind === "step") {
+      updatePage({ ...page, steps: page.steps.filter((_, i) => i !== selected.index) });
+      setSelected({ kind: "section", section: "process" });
+    }
+  }
+
+  function duplicateSelected() {
+    if (selected.kind === "block" && selectedBlock) {
+      const blocks = [...page.blocks];
+      blocks.splice(selected.index + 1, 0, { ...selectedBlock });
+      updatePage({ ...page, blocks });
+      setSelected({ kind: "block", index: selected.index + 1 });
+    }
+    if (selected.kind === "step" && selectedStep) {
+      const steps = [...page.steps];
+      steps.splice(selected.index + 1, 0, { ...selectedStep });
+      updatePage({ ...page, steps });
+      setSelected({ kind: "step", index: selected.index + 1 });
+    }
+  }
+
+  function moveSelected(direction: "left" | "right" | "up" | "down") {
+    if (selected.kind === "block") {
+      const to = direction === "left" || direction === "up" ? selected.index - 1 : selected.index + 1;
+      if (to >= 0 && to < page.blocks.length) {
+        updatePage({ ...page, blocks: move(page.blocks, selected.index, to) });
+        setSelected({ kind: "block", index: to });
+      }
+    }
+    if (selected.kind === "step") {
+      const to = direction === "left" || direction === "up" ? selected.index - 1 : selected.index + 1;
+      if (to >= 0 && to < page.steps.length) {
+        updatePage({ ...page, steps: move(page.steps, selected.index, to) });
+        setSelected({ kind: "step", index: to });
+      }
+    }
+    if (selected.kind === "section") {
+      const index = order.indexOf(selected.section);
+      const to = direction === "left" || direction === "up" ? index - 1 : index + 1;
+      if (index >= 0 && to >= 0 && to < order.length) updatePagePatch({ sectionOrder: move(order, index, to) });
+    }
+  }
 
   async function save() {
     if (!content) return;
-    setSaving(true); setMessage("");
+    setSaving(true);
+    setMessage("");
     try {
       const response = await fetch("/api/admin/content", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not save website layout.");
-      setContent(data.content); setMessage("Website layout saved. Open the public page to confirm the live site updated.");
-    } catch (err) { setMessage(err instanceof Error ? err.message : "Could not save website layout."); }
-    finally { setSaving(false); }
+      setContent(data.content);
+      setMessage("Saved. Refresh the public page to confirm the live website updated.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not save website layout.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCanvasDrop(event: DragEvent<HTMLElement>, target: "content" | "process", index?: number) {
+    event.preventDefault();
+    if (!drag) return;
+    if (target === "content") {
+      if (drag.kind === "widget") addBlock(drag.template, index);
+      if (drag.kind === "block" && typeof index === "number") updatePagePatch({ blocks: move(page.blocks, drag.index, index) });
+    }
+    if (target === "process") {
+      if (drag.kind === "step" && typeof index === "number") updatePagePatch({ steps: move(page.steps, drag.index, index) });
+    }
+    setDrag(null);
   }
 
   function renderSection(section: string, index: number) {
     const selectedSection = selected.kind === "section" && selected.section === section;
-    const base = `relative rounded-2xl border bg-white shadow-sm transition-all ${selectedSection ? "ring-2 ring-accent border-accent" : "border-gray-200 hover:ring-2 hover:ring-accent/20"}`;
-    return <div key={section} draggable onDragStart={() => setDrag({ kind: "section", index })} onDragOver={(event)=>event.preventDefault()} onDrop={() => { if (drag?.kind === "section") updatePagePatch({ sectionOrder: move(order, drag.index, index) }); setDrag(null); }} className={base} onClick={() => setSelected({ kind: "section", section })}><div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-2"><div><p className="text-[10px] font-mono uppercase tracking-widest text-accent">☰ {SECTION_META[section]?.label || section}</p><p className="text-[11px] text-gray-400">{SECTION_META[section]?.hint}</p></div><button type="button" className="text-[11px] font-display font-800 text-navy-900">Move section</button></div>{section === "hero" && <div className="bg-navy-950 p-7 text-white" style={{ backgroundImage: page.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${page.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }} onClick={(event)=>{event.stopPropagation(); setSelected({ kind: "hero" });}}><p className="font-mono text-[10px] uppercase tracking-widest text-accent">{page.eyebrow}</p><h2 className="mt-2 font-display text-3xl font-900">{page.heading} <span className="text-accent">{page.accent}</span></h2><p className="mt-3 max-w-2xl text-sm text-white/70 whitespace-pre-line">{page.body}</p><div className="mt-4 flex gap-2"><span className="rounded bg-accent px-4 py-2 text-xs font-display font-800 text-navy-950">{page.primaryLabel || "Main button"}</span><span className="rounded border border-white/30 px-4 py-2 text-xs font-display font-800 text-white">{page.secondaryLabel || "Second button"}</span></div></div>}{section === "contactBar" && <div className="grid gap-3 p-4 md:grid-cols-4" onClick={(event)=>{event.stopPropagation(); setSelected({ kind: "contact" });}}>{["Order’s/Quotes", "General/Media", "Phone", "Location"].map((x)=><div key={x} className="rounded-xl border border-gray-200 bg-gray-50 p-3"><p className="font-display font-800 text-sm text-navy-900">{x}</p><p className="text-xs text-gray-500">{x === "Order’s/Quotes" ? content?.contact.salesEmail : x === "General/Media" ? content?.contact.infoEmail : x === "Phone" ? content?.contact.phone : content?.contact.location}</p></div>)}</div>}{section === "content" && <div className="p-5"><p className="font-mono text-[10px] uppercase tracking-widest text-accent">{page.sectionEyebrow}</p><h3 className="font-display text-2xl font-900 text-navy-950">{page.sectionHeading}</h3><p className="mt-1 text-sm text-gray-500 whitespace-pre-line">{page.sectionBody}</p><div className="mt-5 grid gap-4 md:grid-cols-4">{page.blocks.map((block, i)=><CanvasBlock key={`${block.title}-${i}`} block={block} selected={selected.kind === "block" && selected.index === i} draggable onClick={()=>setSelected({ kind: "block", index: i })} onDragStart={()=>setDrag({ kind: "block", index: i })} onDragOver={(event)=>event.preventDefault()} onDrop={()=>{ if (drag?.kind === "block") updatePagePatch({ blocks: move(page.blocks, drag.index, i) }); setDrag(null); }} />)}</div></div>}{section === "process" && <div className="grid gap-4 p-5 md:grid-cols-4">{page.steps.map((step, i)=><div key={`${step.title}-${i}`} draggable onDragStart={()=>setDrag({ kind: "step", index: i })} onDragOver={(event)=>event.preventDefault()} onDrop={()=>{ if (drag?.kind === "step") updatePagePatch({ steps: move(page.steps, drag.index, i) }); setDrag(null); }} onClick={(event)=>{event.stopPropagation(); setSelected({ kind: "step", index: i });}} className={`cursor-move rounded-xl border p-4 ${selected.kind === "step" && selected.index === i ? "ring-2 ring-accent" : "border-gray-200 bg-gray-50"}`}>{step.imageUrl ? <img src={step.imageUrl} alt="" className="mb-3 h-20 w-full rounded object-cover" /> : null}<p className="font-mono text-xs text-accent">{step.number}</p><p className="font-display font-900 text-navy-950">{step.title}</p><p className="text-xs text-gray-500">{step.body}</p></div>)}</div>}{section === "formOrCta" && <div className="bg-accent p-7 text-center text-navy-950" onClick={(event)=>{event.stopPropagation(); setSelected({ kind: "section", section: "formOrCta" });}}><h3 className="font-display text-2xl font-900">{page.ctaHeading || "Final call-to-action / form"}</h3><p className="mx-auto mt-2 max-w-2xl text-sm whitespace-pre-line">{page.ctaBody}</p><div className="mt-4 flex justify-center gap-2"><span className="rounded bg-navy-950 px-4 py-2 text-xs font-display font-800 text-white">{page.ctaPrimaryLabel || "Main action"}</span><span className="rounded border border-navy-900/20 px-4 py-2 text-xs font-display font-800">{page.ctaSecondaryLabel || "Second action"}</span></div></div>}</div>;
+    const sectionShell = `relative border-b border-gray-200 bg-white transition ${selectedSection ? "ring-4 ring-inset ring-accent" : "hover:ring-2 hover:ring-inset hover:ring-accent/20"}`;
+    const sectionHandle = (
+      <button
+        type="button"
+        draggable
+        onDragStart={(event) => { event.stopPropagation(); setDrag({ kind: "section", index }); }}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => { event.preventDefault(); if (drag?.kind === "section") updatePagePatch({ sectionOrder: move(order, drag.index, index) }); setDrag(null); }}
+        onClick={(event) => { event.stopPropagation(); setSelected({ kind: "section", section }); }}
+        className="absolute left-3 top-3 z-20 rounded bg-navy-950 px-3 py-1 text-[11px] font-display font-800 text-white shadow hover:bg-accent hover:text-navy-950"
+      >
+        ☰ {SECTION_META[section]?.label || section}
+      </button>
+    );
+
+    if (section === "hero") {
+      return (
+        <section key={section} className={`${sectionShell} bg-navy-950 px-12 py-20 text-white`} style={{ backgroundImage: page.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${page.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }} onClick={() => setSelected({ kind: "hero" })}>
+          {sectionHandle}
+          <div className="grid grid-cols-[1fr_360px] items-center gap-12">
+            <div>
+              <EditableText as="p" value={page.eyebrow} onChange={(v) => updatePagePatch({ eyebrow: v })} className="font-mono text-xs uppercase tracking-widest text-accent" />
+              <EditableText as="h1" value={page.heading} onChange={(v) => updatePagePatch({ heading: v })} className="mt-4 font-display text-5xl font-900 leading-tight" />
+              <EditableText as="h2" value={page.accent} onChange={(v) => updatePagePatch({ accent: v })} className="font-display text-5xl font-900 leading-tight text-accent" />
+              <EditableText as="p" multiline value={page.body} onChange={(v) => updatePagePatch({ body: v })} className="mt-6 max-w-2xl whitespace-pre-line text-lg leading-relaxed text-white/72" />
+              <div className="mt-8 flex flex-wrap gap-3">
+                <EditableText as="span" value={page.primaryLabel || "Main button"} onChange={(v) => updatePagePatch({ primaryLabel: v })} className="rounded bg-accent px-6 py-3 font-display text-sm font-900 text-navy-950" />
+                <EditableText as="span" value={page.secondaryLabel || "Second button"} onChange={(v) => updatePagePatch({ secondaryLabel: v })} className="rounded border border-white/35 px-6 py-3 font-display text-sm font-800 text-white" />
+              </div>
+            </div>
+            <div className="group relative rounded-2xl border border-white/10 bg-white/5 p-3">
+              {page.heroImageUrl ? <img src={page.heroImageUrl} alt="" className="h-80 w-full rounded-xl object-cover" /> : <div className="flex h-80 items-center justify-center rounded-xl border border-dashed border-white/30 text-sm text-white/60">Hero side image</div>}
+              <div className="absolute inset-x-6 bottom-6 flex justify-center gap-2 opacity-0 transition group-hover:opacity-100"><ImageUploadButton label="Upload image" onUploaded={(url) => updatePagePatch({ heroImageUrl: url })} /><QuickButton onClick={() => { const url = prompt("Paste image URL", page.heroImageUrl || ""); if (url !== null) updatePagePatch({ heroImageUrl: url }); }}>URL</QuickButton></div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    if (section === "contactBar") {
+      return (
+        <section key={section} className={`${sectionShell} bg-gray-50 px-10 py-10`} onClick={() => setSelected({ kind: "contact" })}>
+          {sectionHandle}
+          <div className="grid grid-cols-4 gap-4 pt-6">
+            <div className="rounded-xl border border-gray-200 bg-white p-5"><strong>Order’s/Quotes</strong><EditableText as="p" value={content?.contact.salesEmail || "sales@combay.co.uk"} onChange={(v) => content && updateContent({ ...content, contact: { ...content.contact, salesEmail: v } })} className="mt-1 text-sm text-gray-500" /></div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5"><strong>General/Media</strong><EditableText as="p" value={content?.contact.infoEmail || "info@combay.co.uk"} onChange={(v) => content && updateContent({ ...content, contact: { ...content.contact, infoEmail: v } })} className="mt-1 text-sm text-gray-500" /></div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5"><strong>Phone</strong><EditableText as="p" value={content?.contact.phone || ""} onChange={(v) => content && updateContent({ ...content, contact: { ...content.contact, phone: v } })} className="mt-1 text-sm text-gray-500" /></div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5"><strong>Location</strong><EditableText as="p" value={content?.contact.location || ""} onChange={(v) => content && updateContent({ ...content, contact: { ...content.contact, location: v } })} className="mt-1 text-sm text-gray-500" /></div>
+          </div>
+        </section>
+      );
+    }
+
+    if (section === "content") {
+      return (
+        <section key={section} className={`${sectionShell} px-10 py-14`} onClick={() => setSelected({ kind: "section", section })} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleCanvasDrop(event, "content")}>
+          {sectionHandle}
+          <div className="pt-5">
+            <EditableText as="p" value={page.sectionEyebrow} onChange={(v) => updatePagePatch({ sectionEyebrow: v })} className="font-mono text-xs uppercase tracking-widest text-accent" />
+            <EditableText as="h2" value={page.sectionHeading} onChange={(v) => updatePagePatch({ sectionHeading: v })} className="mt-2 font-display text-4xl font-900 text-navy-950" />
+            <EditableText as="p" multiline value={page.sectionBody} onChange={(v) => updatePagePatch({ sectionBody: v })} className="mt-3 max-w-3xl whitespace-pre-line text-sm leading-relaxed text-gray-600" />
+            <div className="mt-8 grid grid-cols-4 gap-5">
+              {page.blocks.map((block, blockIndex) => (
+                <BlockCard
+                  key={`${block.title}-${blockIndex}`}
+                  block={block}
+                  index={blockIndex}
+                  selected={selected.kind === "block" && selected.index === blockIndex}
+                  onSelect={() => setSelected({ kind: "block", index: blockIndex })}
+                  onPatch={(patch) => updateBlock(blockIndex, patch)}
+                  onStartDrag={() => setDrag({ kind: "block", index: blockIndex })}
+                  onDropBlock={() => handleCanvasDrop({ preventDefault() {}, stopPropagation() {} } as DragEvent<HTMLElement>, "content", blockIndex)}
+                />
+              ))}
+              <div className="col-span-4 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500" onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleCanvasDrop(event, "content", page.blocks.length)}>
+                Drop widgets here, or click a widget on the left to add it.
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    if (section === "process") {
+      return (
+        <section key={section} className={`${sectionShell} bg-gray-50 px-10 py-14`} onClick={() => setSelected({ kind: "section", section })}>
+          {sectionHandle}
+          <div className="pt-5">
+            <h2 className="font-display text-4xl font-900 text-navy-950">How it works.</h2>
+            <div className="mt-8 grid grid-cols-4 gap-5">
+              {page.steps.map((step, stepIndex) => (
+                <div key={`${step.title}-${stepIndex}`} draggable onDragStart={() => setDrag({ kind: "step", index: stepIndex })} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleCanvasDrop(event, "process", stepIndex)} onClick={(event) => { event.stopPropagation(); setSelected({ kind: "step", index: stepIndex }); }} className={`group relative cursor-move rounded-xl border bg-white p-5 ${selected.kind === "step" && selected.index === stepIndex ? "ring-4 ring-accent" : "border-gray-200 hover:ring-2 hover:ring-accent/30"}`}>
+                  {step.imageUrl ? <img src={step.imageUrl} alt="" className="mb-4 h-28 w-full rounded object-cover" /> : null}
+                  <EditableText as="p" value={step.number} onChange={(v) => updateStep(stepIndex, { number: v })} className="font-mono text-xs text-accent" />
+                  <EditableText as="h3" value={step.title} onChange={(v) => updateStep(stepIndex, { title: v })} className="mt-2 font-display text-lg font-900 text-navy-950" />
+                  <EditableText as="p" multiline value={step.body} onChange={(v) => updateStep(stepIndex, { body: v })} className="mt-2 whitespace-pre-line text-xs leading-relaxed text-gray-500" />
+                </div>
+              ))}
+              <button type="button" onClick={(event) => { event.stopPropagation(); addStep(); }} className="rounded-xl border-2 border-dashed border-gray-300 bg-white p-5 text-sm font-display font-800 text-gray-500 hover:border-accent hover:text-navy-950">+ Add step</button>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section key={section} className={`${sectionShell} bg-accent px-10 py-14 text-center`} onClick={() => setSelected({ kind: "section", section })}>
+        {sectionHandle}
+        <EditableText as="h2" value={page.ctaHeading || "Call to action"} onChange={(v) => updatePagePatch({ ctaHeading: v })} className="mx-auto max-w-3xl font-display text-4xl font-900 text-navy-950" />
+        <EditableText as="p" multiline value={page.ctaBody || "Add call-to-action body text."} onChange={(v) => updatePagePatch({ ctaBody: v })} className="mx-auto mt-3 max-w-2xl whitespace-pre-line text-sm text-navy-800" />
+        <div className="mt-6 flex justify-center gap-3"><EditableText as="span" value={page.ctaPrimaryLabel || "Primary CTA"} onChange={(v) => updatePagePatch({ ctaPrimaryLabel: v })} className="rounded bg-navy-950 px-6 py-3 font-display text-sm font-900 text-white" /><EditableText as="span" value={page.ctaSecondaryLabel || "Secondary CTA"} onChange={(v) => updatePagePatch({ ctaSecondaryLabel: v })} className="rounded border border-navy-950/30 px-6 py-3 font-display text-sm font-900 text-navy-950" /></div>
+      </section>
+    );
   }
 
-  const selectedBlockIndex = selected.kind === "block" ? selected.index : -1;
-  const selectedStepIndex = selected.kind === "step" ? selected.index : -1;
-  const selectedHomeHeroIndex = selected.kind === "homeHero" ? selected.index : -1;
-  const selectedBlock = selectedBlockIndex >= 0 ? page.blocks[selectedBlockIndex] : null;
-  const selectedStep = selectedStepIndex >= 0 ? page.steps[selectedStepIndex] : null;
-  const selectedHomeSlide = content?.heroSlides?.[homeHeroIndex] || null;
-  const inspectorHomeSlide = selectedHomeHeroIndex >= 0 ? content?.heroSlides?.[selectedHomeHeroIndex] : null;
+  if (!content) return <div className="p-8 text-sm text-gray-600">Loading visual website builder…</div>;
 
-  if (!content) return <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">Loading visual CMS builder…</div>;
+  const selectedHomeSlide = content.heroSlides[homeHeroIndex];
 
-  return <div className="-m-6 min-h-screen bg-gray-100">
-    <div className="sticky top-0 z-20 border-b border-gray-200 bg-white/95 px-5 py-3 backdrop-blur">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><p className="font-mono text-[10px] uppercase tracking-widest text-accent">Visual CMS Builder</p><h1 className="font-display text-2xl font-900 text-navy-950">Edit the website visually</h1></div>
-        <div className="flex flex-wrap gap-2"><Link href={previewHref} target="_blank" className="btn-outline">Open public page ↗</Link><button className="btn-primary" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save website changes"}</button></div>
-      </div>
-      {message ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">{message}</div> : null}
-    </div>
-
-    <div className="grid min-h-[calc(100vh-88px)] grid-cols-[260px_1fr_360px] gap-0">
-      <aside className="border-r border-gray-200 bg-white p-4">
-        <p className="mb-2 text-[11px] font-display font-900 uppercase tracking-wide text-gray-500">Pages</p>
-        <div className="space-y-1">{PAGES.map((item)=><button key={item.key} onClick={()=>{setPageKey(item.key); setSelected({ kind: "hero" });}} className={`w-full rounded-lg px-3 py-2 text-left text-sm font-display font-800 ${pageKey === item.key ? "bg-navy-950 text-white" : "text-gray-600 hover:bg-gray-50"}`}>{item.label}</button>)}</div>
-        <div className="my-5 border-t border-gray-200" />
-        <p className="mb-2 text-[11px] font-display font-900 uppercase tracking-wide text-gray-500">Add elements</p>
-        <div className="space-y-2">{ADD_BLOCKS.map((template)=><button key={template.label} onClick={()=>addBlock(template)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-xs font-display font-800 text-navy-900 hover:border-accent hover:bg-amber-50"><span className="mr-2">{template.icon}</span>{template.label}</button>)}<button onClick={addStep} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-xs font-display font-800 text-navy-900 hover:border-accent hover:bg-amber-50">➕ Process step</button></div>
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><strong>How this works:</strong><br/>Click a section or block on the page canvas, edit it on the right, drag it with your mouse, then save.</div>
+  return (
+    <div className="fixed inset-0 z-40 flex bg-gray-100 text-navy-950">
+      <aside className="flex w-[290px] shrink-0 flex-col border-r border-gray-200 bg-white">
+        <div className="border-b border-gray-200 p-4">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-accent">Combay CMS</p>
+          <h1 className="font-display text-xl font-900">Visual Builder</h1>
+          <p className="mt-1 text-xs text-gray-500">Drag widgets into the PC website canvas. Click text on the website to edit it directly.</p>
+        </div>
+        <div className="border-b border-gray-200 p-3">
+          <label className="text-[10px] font-display font-800 uppercase tracking-wide text-gray-500">Page</label>
+          <div className="mt-2 grid gap-1">
+            {PAGES.map((item) => <button key={item.key} type="button" onClick={() => { setPageKey(item.key); setSelected({ kind: "hero" }); }} className={`rounded px-3 py-2 text-left text-sm font-display font-800 ${pageKey === item.key ? "bg-navy-950 text-white" : "bg-gray-50 text-navy-900 hover:bg-gray-100"}`}>{item.label}</button>)}
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-3">
+          <p className="mb-2 text-[10px] font-display font-800 uppercase tracking-wide text-gray-500">Widgets</p>
+          <div className="grid grid-cols-2 gap-2">
+            {WIDGETS.map((widget) => (
+              <button
+                key={widget.label}
+                type="button"
+                draggable
+                onDragStart={() => setDrag({ kind: "widget", template: widget })}
+                onClick={() => addBlock(widget)}
+                className="rounded-lg border border-gray-200 bg-white p-3 text-left shadow-sm hover:border-accent hover:bg-accent/10"
+              >
+                <span className="block text-xl">{widget.icon}</span>
+                <span className="mt-1 block text-xs font-display font-900 text-navy-950">{widget.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
+            <strong className="text-navy-950">How to edit</strong>
+            <p className="mt-1">Click text on the website and type. Drag sections/cards to move or swap. Use the quick bar at the bottom for image upload, width, alignment, background and delete.</p>
+          </div>
+        </div>
       </aside>
 
-      <main className="overflow-auto p-6">
-        <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-gray-300 bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-3"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-red-300"/><span className="h-3 w-3 rounded-full bg-amber-300"/><span className="h-3 w-3 rounded-full bg-green-300"/></div><p className="text-xs font-display font-800 text-gray-500">Website preview: {previewHref}</p></div>
-          <div className="border-b border-gray-200 bg-white px-6 py-4"><div className="flex items-center justify-between"><img src="/images/combay-doc-logo.png" alt="Combay" className="h-9 w-auto"/><div className="hidden gap-5 text-xs font-display font-800 text-gray-500 md:flex"><span>Shop</span><span>Repair</span><span>Asset Recovery</span><span>Contact</span></div></div></div>
-          <div className="space-y-4 bg-gray-50 p-4">{pageKey === "home" ? <div className="rounded-2xl border border-gray-200 bg-white p-4"><div className="mb-3 flex gap-2">{content.heroSlides.map((_, index)=><button key={index} onClick={()=>{setHomeHeroIndex(index); setSelected({ kind: "homeHero", index });}} className={`rounded px-3 py-1 text-xs font-display font-800 ${homeHeroIndex === index ? "bg-navy-950 text-white" : "bg-gray-100 text-gray-600"}`}>Hero slide {index+1}</button>)}</div>{selectedHomeSlide ? <div onClick={()=>setSelected({ kind: "homeHero", index: homeHeroIndex })} className={`cursor-pointer rounded-xl bg-navy-950 p-7 text-white ${selected.kind === "homeHero" ? "ring-2 ring-accent" : ""}`} style={{ backgroundImage: selectedHomeSlide.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${selectedHomeSlide.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}><p className="font-mono text-[10px] uppercase tracking-widest text-accent">{selectedHomeSlide.eyebrow}</p><h2 className="mt-2 font-display text-3xl font-900">{selectedHomeSlide.heading} <span className="text-accent">{selectedHomeSlide.accent}</span></h2><p className="mt-3 max-w-2xl text-sm text-white/70">{selectedHomeSlide.body}</p></div> : null}</div> : null}{order.map((section, index)=>renderSection(section, index))}<div onClick={()=>setSelected({ kind: "footer" })} className={`cursor-pointer rounded-2xl bg-navy-950 p-6 text-white ${selected.kind === "footer" ? "ring-2 ring-accent" : ""}`}><p className="font-display font-900">Footer</p><p className="mt-1 text-sm text-white/60">{content.footer.description}</p></div></div>
+      <main className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="rounded bg-navy-950 px-3 py-1 text-xs font-display font-900 text-white">PC desktop mode</span>
+            <span className="text-xs text-gray-500">Canvas is fixed at 1180px wide and scaled down if space is tight.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <select className="input h-9 w-28 text-xs" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
+              <option value={0.65}>65%</option>
+              <option value={0.78}>78%</option>
+              <option value={0.9}>90%</option>
+              <option value={1}>100%</option>
+            </select>
+            <Link href={publicPath} target="_blank" className="btn-outline text-xs">Open live page</Link>
+            <button type="button" onClick={save} disabled={saving} className="btn-primary text-xs">{saving ? "Saving…" : "Save website"}</button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1">
+          <DesktopShell zoom={zoom}>
+            {pageKey === "home" && selectedHomeSlide ? (
+              <section className="border-b border-gray-200 bg-navy-950 px-12 py-10 text-white" style={{ backgroundImage: selectedHomeSlide.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${selectedHomeSlide.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
+                <div className="mb-5 flex gap-2">{content.heroSlides.map((_, index) => <button key={index} type="button" onClick={() => { setHomeHeroIndex(index); setSelected({ kind: "homeHero", index }); }} className={`rounded px-3 py-1 text-xs font-display font-800 ${homeHeroIndex === index ? "bg-accent text-navy-950" : "bg-white/10 text-white"}`}>Home slide {index + 1}</button>)}</div>
+                <EditableText as="p" value={selectedHomeSlide.eyebrow} onChange={(v) => updateContent({ ...content, heroSlides: content.heroSlides.map((slide, i) => i === homeHeroIndex ? { ...slide, eyebrow: v } : slide) })} className="font-mono text-xs uppercase tracking-widest text-accent" />
+                <EditableText as="h1" value={selectedHomeSlide.heading} onChange={(v) => updateContent({ ...content, heroSlides: content.heroSlides.map((slide, i) => i === homeHeroIndex ? { ...slide, heading: v } : slide) })} className="mt-4 max-w-3xl font-display text-5xl font-900" />
+                <EditableText as="h2" value={selectedHomeSlide.accent} onChange={(v) => updateContent({ ...content, heroSlides: content.heroSlides.map((slide, i) => i === homeHeroIndex ? { ...slide, accent: v } : slide) })} className="max-w-3xl font-display text-5xl font-900 text-accent" />
+                <EditableText as="p" multiline value={selectedHomeSlide.body} onChange={(v) => updateContent({ ...content, heroSlides: content.heroSlides.map((slide, i) => i === homeHeroIndex ? { ...slide, body: v } : slide) })} className="mt-5 max-w-2xl whitespace-pre-line text-lg text-white/70" />
+              </section>
+            ) : null}
+            {order.map((section, index) => renderSection(section, index))}
+            <footer onClick={() => setSelected({ kind: "footer" })} className={`bg-navy-950 px-10 py-8 text-white ${selected.kind === "footer" ? "ring-4 ring-inset ring-accent" : ""}`}>
+              <EditableText as="p" multiline value={content.footer.description} onChange={(v) => updateContent({ ...content, footer: { ...content.footer, description: v } })} className="max-w-2xl whitespace-pre-line text-sm text-white/70" />
+            </footer>
+          </DesktopShell>
         </div>
       </main>
 
-      <aside className="border-l border-gray-200 bg-white p-5 overflow-auto">
-        <div className="mb-4"><p className="font-mono text-[10px] uppercase tracking-widest text-accent">Inspector</p><h2 className="font-display text-lg font-900 text-navy-950">Edit selected item</h2></div>
-        {selected.kind === "hero" && <div className="space-y-3"><Field label="Small label" value={page.eyebrow} onChange={(v)=>updatePagePatch({ eyebrow: v })}/><Field label="Main heading" value={page.heading} onChange={(v)=>updatePagePatch({ heading: v })}/><Field label="Highlighted heading" value={page.accent} onChange={(v)=>updatePagePatch({ accent: v })}/><Field label="Intro text" textarea value={page.body} onChange={(v)=>updatePagePatch({ body: v })}/><ImageField label="Hero background image" value={page.backgroundImageUrl} onChange={(v)=>updatePagePatch({ backgroundImageUrl: v })}/><ImageField label="Hero side image" value={page.heroImageUrl} onChange={(v)=>updatePagePatch({ heroImageUrl: v })}/><Field label="Main button text" value={page.primaryLabel} onChange={(v)=>updatePagePatch({ primaryLabel: v })}/><Field label="Main button link" value={page.primaryHref} onChange={(v)=>updatePagePatch({ primaryHref: v })}/><Field label="Second button text" value={page.secondaryLabel} onChange={(v)=>updatePagePatch({ secondaryLabel: v })}/><Field label="Second button link" value={page.secondaryHref} onChange={(v)=>updatePagePatch({ secondaryHref: v })}/></div>}
-        {inspectorHomeSlide && <div className="space-y-3"><Field label="Small label" value={inspectorHomeSlide.eyebrow} onChange={(v)=>updateContent({ ...content, heroSlides: content.heroSlides.map((s,i)=>i===selectedHomeHeroIndex?{...s,eyebrow:v}:s) })}/><Field label="Main heading" value={inspectorHomeSlide.heading} onChange={(v)=>updateContent({ ...content, heroSlides: content.heroSlides.map((s,i)=>i===selectedHomeHeroIndex?{...s,heading:v}:s) })}/><Field label="Highlighted heading" value={inspectorHomeSlide.accent} onChange={(v)=>updateContent({ ...content, heroSlides: content.heroSlides.map((s,i)=>i===selectedHomeHeroIndex?{...s,accent:v}:s) })}/><Field label="Body text" textarea value={inspectorHomeSlide.body} onChange={(v)=>updateContent({ ...content, heroSlides: content.heroSlides.map((s,i)=>i===selectedHomeHeroIndex?{...s,body:v}:s) })}/><ImageField label="Background image" value={inspectorHomeSlide.backgroundImageUrl || ""} onChange={(v)=>updateContent({ ...content, heroSlides: content.heroSlides.map((s,i)=>i===selectedHomeHeroIndex?{...s,backgroundImageUrl:v}:s) })}/><ImageField label="Side image" value={inspectorHomeSlide.imageUrl || ""} onChange={(v)=>updateContent({ ...content, heroSlides: content.heroSlides.map((s,i)=>i===selectedHomeHeroIndex?{...s,imageUrl:v}:s) })}/></div>}
-        {selected.kind === "section" && <div className="space-y-3"><div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm"><strong>{SECTION_META[selected.section]?.label}</strong><p className="mt-1 text-xs text-gray-500">Drag this section up/down on the canvas to change its public order.</p></div>{selected.section === "content" && <><Field label="Section small label" value={page.sectionEyebrow} onChange={(v)=>updatePagePatch({ sectionEyebrow: v })}/><Field label="Section heading" value={page.sectionHeading} onChange={(v)=>updatePagePatch({ sectionHeading: v })}/><Field label="Section body" textarea value={page.sectionBody} onChange={(v)=>updatePagePatch({ sectionBody: v })}/></>}{selected.section === "formOrCta" && <><Field label="CTA / form heading" value={page.ctaHeading} onChange={(v)=>updatePagePatch({ ctaHeading: v })}/><Field label="CTA body" textarea value={page.ctaBody} onChange={(v)=>updatePagePatch({ ctaBody: v })}/><Field label="Main CTA text" value={page.ctaPrimaryLabel} onChange={(v)=>updatePagePatch({ ctaPrimaryLabel: v })}/><Field label="Main CTA link" value={page.ctaPrimaryHref} onChange={(v)=>updatePagePatch({ ctaPrimaryHref: v })}/><Field label="Second CTA text" value={page.ctaSecondaryLabel} onChange={(v)=>updatePagePatch({ ctaSecondaryLabel: v })}/><Field label="Second CTA link" value={page.ctaSecondaryHref} onChange={(v)=>updatePagePatch({ ctaSecondaryHref: v })}/></>}</div>}
-        {selectedBlock && <div className="space-y-3"><div className="flex justify-between gap-3"><strong className="text-sm text-navy-950">Content block</strong><button className="text-xs text-red-600" onClick={()=>removeBlock(selectedBlockIndex)}>Delete</button></div><SelectField label="Element type" value={selectedBlock.blockType} onChange={(v)=>updateBlock(selectedBlockIndex,{ blockType: v })} options={[["text","Text"],["image","Image"],["icon","Icon feature"],["promotion","Promotion banner"],["slider","Slider item"],["animation","Animation cue"]]}/><Field label="Icon / emoji" value={selectedBlock.icon} onChange={(v)=>updateBlock(selectedBlockIndex,{ icon: v })}/><Field label="Heading" value={selectedBlock.title} onChange={(v)=>updateBlock(selectedBlockIndex,{ title: v })}/><Field label="Sub-heading" value={selectedBlock.subtitle} onChange={(v)=>updateBlock(selectedBlockIndex,{ subtitle: v })}/><Field label="Body text" textarea value={selectedBlock.body} onChange={(v)=>updateBlock(selectedBlockIndex,{ body: v })}/><ImageField label="Image" value={selectedBlock.imageUrl} onChange={(v)=>updateBlock(selectedBlockIndex,{ imageUrl: v })}/><div className="grid grid-cols-2 gap-3"><Field label="Button text" value={selectedBlock.linkLabel} onChange={(v)=>updateBlock(selectedBlockIndex,{ linkLabel: v })}/><Field label="Button link" value={selectedBlock.linkHref} onChange={(v)=>updateBlock(selectedBlockIndex,{ linkHref: v })}/></div><div className="grid grid-cols-2 gap-3"><SelectField label="Width" value={selectedBlock.width} onChange={(v)=>updateBlock(selectedBlockIndex,{ width: v })} options={[["quarter","Small"],["half","Medium"],["full","Full width"]]}/><SelectField label="Text alignment" value={selectedBlock.align} onChange={(v)=>updateBlock(selectedBlockIndex,{ align: v })} options={[["left","Left"],["center","Centre"],["right","Right"]]}/><SelectField label="Background" value={selectedBlock.background} onChange={(v)=>updateBlock(selectedBlockIndex,{ background: v })} options={[["white","White"],["soft","Soft grey"],["accent","Accent"],["dark","Dark"]]}/><SelectField label="Animation" value={selectedBlock.animation} onChange={(v)=>updateBlock(selectedBlockIndex,{ animation: v })} options={[["none","None"],["float","Float on hover"],["pulse","Shadow on hover"],["slide","Slide on hover"]]}/></div></div>}
-        {selectedStep && <div className="space-y-3"><div className="flex justify-between gap-3"><strong className="text-sm text-navy-950">Process step</strong><button className="text-xs text-red-600" onClick={()=>removeStep(selectedStepIndex)}>Delete</button></div><Field label="Step number" value={selectedStep.number} onChange={(v)=>updateStep(selectedStepIndex,{ number: v })}/><Field label="Heading" value={selectedStep.title} onChange={(v)=>updateStep(selectedStepIndex,{ title: v })}/><Field label="Body" textarea value={selectedStep.body} onChange={(v)=>updateStep(selectedStepIndex,{ body: v })}/><ImageField label="Step image" value={selectedStep.imageUrl} onChange={(v)=>updateStep(selectedStepIndex,{ imageUrl: v })}/></div>}
-        {selected.kind === "contact" && <div className="space-y-3"><Field label="Order’s/Quotes email" value={content.contact.salesEmail} onChange={(v)=>updateContent({ ...content, contact: { ...content.contact, salesEmail: v } })}/><Field label="General/Media email" value={content.contact.infoEmail} onChange={(v)=>updateContent({ ...content, contact: { ...content.contact, infoEmail: v } })}/><Field label="Phone" value={content.contact.phone} onChange={(v)=>updateContent({ ...content, contact: { ...content.contact, phone: v } })}/><Field label="Location" value={content.contact.location} onChange={(v)=>updateContent({ ...content, contact: { ...content.contact, location: v } })}/><Field label="Google map embed URL" textarea value={content.contact.mapEmbedUrl} onChange={(v)=>updateContent({ ...content, contact: { ...content.contact, mapEmbedUrl: v } })}/></div>}
-        {selected.kind === "footer" && <div className="space-y-3"><Field label="Footer description" textarea value={content.footer.description} onChange={(v)=>updateContent({ ...content, footer: { ...content.footer, description: v } })}/><ImageField label="Footer background" value={content.footer.backgroundImageUrl} onChange={(v)=>updateContent({ ...content, footer: { ...content.footer, backgroundImageUrl: v } })}/></div>}
-      </aside>
+      <div className="pointer-events-none fixed bottom-4 left-[310px] right-6 z-50 flex justify-center">
+        <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur">
+          <span className="mr-2 text-xs font-display font-900 text-navy-950">Selected: {selectedLabel}</span>
+          <QuickButton onClick={() => moveSelected("left")}>Move left/up</QuickButton>
+          <QuickButton onClick={() => moveSelected("right")}>Move right/down</QuickButton>
+          <QuickButton onClick={duplicateSelected}>Duplicate</QuickButton>
+          {(selected.kind === "block" || selected.kind === "step") ? <QuickButton onClick={removeSelected}>Delete</QuickButton> : null}
+          {selected.kind === "block" && selectedBlock ? (
+            <>
+              <select className="rounded border border-gray-300 px-2 py-1 text-xs" value={selectedBlock.width || "quarter"} onChange={(event) => updateBlock(selected.index, { width: event.target.value })}>
+                <option value="quarter">Small</option><option value="half">Medium</option><option value="full">Full width</option>
+              </select>
+              <select className="rounded border border-gray-300 px-2 py-1 text-xs" value={selectedBlock.align || "left"} onChange={(event) => updateBlock(selected.index, { align: event.target.value })}>
+                <option value="left">Left text</option><option value="center">Centre text</option><option value="right">Right text</option>
+              </select>
+              <select className="rounded border border-gray-300 px-2 py-1 text-xs" value={selectedBlock.background || "white"} onChange={(event) => updateBlock(selected.index, { background: event.target.value })}>
+                <option value="white">White</option><option value="soft">Soft grey</option><option value="accent">Accent</option><option value="dark">Dark</option>
+              </select>
+              <select className="rounded border border-gray-300 px-2 py-1 text-xs" value={selectedBlock.animation || "none"} onChange={(event) => updateBlock(selected.index, { animation: event.target.value })}>
+                <option value="none">No animation</option><option value="float">Float</option><option value="pulse">Pulse</option><option value="slide">Slide</option>
+              </select>
+              <ImageUploadButton label="Upload image" onUploaded={(url) => updateBlock(selected.index, { imageUrl: url })} />
+              <QuickButton onClick={() => { const url = prompt("Paste image URL", selectedBlock.imageUrl || ""); if (url !== null) updateBlock(selected.index, { imageUrl: url }); }}>Image URL</QuickButton>
+              <QuickButton onClick={() => { const url = prompt("Paste button/video link", selectedBlock.linkHref || ""); if (url !== null) updateBlock(selected.index, { linkHref: url }); }}>Link URL</QuickButton>
+            </>
+          ) : null}
+          {selected.kind === "step" && selectedStep ? <ImageUploadButton label="Upload step image" onUploaded={(url) => updateStep(selected.index, { imageUrl: url })} /> : null}
+          {selected.kind === "hero" ? <><ImageUploadButton label="Hero background" onUploaded={(url) => updatePagePatch({ backgroundImageUrl: url })} /><QuickButton onClick={() => { const url = prompt("Paste background image URL", page.backgroundImageUrl || ""); if (url !== null) updatePagePatch({ backgroundImageUrl: url }); }}>Background URL</QuickButton></> : null}
+          {message ? <span className="ml-2 text-xs text-gray-500">{message}</span> : null}
+        </div>
+      </div>
     </div>
-  </div>;
+  );
 }
