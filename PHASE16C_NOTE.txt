@@ -1,0 +1,5 @@
+Phase 16C — Visual CMS foundation
+
+Adds /admin/content/visual with a live public-site preview iframe, page selector, drag-and-drop ordering for CMS cards and process steps, image upload/URL editing for visual blocks, and common addable content blocks such as image cards, icon features, promotion banners, slider items and animation placeholders.
+
+This phase intentionally keeps checkout, account, navigation and protected workflows outside visual dragging to avoid accidental site breakage.

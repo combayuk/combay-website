@@ -16,6 +16,7 @@ const NAV = [
   { href:"/admin/support",    label:"Support",           icon:<MessageSquare size={15}/> },
   { href:"/admin/returns",    label:"Returns",           icon:<RotateCcw size={15}/> },
   { href:"/admin/content",    label:"Content",           icon:<FileText size={15}/> },
+  { href:"/admin/content/visual", label:"Visual CMS",       icon:<FileText size={15}/> },
   { href:"/admin/promotions", label:"Promotions",        icon:<Tag size={15}/> },
   { href:"/admin/marketing",  label:"Email automation",   icon:<Mail size={15}/> },
   { href:"/admin/marketing/broadcast", label:"Send custom email", icon:<Mail size={15}/> },
