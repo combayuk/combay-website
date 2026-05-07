@@ -110,6 +110,8 @@ export default function PromotionsPage() {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [categorySearch, setCategorySearch] = useState("");
+  const [brandSearch, setBrandSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,11 +244,23 @@ export default function PromotionsPage() {
     return list.filter((product) => `${product.sku} ${product.title} ${product.brand || ""} ${product.manufacturer || ""} ${product.category || ""}`.toLowerCase().includes(q)).slice(0, 120);
   }, [products, productSearch]);
 
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((category) => `${category.label} ${category.slug}`.toLowerCase().includes(q));
+  }, [categories, categorySearch]);
+
   const brands = useMemo(() => {
     const map = new Map<string, string>();
     products.forEach((product) => [product.brand, product.manufacturer].forEach((value) => { const label = String(value || "").trim(); if (label) map.set(label.toLowerCase(), label); }));
     return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
   }, [products]);
+
+  const filteredBrands = useMemo(() => {
+    const q = brandSearch.trim().toLowerCase();
+    if (!q) return brands;
+    return brands.filter((brand) => brand.toLowerCase().includes(q));
+  }, [brands, brandSearch]);
 
   async function remove(id: string) {
     if (!confirm("Delete this promotion? This cannot be undone.")) return;
@@ -303,12 +317,9 @@ export default function PromotionsPage() {
         </div>
 
         <section className="border border-gray-200 rounded-2xl p-4 bg-gray-50">
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-4">
-            <div>
-              <h3 className="font-display font-800 text-navy-950">Promotion eligibility</h3>
-              <p className="text-xs text-gray-500 mt-1">Include or exclude by product, category or brand. Example: include Lab & Scientific or exclude a brand from a sale.</p>
-            </div>
-            <label className="block lg:w-96"><span className="label">Search products</span><input className="input" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="SKU, title, brand, category..." /></label>
+          <div className="mb-4">
+            <h3 className="font-display font-800 text-navy-950">Promotion eligibility</h3>
+            <p className="text-xs text-gray-500 mt-1">Include or exclude by product, category or brand. Each rule type has its own search box so admin can quickly find the right target.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-4 mb-4">
             <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Products</p><p className="text-xs text-gray-500 mt-1">{form.includeAllProducts ? "All included" : `${form.includeProductIds.length} included`} · {form.excludeProductIds.length} excluded</p></div>
@@ -316,10 +327,21 @@ export default function PromotionsPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Brands</p><p className="text-xs text-gray-500 mt-1">{form.includeAllBrands ? "All included" : `${form.includeBrands.length} included`} · {form.excludeBrands.length} excluded</p></div>
           </div>
           <div className="grid lg:grid-cols-2 gap-4 mb-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><div className="flex items-start justify-between gap-3 mb-3"><div><p className="font-display font-700 text-sm text-navy-950">Category rules</p><p className="text-[11px] text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected categories only.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950 whitespace-nowrap"><input type="checkbox" checked={form.includeAllCategories} onChange={(e) => toggleIncludeAll("categories", e.target.checked)} /> Include all</label></div><div className="max-h-56 overflow-auto space-y-2">{categories.length === 0 ? <p className="text-xs text-gray-500">No categories found.</p> : categories.map((category) => (<div key={category.slug} className={`flex items-center justify-between gap-2 border rounded-lg p-2 ${form.includeAllCategories ? "border-gray-100 bg-gray-50" : "border-gray-100"}`}><span className="text-xs font-display font-700 text-navy-950">{category.label}</span><div className="flex gap-1"><button type="button" disabled={form.includeAllCategories} onClick={() => toggleProductTarget("includeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border disabled:opacity-40 disabled:cursor-not-allowed ${form.includeCategorySlugs.includes(category.slug) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeCategorySlugs.includes(category.slug) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><div className="flex items-start justify-between gap-3 mb-3"><div><p className="font-display font-700 text-sm text-navy-950">Brand/manufacturer rules</p><p className="text-[11px] text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected brands only.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950 whitespace-nowrap"><input type="checkbox" checked={form.includeAllBrands} onChange={(e) => toggleIncludeAll("brands", e.target.checked)} /> Include all</label></div><div className="max-h-56 overflow-auto space-y-2">{brands.length === 0 ? <p className="text-xs text-gray-500">No brands found.</p> : brands.map((brand) => (<div key={brand} className={`flex items-center justify-between gap-2 border rounded-lg p-2 ${form.includeAllBrands ? "border-gray-100 bg-gray-50" : "border-gray-100"}`}><span className="text-xs font-display font-700 text-navy-950">{brand}</span><div className="flex gap-1"><button type="button" disabled={form.includeAllBrands} onClick={() => toggleProductTarget("includeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border disabled:opacity-40 disabled:cursor-not-allowed ${form.includeBrands.includes(brand) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeBrands.includes(brand) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3">
+              <div className="flex items-start justify-between gap-3 mb-3"><div><p className="font-display font-700 text-sm text-navy-950">Category rules</p><p className="text-[11px] text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected categories only.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950 whitespace-nowrap"><input type="checkbox" checked={form.includeAllCategories} onChange={(e) => toggleIncludeAll("categories", e.target.checked)} /> Include all</label></div>
+              <label className="block mb-3"><span className="label">Search categories</span><input className="input" value={categorySearch} onChange={(e) => setCategorySearch(e.target.value)} placeholder="Category name, e.g. Lab & Scientific" /></label>
+              <div className="max-h-56 overflow-auto space-y-2">{categories.length === 0 ? <p className="text-xs text-gray-500">No categories found.</p> : filteredCategories.length === 0 ? <p className="text-xs text-gray-500">No categories match your search.</p> : filteredCategories.map((category) => (<div key={category.slug} className={`flex items-center justify-between gap-2 border rounded-lg p-2 ${form.includeAllCategories ? "border-gray-100 bg-gray-50" : "border-gray-100"}`}><span className="text-xs font-display font-700 text-navy-950">{category.label}</span><div className="flex gap-1"><button type="button" disabled={form.includeAllCategories} onClick={() => toggleProductTarget("includeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border disabled:opacity-40 disabled:cursor-not-allowed ${form.includeCategorySlugs.includes(category.slug) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeCategorySlugs.includes(category.slug) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3">
+              <div className="flex items-start justify-between gap-3 mb-3"><div><p className="font-display font-700 text-sm text-navy-950">Brand/manufacturer rules</p><p className="text-[11px] text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected brands only.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950 whitespace-nowrap"><input type="checkbox" checked={form.includeAllBrands} onChange={(e) => toggleIncludeAll("brands", e.target.checked)} /> Include all</label></div>
+              <label className="block mb-3"><span className="label">Search brands/manufacturers</span><input className="input" value={brandSearch} onChange={(e) => setBrandSearch(e.target.value)} placeholder="Brand/manufacturer, e.g. Siemens" /></label>
+              <div className="max-h-56 overflow-auto space-y-2">{brands.length === 0 ? <p className="text-xs text-gray-500">No brands found.</p> : filteredBrands.length === 0 ? <p className="text-xs text-gray-500">No brands match your search.</p> : filteredBrands.map((brand) => (<div key={brand} className={`flex items-center justify-between gap-2 border rounded-lg p-2 ${form.includeAllBrands ? "border-gray-100 bg-gray-50" : "border-gray-100"}`}><span className="text-xs font-display font-700 text-navy-950">{brand}</span><div className="flex gap-1"><button type="button" disabled={form.includeAllBrands} onClick={() => toggleProductTarget("includeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border disabled:opacity-40 disabled:cursor-not-allowed ${form.includeBrands.includes(brand) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeBrands.includes(brand) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div>
+            </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"><div><p className="font-display font-700 text-sm text-navy-950">Product rules</p><p className="text-xs text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected products only. Exclusions still work while include all is enabled.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950"><input type="checkbox" checked={form.includeAllProducts} onChange={(e) => toggleIncludeAll("products", e.target.checked)} /> Include all products</label></div>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 mb-3 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2"><div><p className="font-display font-700 text-sm text-navy-950">Product rules</p><p className="text-xs text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected products only. Exclusions still work while include all is enabled.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950"><input type="checkbox" checked={form.includeAllProducts} onChange={(e) => toggleIncludeAll("products", e.target.checked)} /> Include all products</label></div>
+            <label className="block"><span className="label">Search products</span><input className="input" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="SKU, title, brand, category..." /></label>
+          </div>
           <div className="max-h-72 overflow-auto border border-gray-200 rounded-xl bg-white divide-y divide-gray-100">
             {filteredProducts.length === 0 ? <div className="p-4 text-sm text-gray-500">No products found.</div> : filteredProducts.map((product) => (
               <div key={product.id} className="p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
