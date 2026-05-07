@@ -134,18 +134,10 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [addingAddress, setAddingAddress] = useState(false);
   const [addressDraft, setAddressDraft] = useState<AddressDraft>(EMPTY_ADDRESS);
-  const [addresses, setAddresses] = useState<Address[]>([
-    {
-      id: "addr-1",
-      label: "Main office",
-      line1: "Unit 12, Industrial Estate",
-      line2: "",
-      city: "London",
-      postcode: "E16 1AA",
-      country: "United Kingdom",
-      isDefault: true,
-    },
-  ]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressNotice, setAddressNotice] = useState<string | null>(null);
+  const [addressError, setAddressError] = useState<string | null>(null);
   const [savedCardPreview, setSavedCardPreview] = useState(false);
   const [orders, setOrders] = useState<PortalOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
@@ -174,6 +166,38 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
       .catch(() => { setOrders([]); setPortalReturns([]); })
       .finally(() => setOrdersLoading(false));
   }, [session]);
+
+  function normaliseAddress(row: any): Address {
+    return {
+      id: String(row.id),
+      label: String(row.label || ""),
+      line1: String(row.address1 || row.line1 || ""),
+      line2: String(row.address2 || row.line2 || ""),
+      city: String(row.city || ""),
+      postcode: String(row.postcode || ""),
+      country: String(row.country || "United Kingdom"),
+      isDefault: Boolean(row.isPrimary ?? row.isDefault),
+    };
+  }
+
+  async function loadAddresses() {
+    if (!session) return;
+    setAddressesLoading(true);
+    setAddressError(null);
+    try {
+      const response = await fetch("/api/account/addresses", { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not load addresses.");
+      setAddresses(Array.isArray(data.addresses) ? data.addresses.map(normaliseAddress) : []);
+    } catch (error) {
+      setAddressError(error instanceof Error ? error.message : "Could not load addresses.");
+      setAddresses([]);
+    } finally {
+      setAddressesLoading(false);
+    }
+  }
+
+  useEffect(() => { loadAddresses(); }, [session]);
 
   const portalOrders = orders;
 
@@ -229,16 +253,66 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
     setAddressDraft({ label: address.label, line1: address.line1, line2: address.line2, city: address.city, postcode: address.postcode, country: address.country });
   }
 
-  function saveAddress() {
-    if (!addressDraft.label || !addressDraft.line1 || !addressDraft.city || !addressDraft.postcode) return;
-    if (editingAddressId) {
-      setAddresses((items) => items.map((address) => (address.id === editingAddressId ? { ...address, ...addressDraft } : address)));
-    } else if (addresses.length < 5) {
-      setAddresses((items) => [...items, { ...addressDraft, id: `addr-${Date.now()}`, isDefault: items.length === 0 }]);
+  async function saveAddress() {
+    if (!addressDraft.line1 || !addressDraft.city || !addressDraft.postcode) {
+      setAddressError("Address line 1, town/city and postcode are required.");
+      return;
+    }
+    setAddressError(null);
+    setAddressNotice(null);
+    const payload = {
+      id: editingAddressId,
+      label: addressDraft.label,
+      address1: addressDraft.line1,
+      address2: addressDraft.line2,
+      city: addressDraft.city,
+      postcode: addressDraft.postcode,
+      country: addressDraft.country,
+    };
+    const response = await fetch("/api/account/addresses", {
+      method: editingAddressId ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      setAddressError(data.error || "Could not save address.");
+      return;
     }
     setAddingAddress(false);
     setEditingAddressId(null);
     setAddressDraft(EMPTY_ADDRESS);
+    setAddressNotice(editingAddressId ? "Address updated." : "Address added.");
+    await loadAddresses();
+  }
+
+  async function deleteAddress(id: string) {
+    if (!confirm("Delete this address?")) return;
+    setAddressError(null);
+    const response = await fetch(`/api/account/addresses?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      setAddressError(data.error || "Could not delete address.");
+      return;
+    }
+    setAddressNotice("Address deleted.");
+    await loadAddresses();
+  }
+
+  async function setPrimaryAddress(id: string) {
+    setAddressError(null);
+    const response = await fetch("/api/account/addresses", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, setPrimaryOnly: true }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      setAddressError(data.error || "Could not set primary address.");
+      return;
+    }
+    setAddressNotice("Primary address updated.");
+    await loadAddresses();
   }
 
   return (
@@ -299,8 +373,11 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
                 onEdit={startEditAddress}
                 onCancel={() => { setAddingAddress(false); setEditingAddressId(null); setAddressDraft(EMPTY_ADDRESS); }}
                 onSave={saveAddress}
-                onDelete={(id) => setAddresses((items) => items.filter((address) => address.id !== id))}
-                onSetDefault={(id) => setAddresses((items) => items.map((address) => ({ ...address, isDefault: address.id === id })))}
+                onDelete={deleteAddress}
+                onSetDefault={setPrimaryAddress}
+                loading={addressesLoading}
+                notice={addressNotice}
+                error={addressError}
               />
             )}
             {section === "payments" && <PaymentsPanel savedCardPreview={savedCardPreview} onSavePreview={() => setSavedCardPreview(true)} />}
@@ -926,6 +1003,9 @@ function AddressesPanel({
   onSave,
   onDelete,
   onSetDefault,
+  loading,
+  notice,
+  error,
 }: {
   addresses: Address[];
   addingAddress: boolean;
@@ -938,6 +1018,9 @@ function AddressesPanel({
   onSave: () => void;
   onDelete: (id: string) => void;
   onSetDefault: (id: string) => void;
+  loading?: boolean;
+  notice?: string | null;
+  error?: string | null;
 }) {
   return (
     <section>
@@ -953,14 +1036,14 @@ function AddressesPanel({
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-display font-700 text-sm text-navy-950">{address.label}</span>
-                  {address.isDefault && <span className="text-[10px] bg-accent text-navy-950 font-display font-700 px-2 py-0.5 rounded-full">DEFAULT</span>}
+                  {address.isDefault && <span className="text-[10px] bg-accent text-navy-950 font-display font-700 px-2 py-0.5 rounded-full">PRIMARY</span>}
                 </div>
                 <p className="text-gray-600 text-sm">{address.line1}{address.line2 ? `, ${address.line2}` : ""}</p>
                 <p className="text-gray-600 text-sm">{address.city}, {address.postcode}</p>
                 <p className="text-gray-400 text-xs">{address.country}</p>
               </div>
               <div className="flex gap-2 items-center">
-                {!address.isDefault && <button onClick={() => onSetDefault(address.id)} className="text-xs text-accent hover:text-accent-dark font-display font-600">Set default</button>}
+                {!address.isDefault && <button onClick={() => onSetDefault(address.id)} className="text-xs text-accent hover:text-accent-dark font-display font-600">Set primary</button>}
                 <button onClick={() => onEdit(address)} className="text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button>
                 <button onClick={() => onDelete(address.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
               </div>

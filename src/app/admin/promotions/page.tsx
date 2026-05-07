@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AlertTriangle, CheckCircle2, Pencil, Plus, Trash2 } from "lucide-react";
 
+type ProductOption = { id: string; title: string; sku: string; brand?: string | null };
+
 type Promotion = {
   id: string;
   name: string;
@@ -20,6 +22,8 @@ type Promotion = {
   showOnShop: boolean;
   bannerText: string | null;
   displayPriority: number;
+  includeProductIds: string[];
+  excludeProductIds: string[];
 };
 
 type FormState = {
@@ -38,6 +42,8 @@ type FormState = {
   showOnShop: boolean;
   bannerText: string;
   displayPriority: string;
+  includeProductIds: string[];
+  excludeProductIds: string[];
 };
 
 const emptyForm: FormState = {
@@ -56,6 +62,8 @@ const emptyForm: FormState = {
   showOnShop: false,
   bannerText: "",
   displayPriority: "100",
+  includeProductIds: [],
+  excludeProductIds: [],
 };
 
 function money(value: number) {
@@ -77,6 +85,8 @@ export default function PromotionsPage() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<ProductOption[]>([]);
+  const [productSearch, setProductSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +101,9 @@ export default function PromotionsPage() {
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not load promotions.");
       setPromotions(data.promotions || []);
+      const productResponse = await fetch("/api/products?admin=1&status=PUBLISHED", { cache: "no-store" });
+      const productData = await productResponse.json().catch(() => ({}));
+      setProducts(Array.isArray(productData.products) ? productData.products.map((p: any) => ({ id: p.id, title: p.title, sku: p.sku, brand: p.brand || p.manufacturer || null })).filter((p: ProductOption) => p.id) : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load promotions.");
     } finally {
@@ -123,6 +136,8 @@ export default function PromotionsPage() {
       showOnShop: Boolean(promotion.showOnShop),
       bannerText: promotion.bannerText || "",
       displayPriority: String(promotion.displayPriority ?? 100),
+      includeProductIds: Array.isArray(promotion.includeProductIds) ? promotion.includeProductIds : [],
+      excludeProductIds: Array.isArray(promotion.excludeProductIds) ? promotion.excludeProductIds : [],
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -142,6 +157,8 @@ export default function PromotionsPage() {
         showOnShop: form.showOnShop,
         bannerText: form.bannerText,
         displayPriority: form.displayPriority ? Number(form.displayPriority) : 100,
+        includeProductIds: form.includeProductIds,
+        excludeProductIds: form.excludeProductIds,
       };
       const response = await fetch(form.id ? `/api/promotions/${form.id}` : "/api/promotions", {
         method: form.id ? "PATCH" : "POST",
@@ -159,6 +176,22 @@ export default function PromotionsPage() {
       setSaving(false);
     }
   }
+
+  function toggleProductTarget(mode: "includeProductIds" | "excludeProductIds", id: string) {
+    setForm((current) => {
+      const currentList = current[mode] || [];
+      const opposite = mode === "includeProductIds" ? "excludeProductIds" : "includeProductIds";
+      const nextList = currentList.includes(id) ? currentList.filter((item) => item !== id) : [...currentList, id];
+      return { ...current, [mode]: nextList, [opposite]: (current[opposite] || []).filter((item) => item !== id) } as FormState;
+    });
+  }
+
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    const list = products.slice(0, 500);
+    if (!q) return list.slice(0, 80);
+    return list.filter((product) => `${product.sku} ${product.title} ${product.brand || ""}`.toLowerCase().includes(q)).slice(0, 120);
+  }, [products, productSearch]);
 
   async function remove(id: string) {
     if (!confirm("Delete this promotion? This cannot be undone.")) return;
@@ -214,6 +247,31 @@ export default function PromotionsPage() {
           <label className="block lg:col-span-3"><span className="label">Internal/customer note</span><textarea className="textarea min-h-[90px]" value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="Optional note shown to admin. Keep customer-facing code names professional." /></label>
         </div>
 
+        <section className="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-4">
+            <div>
+              <h3 className="font-display font-800 text-navy-950">Product eligibility</h3>
+              <p className="text-xs text-gray-500 mt-1">Select products to include or exclude. If no products are included, the code applies to all eligible checkout products except excluded products.</p>
+            </div>
+            <label className="block lg:w-96"><span className="label">Search products</span><input className="input" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="SKU, title, brand..." /></label>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Included only</p><p className="text-xs text-gray-500 mt-1">{form.includeProductIds.length} selected</p></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Excluded</p><p className="text-xs text-gray-500 mt-1">{form.excludeProductIds.length} selected</p></div>
+          </div>
+          <div className="max-h-72 overflow-auto border border-gray-200 rounded-xl bg-white divide-y divide-gray-100">
+            {filteredProducts.length === 0 ? <div className="p-4 text-sm text-gray-500">No products found.</div> : filteredProducts.map((product) => (
+              <div key={product.id} className="p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div><p className="font-display font-700 text-sm text-navy-950">{product.title}</p><p className="font-mono text-xs text-gray-500">{product.sku}{product.brand ? ` · ${product.brand}` : ""}</p></div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => toggleProductTarget("includeProductIds", product.id)} className={`text-xs rounded-lg px-3 py-2 font-display font-700 border ${form.includeProductIds.includes(product.id) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>{form.includeProductIds.includes(product.id) ? "Included" : "Include"}</button>
+                  <button type="button" onClick={() => toggleProductTarget("excludeProductIds", product.id)} className={`text-xs rounded-lg px-3 py-2 font-display font-700 border ${form.excludeProductIds.includes(product.id) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>{form.excludeProductIds.includes(product.id) ? "Excluded" : "Exclude"}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <button disabled={saving} className="btn-primary inline-flex items-center gap-2"><Plus size={16} />{saving ? "Saving..." : form.id ? "Save promotion" : "Create promotion"}</button>
       </form>
 
@@ -222,7 +280,7 @@ export default function PromotionsPage() {
         {loading ? <div className="p-6 text-sm text-gray-500">Loading promotions...</div> : promotions.length === 0 ? <div className="p-8 text-center text-sm text-gray-400">No promotions created yet.</div> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500"><tr><th className="px-5 py-3">Code</th><th className="px-5 py-3">Offer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Dates</th><th className="px-5 py-3">Usage</th><th className="px-5 py-3">Public</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
+              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500"><tr><th className="px-5 py-3">Code</th><th className="px-5 py-3">Offer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Dates</th><th className="px-5 py-3">Usage</th><th className="px-5 py-3">Public</th><th className="px-5 py-3">Products</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {promotions.map((promotion) => (
                   <tr key={promotion.id} className="hover:bg-gray-50">
@@ -232,6 +290,7 @@ export default function PromotionsPage() {
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.startsAt ? dateInput(promotion.startsAt) : "No start"} → {promotion.endsAt ? dateInput(promotion.endsAt) : "No end"}</td>
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.usedCount}{promotion.maxUses ? ` / ${promotion.maxUses}` : " used"}</td>
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.showOnHomepage ? "Home" : ""}{promotion.showOnHomepage && promotion.showOnShop ? " + " : ""}{promotion.showOnShop ? "Shop" : ""}{!promotion.showOnHomepage && !promotion.showOnShop ? "Hidden" : ""}</td>
+                    <td className="px-5 py-4 text-xs text-gray-500">{promotion.includeProductIds?.length ? `${promotion.includeProductIds.length} included` : "All products"}{promotion.excludeProductIds?.length ? ` · ${promotion.excludeProductIds.length} excluded` : ""}</td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => edit(promotion)} className="btn-secondary py-2 px-3"><Pencil size={14} /></button><button type="button" onClick={() => remove(promotion.id)} className="btn-secondary py-2 px-3 text-red-600"><Trash2 size={14} /></button></div></td>
                   </tr>
                 ))}

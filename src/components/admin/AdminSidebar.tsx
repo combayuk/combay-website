@@ -18,6 +18,7 @@ const NAV = [
   { href:"/admin/content",    label:"Content",           icon:<FileText size={15}/> },
   { href:"/admin/promotions", label:"Promotions",        icon:<Tag size={15}/> },
   { href:"/admin/marketing",  label:"Email automation",   icon:<Mail size={15}/> },
+  { href:"/admin/marketing/broadcast", label:"Send custom email", icon:<Mail size={15}/> },
 ];
 
 export default function AdminSidebar() {
