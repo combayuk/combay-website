@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     const requestedSkus = lines.map((line) => String(line.sku)).filter(Boolean);
     const products = await prisma.product.findMany({
       where: { sku: { in: requestedSkus }, status: "PUBLISHED" },
-      include: { images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, variants: { orderBy: { sortOrder: "asc" } } },
+      include: { category: true, images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, variants: { orderBy: { sortOrder: "asc" } } },
     });
 
     const productBySku = new Map(products.map((product) => [product.sku, product]));
@@ -98,7 +98,17 @@ export async function POST(request: Request) {
     if (requestedPromotionCode) {
       const promotion = await findPromotionByCode(requestedPromotionCode);
       if (!promotion) throw new Error("Promotion code was not recognised.");
-      const targetCheck = checkPromotionProductTargets(promotion, orderItems.map((item) => item.productId));
+      const targetCheck = checkPromotionProductTargets(promotion, orderItems.map((item) => {
+        const product = products.find((candidate) => candidate.id === item.productId);
+        return {
+          id: item.productId,
+          productId: item.productId,
+          categorySlug: product?.category?.slug ?? "",
+          category: product?.category?.name ?? "",
+          brand: product?.brand ?? "",
+          manufacturer: product?.manufacturer ?? "",
+        };
+      }));
       if (!targetCheck.ok) throw new Error(targetCheck.error || "Promotion code is not valid for these products.");
       const promoTotals = calculatePromotionTotals(promotion, subtotal, shipping);
       if (!promoTotals.ok) throw new Error(promoTotals.error || "Promotion code is not valid for this order.");

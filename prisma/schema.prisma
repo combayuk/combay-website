@@ -681,6 +681,10 @@ model Promotion {
   bannerText     String?
   displayPriority Int     @default(100)
   productTargets PromotionProductTarget[]
+  includeCategorySlugs String[] @default([])
+  excludeCategorySlugs String[] @default([])
+  includeBrands        String[] @default([])
+  excludeBrands        String[] @default([])
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

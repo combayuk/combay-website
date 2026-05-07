@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AlertTriangle, CheckCircle2, Pencil, Plus, Trash2 } from "lucide-react";
 
-type ProductOption = { id: string; title: string; sku: string; brand?: string | null };
+type ProductOption = { id: string; title: string; sku: string; brand?: string | null; manufacturer?: string | null; category?: string | null; categorySlug?: string | null };
+type CategoryOption = { slug: string; label: string };
 
 type Promotion = {
   id: string;
@@ -24,6 +25,10 @@ type Promotion = {
   displayPriority: number;
   includeProductIds: string[];
   excludeProductIds: string[];
+  includeCategorySlugs: string[];
+  excludeCategorySlugs: string[];
+  includeBrands: string[];
+  excludeBrands: string[];
 };
 
 type FormState = {
@@ -44,6 +49,10 @@ type FormState = {
   displayPriority: string;
   includeProductIds: string[];
   excludeProductIds: string[];
+  includeCategorySlugs: string[];
+  excludeCategorySlugs: string[];
+  includeBrands: string[];
+  excludeBrands: string[];
 };
 
 const emptyForm: FormState = {
@@ -64,6 +73,10 @@ const emptyForm: FormState = {
   displayPriority: "100",
   includeProductIds: [],
   excludeProductIds: [],
+  includeCategorySlugs: [],
+  excludeCategorySlugs: [],
+  includeBrands: [],
+  excludeBrands: [],
 };
 
 function money(value: number) {
@@ -86,6 +99,7 @@ export default function PromotionsPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductOption[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -103,7 +117,12 @@ export default function PromotionsPage() {
       setPromotions(data.promotions || []);
       const productResponse = await fetch("/api/products?admin=1&status=PUBLISHED", { cache: "no-store" });
       const productData = await productResponse.json().catch(() => ({}));
-      setProducts(Array.isArray(productData.products) ? productData.products.map((p: any) => ({ id: p.id, title: p.title, sku: p.sku, brand: p.brand || p.manufacturer || null })).filter((p: ProductOption) => p.id) : []);
+      const loadedProducts = Array.isArray(productData.products) ? productData.products.map((p: any) => ({ id: p.id, title: p.title, sku: p.sku, brand: p.brand || null, manufacturer: p.manufacturer || null, category: p.category || null, categorySlug: p.categorySlug || null })).filter((p: ProductOption) => p.id) : [];
+      setProducts(loadedProducts);
+      const categoryMap = new Map<string, CategoryOption>();
+      if (Array.isArray(productData.categories)) productData.categories.forEach((c: any) => { const slug = String(c.slug || ""); const label = String(c.label || c.name || c.slug || ""); if (slug && label) categoryMap.set(slug, { slug, label }); });
+      loadedProducts.forEach((product: ProductOption) => { if (product.categorySlug && product.category) categoryMap.set(product.categorySlug, { slug: product.categorySlug, label: product.category }); });
+      setCategories(Array.from(categoryMap.values()).sort((a, b) => a.label.localeCompare(b.label)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load promotions.");
     } finally {
@@ -138,6 +157,10 @@ export default function PromotionsPage() {
       displayPriority: String(promotion.displayPriority ?? 100),
       includeProductIds: Array.isArray(promotion.includeProductIds) ? promotion.includeProductIds : [],
       excludeProductIds: Array.isArray(promotion.excludeProductIds) ? promotion.excludeProductIds : [],
+      includeCategorySlugs: Array.isArray(promotion.includeCategorySlugs) ? promotion.includeCategorySlugs : [],
+      excludeCategorySlugs: Array.isArray(promotion.excludeCategorySlugs) ? promotion.excludeCategorySlugs : [],
+      includeBrands: Array.isArray(promotion.includeBrands) ? promotion.includeBrands : [],
+      excludeBrands: Array.isArray(promotion.excludeBrands) ? promotion.excludeBrands : [],
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -159,6 +182,10 @@ export default function PromotionsPage() {
         displayPriority: form.displayPriority ? Number(form.displayPriority) : 100,
         includeProductIds: form.includeProductIds,
         excludeProductIds: form.excludeProductIds,
+        includeCategorySlugs: form.includeCategorySlugs,
+        excludeCategorySlugs: form.excludeCategorySlugs,
+        includeBrands: form.includeBrands,
+        excludeBrands: form.excludeBrands,
       };
       const response = await fetch(form.id ? `/api/promotions/${form.id}` : "/api/promotions", {
         method: form.id ? "PATCH" : "POST",
@@ -177,10 +204,11 @@ export default function PromotionsPage() {
     }
   }
 
-  function toggleProductTarget(mode: "includeProductIds" | "excludeProductIds", id: string) {
+  function toggleProductTarget(mode: "includeProductIds" | "excludeProductIds" | "includeCategorySlugs" | "excludeCategorySlugs" | "includeBrands" | "excludeBrands", id: string) {
     setForm((current) => {
       const currentList = current[mode] || [];
-      const opposite = mode === "includeProductIds" ? "excludeProductIds" : "includeProductIds";
+      const oppositeMap = { includeProductIds: "excludeProductIds", excludeProductIds: "includeProductIds", includeCategorySlugs: "excludeCategorySlugs", excludeCategorySlugs: "includeCategorySlugs", includeBrands: "excludeBrands", excludeBrands: "includeBrands" } as const;
+      const opposite = oppositeMap[mode];
       const nextList = currentList.includes(id) ? currentList.filter((item) => item !== id) : [...currentList, id];
       return { ...current, [mode]: nextList, [opposite]: (current[opposite] || []).filter((item) => item !== id) } as FormState;
     });
@@ -190,8 +218,14 @@ export default function PromotionsPage() {
     const q = productSearch.trim().toLowerCase();
     const list = products.slice(0, 500);
     if (!q) return list.slice(0, 80);
-    return list.filter((product) => `${product.sku} ${product.title} ${product.brand || ""}`.toLowerCase().includes(q)).slice(0, 120);
+    return list.filter((product) => `${product.sku} ${product.title} ${product.brand || ""} ${product.manufacturer || ""} ${product.category || ""}`.toLowerCase().includes(q)).slice(0, 120);
   }, [products, productSearch]);
+
+  const brands = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((product) => [product.brand, product.manufacturer].forEach((value) => { const label = String(value || "").trim(); if (label) map.set(label.toLowerCase(), label); }));
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [products]);
 
   async function remove(id: string) {
     if (!confirm("Delete this promotion? This cannot be undone.")) return;
@@ -250,19 +284,24 @@ export default function PromotionsPage() {
         <section className="border border-gray-200 rounded-2xl p-4 bg-gray-50">
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-4">
             <div>
-              <h3 className="font-display font-800 text-navy-950">Product eligibility</h3>
-              <p className="text-xs text-gray-500 mt-1">Select products to include or exclude. If no products are included, the code applies to all eligible checkout products except excluded products.</p>
+              <h3 className="font-display font-800 text-navy-950">Promotion eligibility</h3>
+              <p className="text-xs text-gray-500 mt-1">Include or exclude by product, category or brand. Example: include Lab & Scientific or exclude a brand from a sale.</p>
             </div>
-            <label className="block lg:w-96"><span className="label">Search products</span><input className="input" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="SKU, title, brand..." /></label>
+            <label className="block lg:w-96"><span className="label">Search products</span><input className="input" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="SKU, title, brand, category..." /></label>
           </div>
-          <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Included only</p><p className="text-xs text-gray-500 mt-1">{form.includeProductIds.length} selected</p></div>
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Excluded</p><p className="text-xs text-gray-500 mt-1">{form.excludeProductIds.length} selected</p></div>
+          <div className="grid md:grid-cols-3 gap-4 mb-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Products</p><p className="text-xs text-gray-500 mt-1">{form.includeProductIds.length} included · {form.excludeProductIds.length} excluded</p></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Categories</p><p className="text-xs text-gray-500 mt-1">{form.includeCategorySlugs.length} included · {form.excludeCategorySlugs.length} excluded</p></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Brands</p><p className="text-xs text-gray-500 mt-1">{form.includeBrands.length} included · {form.excludeBrands.length} excluded</p></div>
+          </div>
+          <div className="grid lg:grid-cols-2 gap-4 mb-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950 mb-2">Category rules</p><div className="max-h-56 overflow-auto space-y-2">{categories.length === 0 ? <p className="text-xs text-gray-500">No categories found.</p> : categories.map((category) => (<div key={category.slug} className="flex items-center justify-between gap-2 border border-gray-100 rounded-lg p-2"><span className="text-xs font-display font-700 text-navy-950">{category.label}</span><div className="flex gap-1"><button type="button" onClick={() => toggleProductTarget("includeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border ${form.includeCategorySlugs.includes(category.slug) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeCategorySlugs.includes(category.slug) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950 mb-2">Brand/manufacturer rules</p><div className="max-h-56 overflow-auto space-y-2">{brands.length === 0 ? <p className="text-xs text-gray-500">No brands found.</p> : brands.map((brand) => (<div key={brand} className="flex items-center justify-between gap-2 border border-gray-100 rounded-lg p-2"><span className="text-xs font-display font-700 text-navy-950">{brand}</span><div className="flex gap-1"><button type="button" onClick={() => toggleProductTarget("includeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border ${form.includeBrands.includes(brand) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeBrands.includes(brand) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
           </div>
           <div className="max-h-72 overflow-auto border border-gray-200 rounded-xl bg-white divide-y divide-gray-100">
             {filteredProducts.length === 0 ? <div className="p-4 text-sm text-gray-500">No products found.</div> : filteredProducts.map((product) => (
               <div key={product.id} className="p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div><p className="font-display font-700 text-sm text-navy-950">{product.title}</p><p className="font-mono text-xs text-gray-500">{product.sku}{product.brand ? ` · ${product.brand}` : ""}</p></div>
+                <div><p className="font-display font-700 text-sm text-navy-950">{product.title}</p><p className="font-mono text-xs text-gray-500">{product.sku}{product.brand ? ` · ${product.brand}` : ""}{product.category ? ` · ${product.category}` : ""}</p></div>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => toggleProductTarget("includeProductIds", product.id)} className={`text-xs rounded-lg px-3 py-2 font-display font-700 border ${form.includeProductIds.includes(product.id) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>{form.includeProductIds.includes(product.id) ? "Included" : "Include"}</button>
                   <button type="button" onClick={() => toggleProductTarget("excludeProductIds", product.id)} className={`text-xs rounded-lg px-3 py-2 font-display font-700 border ${form.excludeProductIds.includes(product.id) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>{form.excludeProductIds.includes(product.id) ? "Excluded" : "Exclude"}</button>
@@ -290,7 +329,7 @@ export default function PromotionsPage() {
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.startsAt ? dateInput(promotion.startsAt) : "No start"} → {promotion.endsAt ? dateInput(promotion.endsAt) : "No end"}</td>
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.usedCount}{promotion.maxUses ? ` / ${promotion.maxUses}` : " used"}</td>
                     <td className="px-5 py-4 text-xs text-gray-500">{promotion.showOnHomepage ? "Home" : ""}{promotion.showOnHomepage && promotion.showOnShop ? " + " : ""}{promotion.showOnShop ? "Shop" : ""}{!promotion.showOnHomepage && !promotion.showOnShop ? "Hidden" : ""}</td>
-                    <td className="px-5 py-4 text-xs text-gray-500">{promotion.includeProductIds?.length ? `${promotion.includeProductIds.length} included` : "All products"}{promotion.excludeProductIds?.length ? ` · ${promotion.excludeProductIds.length} excluded` : ""}</td>
+                    <td className="px-5 py-4 text-xs text-gray-500">{(promotion.includeProductIds?.length || promotion.includeCategorySlugs?.length || promotion.includeBrands?.length) ? `${(promotion.includeProductIds?.length || 0) + (promotion.includeCategorySlugs?.length || 0) + (promotion.includeBrands?.length || 0)} include rules` : "All products"}{(promotion.excludeProductIds?.length || promotion.excludeCategorySlugs?.length || promotion.excludeBrands?.length) ? ` · ${(promotion.excludeProductIds?.length || 0) + (promotion.excludeCategorySlugs?.length || 0) + (promotion.excludeBrands?.length || 0)} exclude rules` : ""}</td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => edit(promotion)} className="btn-secondary py-2 px-3"><Pencil size={14} /></button><button type="button" onClick={() => remove(promotion.id)} className="btn-secondary py-2 px-3 text-red-600"><Trash2 size={14} /></button></div></td>
                   </tr>
                 ))}
