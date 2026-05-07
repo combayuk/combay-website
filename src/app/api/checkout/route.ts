@@ -25,7 +25,7 @@ function siteOrigin(request: Request) {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const session = await getServerSession(authOptions).catch(() => null);
+  const authSession = await getServerSession(authOptions).catch(() => null);
 
   if (!body?.customer?.email || !Array.isArray(body?.lines) || body.lines.length === 0) {
     return NextResponse.json({ ok: false, error: "Missing checkout details." }, { status: 400 });
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const origin = siteOrigin(request);
 
   const dbResult = await withDatabase(async () => {
-    const sessionEmail = session?.user?.email ? String(session.user.email).toLowerCase() : "";
+    const sessionEmail = authSession?.user?.email ? String(authSession.user.email).toLowerCase() : "";
     const currentUser = sessionEmail ? await prisma.user.findUnique({ where: { email: sessionEmail }, select: { id: true } }).catch(() => null) : null;
     const requestedSkus = lines.map((line) => String(line.sku)).filter(Boolean);
     const products = await prisma.product.findMany({
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const session = await createStripeCheckoutSession({
+  const stripeSession = await createStripeCheckoutSession({
     customerEmail: order.customerEmail,
     orderNumber: order.orderNumber,
     orderId: order.id,
@@ -187,7 +187,7 @@ export async function POST(request: Request) {
         ],
   });
 
-  await prisma.order.update({ where: { id: order.id }, data: { notes: `Stripe checkout session created: ${session.id}. Total: £${total.toFixed(2)}.` } });
+  await prisma.order.update({ where: { id: order.id }, data: { notes: `Stripe checkout session created: ${stripeSession.id}. Total: £${total.toFixed(2)}.` } });
 
   return NextResponse.json({
     ok: true,
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
     mode: "database",
     paymentMode: "stripe-checkout",
     status: "redirect-to-stripe",
-    checkoutUrl: session.url,
-    sessionId: session.id,
+    checkoutUrl: stripeSession.url,
+    sessionId: stripeSession.id,
   });
 }
