@@ -23,10 +23,13 @@ type Promotion = {
   showOnShop: boolean;
   bannerText: string | null;
   displayPriority: number;
+  includeAllProducts: boolean;
   includeProductIds: string[];
   excludeProductIds: string[];
+  includeAllCategories: boolean;
   includeCategorySlugs: string[];
   excludeCategorySlugs: string[];
+  includeAllBrands: boolean;
   includeBrands: string[];
   excludeBrands: string[];
 };
@@ -47,10 +50,13 @@ type FormState = {
   showOnShop: boolean;
   bannerText: string;
   displayPriority: string;
+  includeAllProducts: boolean;
   includeProductIds: string[];
   excludeProductIds: string[];
+  includeAllCategories: boolean;
   includeCategorySlugs: string[];
   excludeCategorySlugs: string[];
+  includeAllBrands: boolean;
   includeBrands: string[];
   excludeBrands: string[];
 };
@@ -71,10 +77,13 @@ const emptyForm: FormState = {
   showOnShop: false,
   bannerText: "",
   displayPriority: "100",
+  includeAllProducts: true,
   includeProductIds: [],
   excludeProductIds: [],
+  includeAllCategories: true,
   includeCategorySlugs: [],
   excludeCategorySlugs: [],
+  includeAllBrands: true,
   includeBrands: [],
   excludeBrands: [],
 };
@@ -155,10 +164,13 @@ export default function PromotionsPage() {
       showOnShop: Boolean(promotion.showOnShop),
       bannerText: promotion.bannerText || "",
       displayPriority: String(promotion.displayPriority ?? 100),
+      includeAllProducts: !Array.isArray(promotion.includeProductIds) || promotion.includeProductIds.length === 0,
       includeProductIds: Array.isArray(promotion.includeProductIds) ? promotion.includeProductIds : [],
       excludeProductIds: Array.isArray(promotion.excludeProductIds) ? promotion.excludeProductIds : [],
+      includeAllCategories: !Array.isArray(promotion.includeCategorySlugs) || promotion.includeCategorySlugs.length === 0,
       includeCategorySlugs: Array.isArray(promotion.includeCategorySlugs) ? promotion.includeCategorySlugs : [],
       excludeCategorySlugs: Array.isArray(promotion.excludeCategorySlugs) ? promotion.excludeCategorySlugs : [],
+      includeAllBrands: !Array.isArray(promotion.includeBrands) || promotion.includeBrands.length === 0,
       includeBrands: Array.isArray(promotion.includeBrands) ? promotion.includeBrands : [],
       excludeBrands: Array.isArray(promotion.excludeBrands) ? promotion.excludeBrands : [],
     });
@@ -180,11 +192,11 @@ export default function PromotionsPage() {
         showOnShop: form.showOnShop,
         bannerText: form.bannerText,
         displayPriority: form.displayPriority ? Number(form.displayPriority) : 100,
-        includeProductIds: form.includeProductIds,
+        includeProductIds: form.includeAllProducts ? [] : form.includeProductIds,
         excludeProductIds: form.excludeProductIds,
-        includeCategorySlugs: form.includeCategorySlugs,
+        includeCategorySlugs: form.includeAllCategories ? [] : form.includeCategorySlugs,
         excludeCategorySlugs: form.excludeCategorySlugs,
-        includeBrands: form.includeBrands,
+        includeBrands: form.includeAllBrands ? [] : form.includeBrands,
         excludeBrands: form.excludeBrands,
       };
       const response = await fetch(form.id ? `/api/promotions/${form.id}` : "/api/promotions", {
@@ -204,13 +216,22 @@ export default function PromotionsPage() {
     }
   }
 
+  function toggleIncludeAll(kind: "products" | "categories" | "brands", checked: boolean) {
+    setForm((current) => {
+      if (kind === "products") return { ...current, includeAllProducts: checked, includeProductIds: checked ? [] : current.includeProductIds };
+      if (kind === "categories") return { ...current, includeAllCategories: checked, includeCategorySlugs: checked ? [] : current.includeCategorySlugs };
+      return { ...current, includeAllBrands: checked, includeBrands: checked ? [] : current.includeBrands };
+    });
+  }
+
   function toggleProductTarget(mode: "includeProductIds" | "excludeProductIds" | "includeCategorySlugs" | "excludeCategorySlugs" | "includeBrands" | "excludeBrands", id: string) {
     setForm((current) => {
       const currentList = current[mode] || [];
       const oppositeMap = { includeProductIds: "excludeProductIds", excludeProductIds: "includeProductIds", includeCategorySlugs: "excludeCategorySlugs", excludeCategorySlugs: "includeCategorySlugs", includeBrands: "excludeBrands", excludeBrands: "includeBrands" } as const;
       const opposite = oppositeMap[mode];
       const nextList = currentList.includes(id) ? currentList.filter((item) => item !== id) : [...currentList, id];
-      return { ...current, [mode]: nextList, [opposite]: (current[opposite] || []).filter((item) => item !== id) } as FormState;
+      const includeAllReset = mode === "includeProductIds" ? { includeAllProducts: false } : mode === "includeCategorySlugs" ? { includeAllCategories: false } : mode === "includeBrands" ? { includeAllBrands: false } : {};
+      return { ...current, ...includeAllReset, [mode]: nextList, [opposite]: (current[opposite] || []).filter((item) => item !== id) } as FormState;
     });
   }
 
@@ -290,20 +311,21 @@ export default function PromotionsPage() {
             <label className="block lg:w-96"><span className="label">Search products</span><input className="input" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="SKU, title, brand, category..." /></label>
           </div>
           <div className="grid md:grid-cols-3 gap-4 mb-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Products</p><p className="text-xs text-gray-500 mt-1">{form.includeProductIds.length} included · {form.excludeProductIds.length} excluded</p></div>
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Categories</p><p className="text-xs text-gray-500 mt-1">{form.includeCategorySlugs.length} included · {form.excludeCategorySlugs.length} excluded</p></div>
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Brands</p><p className="text-xs text-gray-500 mt-1">{form.includeBrands.length} included · {form.excludeBrands.length} excluded</p></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Products</p><p className="text-xs text-gray-500 mt-1">{form.includeAllProducts ? "All included" : `${form.includeProductIds.length} included`} · {form.excludeProductIds.length} excluded</p></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Categories</p><p className="text-xs text-gray-500 mt-1">{form.includeAllCategories ? "All included" : `${form.includeCategorySlugs.length} included`} · {form.excludeCategorySlugs.length} excluded</p></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950">Brands</p><p className="text-xs text-gray-500 mt-1">{form.includeAllBrands ? "All included" : `${form.includeBrands.length} included`} · {form.excludeBrands.length} excluded</p></div>
           </div>
           <div className="grid lg:grid-cols-2 gap-4 mb-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950 mb-2">Category rules</p><div className="max-h-56 overflow-auto space-y-2">{categories.length === 0 ? <p className="text-xs text-gray-500">No categories found.</p> : categories.map((category) => (<div key={category.slug} className="flex items-center justify-between gap-2 border border-gray-100 rounded-lg p-2"><span className="text-xs font-display font-700 text-navy-950">{category.label}</span><div className="flex gap-1"><button type="button" onClick={() => toggleProductTarget("includeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border ${form.includeCategorySlugs.includes(category.slug) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeCategorySlugs.includes(category.slug) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
-            <div className="bg-white border border-gray-200 rounded-xl p-3"><p className="font-display font-700 text-sm text-navy-950 mb-2">Brand/manufacturer rules</p><div className="max-h-56 overflow-auto space-y-2">{brands.length === 0 ? <p className="text-xs text-gray-500">No brands found.</p> : brands.map((brand) => (<div key={brand} className="flex items-center justify-between gap-2 border border-gray-100 rounded-lg p-2"><span className="text-xs font-display font-700 text-navy-950">{brand}</span><div className="flex gap-1"><button type="button" onClick={() => toggleProductTarget("includeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border ${form.includeBrands.includes(brand) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeBrands.includes(brand) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><div className="flex items-start justify-between gap-3 mb-3"><div><p className="font-display font-700 text-sm text-navy-950">Category rules</p><p className="text-[11px] text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected categories only.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950 whitespace-nowrap"><input type="checkbox" checked={form.includeAllCategories} onChange={(e) => toggleIncludeAll("categories", e.target.checked)} /> Include all</label></div><div className="max-h-56 overflow-auto space-y-2">{categories.length === 0 ? <p className="text-xs text-gray-500">No categories found.</p> : categories.map((category) => (<div key={category.slug} className={`flex items-center justify-between gap-2 border rounded-lg p-2 ${form.includeAllCategories ? "border-gray-100 bg-gray-50" : "border-gray-100"}`}><span className="text-xs font-display font-700 text-navy-950">{category.label}</span><div className="flex gap-1"><button type="button" disabled={form.includeAllCategories} onClick={() => toggleProductTarget("includeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border disabled:opacity-40 disabled:cursor-not-allowed ${form.includeCategorySlugs.includes(category.slug) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeCategorySlugs", category.slug)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeCategorySlugs.includes(category.slug) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
+            <div className="bg-white border border-gray-200 rounded-xl p-3"><div className="flex items-start justify-between gap-3 mb-3"><div><p className="font-display font-700 text-sm text-navy-950">Brand/manufacturer rules</p><p className="text-[11px] text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected brands only.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950 whitespace-nowrap"><input type="checkbox" checked={form.includeAllBrands} onChange={(e) => toggleIncludeAll("brands", e.target.checked)} /> Include all</label></div><div className="max-h-56 overflow-auto space-y-2">{brands.length === 0 ? <p className="text-xs text-gray-500">No brands found.</p> : brands.map((brand) => (<div key={brand} className={`flex items-center justify-between gap-2 border rounded-lg p-2 ${form.includeAllBrands ? "border-gray-100 bg-gray-50" : "border-gray-100"}`}><span className="text-xs font-display font-700 text-navy-950">{brand}</span><div className="flex gap-1"><button type="button" disabled={form.includeAllBrands} onClick={() => toggleProductTarget("includeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border disabled:opacity-40 disabled:cursor-not-allowed ${form.includeBrands.includes(brand) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>Include</button><button type="button" onClick={() => toggleProductTarget("excludeBrands", brand)} className={`text-[11px] rounded px-2 py-1 border ${form.excludeBrands.includes(brand) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>Exclude</button></div></div>))}</div></div>
           </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"><div><p className="font-display font-700 text-sm text-navy-950">Product rules</p><p className="text-xs text-gray-500 mt-1">Include all is selected by default. Untick it to restrict the code to selected products only. Exclusions still work while include all is enabled.</p></div><label className="flex items-center gap-2 text-xs font-display font-700 text-navy-950"><input type="checkbox" checked={form.includeAllProducts} onChange={(e) => toggleIncludeAll("products", e.target.checked)} /> Include all products</label></div>
           <div className="max-h-72 overflow-auto border border-gray-200 rounded-xl bg-white divide-y divide-gray-100">
             {filteredProducts.length === 0 ? <div className="p-4 text-sm text-gray-500">No products found.</div> : filteredProducts.map((product) => (
               <div key={product.id} className="p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div><p className="font-display font-700 text-sm text-navy-950">{product.title}</p><p className="font-mono text-xs text-gray-500">{product.sku}{product.brand ? ` · ${product.brand}` : ""}{product.category ? ` · ${product.category}` : ""}</p></div>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => toggleProductTarget("includeProductIds", product.id)} className={`text-xs rounded-lg px-3 py-2 font-display font-700 border ${form.includeProductIds.includes(product.id) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>{form.includeProductIds.includes(product.id) ? "Included" : "Include"}</button>
+                  <button type="button" disabled={form.includeAllProducts} onClick={() => toggleProductTarget("includeProductIds", product.id)} className={`text-xs rounded-lg px-3 py-2 font-display font-700 border disabled:opacity-40 disabled:cursor-not-allowed ${form.includeProductIds.includes(product.id) ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-gray-200"}`}>{form.includeProductIds.includes(product.id) ? "Included" : "Include"}</button>
                   <button type="button" onClick={() => toggleProductTarget("excludeProductIds", product.id)} className={`text-xs rounded-lg px-3 py-2 font-display font-700 border ${form.excludeProductIds.includes(product.id) ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-500 border-gray-200"}`}>{form.excludeProductIds.includes(product.id) ? "Excluded" : "Exclude"}</button>
                 </div>
               </div>

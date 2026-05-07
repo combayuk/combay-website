@@ -1,0 +1,11 @@
+Phase 15F.4 — Promotion include-all defaults
+
+Changes:
+- Adds Include all checkboxes for Products, Categories, and Brands/manufacturers in /admin/promotions.
+- Each Include all checkbox is selected by default for new promotions.
+- Existing promotions with no include list automatically display as Include all.
+- When Include all is checked, the matching Include buttons are disabled because an empty include list already means all items of that type are eligible.
+- Exclude buttons remain usable while Include all is checked, so admin can run broad promotions while excluding selected products/categories/brands.
+- Unticking Include all enables admin to select specific included products/categories/brands.
+
+No Prisma schema change.
