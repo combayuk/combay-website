@@ -4,7 +4,20 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const DEFAULT_SLIDES = [
+type HeroSlide = {
+  eyebrow: string;
+  heading: string;
+  accent: string;
+  body: string;
+  cta1: { label: string; href: string };
+  cta2: { label: string; href: string };
+  stats: { v: string; l: string }[];
+  bg: string;
+  imageUrl?: string;
+  backgroundImageUrl?: string;
+};
+
+const DEFAULT_SLIDES: HeroSlide[] = [
   {
     eyebrow: "10,000+ Items In Stock",
     heading: "Mission-critical equipment,",
@@ -56,7 +69,7 @@ type HeroSlideInput = {
   backgroundImageUrl?: string;
 };
 
-function buildSlides(contentSlides?: HeroSlideInput[]) {
+function buildSlides(contentSlides?: HeroSlideInput[]): HeroSlide[] {
   if (!Array.isArray(contentSlides) || !contentSlides.length) return DEFAULT_SLIDES;
   return DEFAULT_SLIDES.map((fallback, index) => {
     const input = contentSlides[index];
