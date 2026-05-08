@@ -16,11 +16,68 @@ export async function POST(request: Request) {
   if (!verifyStripeWebhookSignature(body, signature, webhookSecret)) return NextResponse.json({ ok: false, error: "Webhook verification failed." }, { status: 400 });
 
   const event = JSON.parse(body);
+
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as any;
-    const orderId = session.metadata?.orderId;
-    const orderNumber = session.metadata?.orderNumber || session.client_reference_id;
-    if (orderId || orderNumber) {
+    const metadata = session.metadata ?? {};
+    const invoiceId = metadata.invoiceId;
+    const documentNumber = metadata.documentNumber;
+    const orderId = metadata.orderId;
+    const orderNumber = metadata.orderNumber || session.client_reference_id;
+    const paidAmount = session.amount_total ? Number((session.amount_total / 100).toFixed(2)) : undefined;
+
+    if (invoiceId || documentNumber) {
+      const invoiceResult = await withDatabase(async () => prisma.invoice.update({
+        where: invoiceId ? { id: invoiceId } : { documentNumber },
+        data: {
+          status: "PAID",
+          amountPaid: paidAmount ?? undefined,
+          balanceDue: 0,
+          notes: `Stripe webhook confirmed payment. Session: ${session.id}`,
+        },
+        include: { lines: { orderBy: { sortOrder: "asc" } }, order: true },
+      }));
+
+      if (invoiceResult.ok) {
+        const invoice: any = invoiceResult.data;
+        await sendCustomerAcknowledgement({
+          to: invoice.customerEmail,
+          name: invoice.customerName,
+          subject: `Combay payment confirmation ${invoice.documentNumber}`,
+          title: "Payment confirmation",
+          reference: invoice.documentNumber,
+          body: `Thank you. Payment has been received for ${invoice.documentNumber}. We will now process the order/proforma workflow and contact you with any dispatch updates.`,
+          ctaUrl: `${process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/orders`,
+          ctaLabel: "View portal",
+        }).catch((emailError) => console.error("[invoice-payment-email-failed]", emailError));
+
+        await sendAdminNotification({
+          subject: `Paid Combay proforma ${invoice.documentNumber}`,
+          title: "Proforma payment received",
+          message: `Stripe confirmed payment for ${invoice.documentNumber}.`,
+          rows: [
+            ["Document", invoice.documentNumber],
+            ["Customer", invoice.customerName],
+            ["Email", invoice.customerEmail],
+            ["Total", `£${Number(invoice.total).toFixed(2)}`],
+            ["Session", session.id],
+          ],
+        }).catch((emailError) => console.error("[invoice-payment-admin-email-failed]", emailError));
+
+        await captureLead({
+          name: invoice.customerName,
+          email: invoice.customerEmail,
+          phone: invoice.customerPhone,
+          company: invoice.company,
+          country: null,
+          source: "paid stripe proforma",
+          sourceRef: invoice.documentNumber,
+          productSku: invoice.lines?.[0]?.sku,
+          productTitle: invoice.lines?.[0]?.description,
+          notes: `Paid Stripe proforma/invoice ${invoice.documentNumber}.`,
+        }).catch((leadError) => console.error("[invoice-payment-lead-failed]", leadError));
+      }
+    } else if (orderId || orderNumber) {
       const updateResult = await withDatabase(async () => prisma.order.update({
         where: orderId ? { id: orderId } : { orderNumber },
         data: { paymentStatus: "PAID", status: "PAYMENT_RECEIVED", notes: `Stripe webhook confirmed payment. Session: ${session.id}` },
