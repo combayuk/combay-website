@@ -6,6 +6,8 @@ import { ArrowLeft, Download, Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 type DocType = "QUOTE" | "PROFORMA_INVOICE" | "PACKING_LIST";
+type DiscountMode = "NONE" | "LINE_ITEMS" | "TOTAL_VALUE";
+type DiscountType = "PERCENTAGE" | "FIXED";
 const newLine = () => ({ description: "", sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: 0 });
 type LineItem = ReturnType<typeof newLine>;
 
@@ -28,6 +30,17 @@ function fmt(value: number) {
 
 function label(value: string) {
   return value.replace(/_/g, " ");
+}
+
+function money(value: number) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function discountFor(value: number, discountType: DiscountType, discountValue: number) {
+  const raw = Number(discountValue || 0);
+  if (!Number.isFinite(raw) || raw <= 0 || value <= 0) return 0;
+  if (discountType === "PERCENTAGE") return money(value * Math.min(raw, 100) / 100);
+  return money(Math.min(value, raw));
 }
 
 export default function InvoiceGenerator() {
@@ -56,9 +69,15 @@ export default function InvoiceGenerator() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [createdId, setCreatedId] = useState("");
+  const [discountMode, setDiscountMode] = useState<DiscountMode>("NONE");
+  const [discountType, setDiscountType] = useState<DiscountType>("PERCENTAGE");
+  const [discountValue, setDiscountValue] = useState(0);
 
   const isPackingList = type === "PACKING_LIST";
-  const subtotal = useMemo(() => isPackingList ? 0 : lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines, isPackingList]);
+  const discountAllowed = type === "QUOTE" || type === "PROFORMA_INVOICE";
+  const grossSubtotal = useMemo(() => isPackingList ? 0 : lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines, isPackingList]);
+  const discount = discountAllowed && discountMode !== "NONE" ? discountFor(grossSubtotal, discountType, discountValue) : 0;
+  const subtotal = Math.max(money(grossSubtotal - discount), 0);
   const tax = isPackingList ? 0 : subtotal * 0.2;
   const total = isPackingList ? 0 : subtotal + tax + Number(shippingCost || 0);
   const amountPaid = 0;
@@ -74,6 +93,22 @@ export default function InvoiceGenerator() {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, [key]: value } : line)));
   }
 
+  function linesForSave() {
+    if (!discountAllowed || discountMode === "NONE" || discount <= 0) return lines;
+    if (discountMode === "LINE_ITEMS") {
+      return lines.map((line) => {
+        const originalLine = Number(line.quantity || 0) * Number(line.unitPrice || 0);
+        const lineDiscount = discountFor(originalLine, discountType, discountValue);
+        const discountedLine = Math.max(money(originalLine - lineDiscount), 0);
+        const unitPrice = Number(line.quantity || 0) > 0 ? money(discountedLine / Number(line.quantity || 1)) : 0;
+        const note = discountType === "PERCENTAGE" ? `${discountValue}% line-item discount applied` : `£${discountValue} line-item discount applied`;
+        return { ...line, unitPrice, description: `${line.description}\n${note}` };
+      });
+    }
+    const label = discountType === "PERCENTAGE" ? `${discountValue}% total invoice discount` : `£${discountValue} total invoice discount`;
+    return [...lines, { description: `Discount - ${label}`, sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: -discount }];
+  }
+
   async function saveDocument() {
     setSaving(true);
     setMessage("");
@@ -85,7 +120,7 @@ export default function InvoiceGenerator() {
       body: JSON.stringify({
         type,
         ...customer,
-        lines,
+        lines: linesForSave(),
         notes,
         paymentTerms,
         paymentLink,
@@ -159,6 +194,19 @@ export default function InvoiceGenerator() {
             <button onClick={() => setLines((current) => [...current, newLine()])} className="flex items-center gap-1.5 text-accent font-display font-600 text-sm hover:text-accent-dark transition-colors"><Plus size={14}/> Add Line</button>
           </div>
 
+
+
+          {discountAllowed && <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <h2 className="font-display font-700 text-navy-950 mb-1">Discount</h2>
+            <p className="text-xs text-gray-500 mb-4">Only applies to Quotes and Proforma Invoices. Choose whether the discount is applied across line items or as a discount against the total invoice value.</p>
+            <div className="grid sm:grid-cols-4 gap-3">
+              <div><label className="label">Discount application</label><select className="input text-sm" value={discountMode} onChange={(e) => setDiscountMode(e.target.value as DiscountMode)}><option value="NONE">No discount</option><option value="LINE_ITEMS">Apply to line items</option><option value="TOTAL_VALUE">Apply to total invoice value</option></select></div>
+              <div><label className="label">Discount type</label><select className="input text-sm" value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType)} disabled={discountMode === "NONE"}><option value="PERCENTAGE">Percentage %</option><option value="FIXED">Fixed amount £</option></select></div>
+              <div><label className="label">Discount value</label><input type="number" min="0" step="0.01" className="input text-sm" value={discountValue || ""} onChange={(e) => setDiscountValue(Number(e.target.value))} disabled={discountMode === "NONE"} placeholder={discountType === "PERCENTAGE" ? "10" : "50.00"}/></div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600"><strong className="block text-navy-950">Calculated discount</strong>{fmt(discount)}<br/><span>Original subtotal: {fmt(grossSubtotal)}</span></div>
+            </div>
+          </div>}
+
           {!isPackingList && <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h2 className="font-display font-700 text-navy-950 mb-4">Shipping</h2>
             <div className="grid sm:grid-cols-2 gap-3">
@@ -185,7 +233,9 @@ export default function InvoiceGenerator() {
             <h2 className="font-display font-700 text-navy-950 mb-4">Totals</h2>
             <div className="space-y-2 text-sm mb-5">
               {isPackingList ? <div className="text-gray-600 text-sm">Packing lists do not show invoice totals, payment links or balances.</div> : <>
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span className="font-600">{fmt(subtotal)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>Subtotal before discount</span><span className="font-600">{fmt(grossSubtotal)}</span></div>
+              {discount > 0 && <div className="flex justify-between text-green-700"><span>Discount</span><span className="font-600">-{fmt(discount)}</span></div>}
+              <div className="flex justify-between text-gray-600"><span>Discounted subtotal</span><span className="font-600">{fmt(subtotal)}</span></div>
               {amountPaid > 0 && <div className="flex justify-between text-green-700"><span>Paid / credit</span><span className="font-600">-{fmt(amountPaid)}</span></div>}
               <div className="flex justify-between text-gray-600"><span>VAT 20%</span><span className="font-600">{fmt(tax)}</span></div>
               <div className="flex justify-between text-gray-600"><span>Shipping</span><span className="font-600">{fmt(Number(shippingCost || 0))}</span></div>

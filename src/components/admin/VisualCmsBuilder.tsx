@@ -6,6 +6,8 @@ import type { DragEvent, FocusEvent, ReactNode } from "react";
 import type { CmsBlock, CmsPage, CmsStep, SiteContent } from "@/lib/siteContent";
 
 type PageKey = keyof SiteContent["pages"];
+type DeviceMode = "desktop" | "tablet" | "mobile";
+type EditScope = "all" | "device";
 type SelectTarget =
   | { kind: "hero" }
   | { kind: "section"; section: string }
@@ -163,15 +165,22 @@ function EditableText({
           event.currentTarget.blur();
         }
       }}
-      className={`${className || ""} min-h-[1em] cursor-text rounded outline-none ring-accent/0 transition hover:ring-2 hover:ring-accent/40 focus:bg-white/95 focus:px-1 focus:text-navy-950 focus:ring-2 focus:ring-accent`}
+      className={`${className || ""} min-h-[1em] cursor-text rounded outline-none ring-accent/0 transition hover:ring-2 hover:ring-accent/40 focus:px-1 focus:ring-2 focus:ring-accent`}
     >
       {value || placeholder}
     </Tag>
   );
 }
 
-function DesktopShell({ children, zoom }: { children: ReactNode; zoom: number }) {
-  const width = 1180;
+const DEVICE_CANVAS: Record<DeviceMode, { label: string; width: number; note: string }> = {
+  desktop: { label: "PC desktop", width: 1180, note: "Full desktop layout" },
+  tablet: { label: "Tablet", width: 820, note: "Tablet-width preview" },
+  mobile: { label: "Mobile", width: 390, note: "Phone-width preview" },
+};
+
+function DesktopShell({ children, zoom, device }: { children: ReactNode; zoom: number; device: DeviceMode }) {
+  const meta = DEVICE_CANVAS[device];
+  const width = meta.width;
   return (
     <div className="h-full overflow-auto bg-slate-200 p-6">
       <div className="mx-auto rounded-t-2xl border border-slate-400 bg-slate-800 p-3 shadow-2xl" style={{ width: width * zoom + 28 }}>
@@ -179,9 +188,9 @@ function DesktopShell({ children, zoom }: { children: ReactNode; zoom: number })
           <span className="h-3 w-3 rounded-full bg-red-400" />
           <span className="h-3 w-3 rounded-full bg-yellow-400" />
           <span className="h-3 w-3 rounded-full bg-green-400" />
-          <div className="ml-3 flex-1 rounded bg-white/10 px-3 py-1 text-center text-[10px] text-white/60">Desktop preview · 1180px wide · editable canvas</div>
+          <div className="ml-3 flex-1 rounded bg-white/10 px-3 py-1 text-center text-[10px] text-white/70">{meta.label} preview · {width}px wide · editable canvas</div>
         </div>
-        <div className="origin-top-left overflow-hidden rounded-lg bg-white" style={{ width, transform: `scale(${zoom})`, height: `calc(100% / ${zoom})` }}>
+        <div className="origin-top-left overflow-hidden rounded-lg bg-white text-navy-950" style={{ width, transform: `scale(${zoom})`, minHeight: `calc(100% / ${zoom})` }}>
           {children}
         </div>
       </div>
@@ -277,6 +286,8 @@ export default function VisualCmsBuilder() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [zoom, setZoom] = useState(0.78);
+  const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
+  const [editScope, setEditScope] = useState<EditScope>("all");
   const [homeHeroIndex, setHomeHeroIndex] = useState(0);
 
   useEffect(() => {
@@ -561,7 +572,7 @@ export default function VisualCmsBuilder() {
           </div>
           <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
             <strong className="text-navy-950">How to edit</strong>
-            <p className="mt-1">Click text on the website and type. Drag sections/cards to move or swap. Use the quick bar at the bottom for image upload, width, alignment, background and delete.</p>
+            <p className="mt-1">Click text on the website and type. Drag sections/cards to move or swap. Use the quick bar at the bottom for image upload, width, alignment, background and delete.</p><p className="mt-2 text-[11px] text-gray-500">Screen selector lets you preview PC, tablet and mobile. Use “This screen only draft” before making device-specific layout experiments.</p>
           </div>
         </div>
       </aside>
@@ -569,10 +580,19 @@ export default function VisualCmsBuilder() {
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="rounded bg-navy-950 px-3 py-1 text-xs font-display font-900 text-white">PC desktop mode</span>
-            <span className="text-xs text-gray-500">Canvas is fixed at 1180px wide and scaled down if space is tight.</span>
+            <span className="rounded bg-navy-950 px-3 py-1 text-xs font-display font-900 text-white">{DEVICE_CANVAS[deviceMode].label} mode</span>
+            <span className="text-xs text-gray-500">Switch screen size to preview responsive layout. Use screen-only mode for device-specific drafts.</span>
           </div>
           <div className="flex items-center gap-2">
+            <select className="input h-9 w-32 text-xs" value={deviceMode} onChange={(event) => { const next = event.target.value as DeviceMode; setDeviceMode(next); setZoom(next === "desktop" ? 0.78 : next === "tablet" ? 0.9 : 1); }}>
+              <option value="desktop">PC desktop</option>
+              <option value="tablet">Tablet</option>
+              <option value="mobile">Mobile</option>
+            </select>
+            <select className="input h-9 w-40 text-xs" value={editScope} onChange={(event) => setEditScope(event.target.value as EditScope)}>
+              <option value="all">Apply to all screens</option>
+              <option value="device">This screen only draft</option>
+            </select>
             <select className="input h-9 w-28 text-xs" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
               <option value={0.65}>65%</option>
               <option value={0.78}>78%</option>
@@ -585,7 +605,7 @@ export default function VisualCmsBuilder() {
         </div>
 
         <div className="min-h-0 flex-1">
-          <DesktopShell zoom={zoom}>
+          <DesktopShell zoom={zoom} device={deviceMode}>
             {pageKey === "home" && selectedHomeSlide ? (
               <section className="border-b border-gray-200 bg-navy-950 px-12 py-10 text-white" style={{ backgroundImage: selectedHomeSlide.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${selectedHomeSlide.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
                 <div className="mb-5 flex gap-2">{content.heroSlides.map((_, index) => <button key={index} type="button" onClick={() => { setHomeHeroIndex(index); setSelected({ kind: "homeHero", index }); }} className={`rounded px-3 py-1 text-xs font-display font-800 ${homeHeroIndex === index ? "bg-accent text-navy-950" : "bg-white/10 text-white"}`}>Home slide {index + 1}</button>)}</div>
