@@ -50,7 +50,8 @@ const PAGE_SECTIONS = [
 
 const DEVICE_WIDTH: Record<DeviceMode, number> = { desktop: 1180, tablet: 820, mobile: 390 };
 const WIDGETS: WidgetTemplate[] = [
-  { label: "Card", icon: "▣", blockType: "icon", title: "New card", subtitle: "Editable card", body: "Use this card for a service, benefit, process item or content block.", background: "white", width: "quarter", linkLabel: "Learn more", linkHref: "/contact" },
+  { label: "Card", icon: "▣", blockType: "card", title: "New card", subtitle: "Editable card", body: "Use this card for a service, benefit, process item or content block.", background: "white", width: "quarter", linkLabel: "Learn more", linkHref: "/contact" },
+  { label: "FAQ", icon: "?", blockType: "faq", title: "New FAQ question", subtitle: "FAQ", body: "Add the answer here. This answer is visible in Visual CMS and appears as a dropdown on the public page.", background: "white", width: "full" },
   { label: "Button", icon: "⬚", blockType: "button", title: "Call to action", subtitle: "Button block", body: "Use the button link below for enquiries, quote requests or page navigation.", background: "accent", width: "half", linkLabel: "Button link", linkHref: "/contact" },
   { label: "Text", icon: "T", blockType: "text", title: "New text block", subtitle: "Editable heading", body: "Click text on the canvas to edit it.", background: "white", width: "half" },
   { label: "Image", icon: "🖼", blockType: "image", title: "Image block", subtitle: "Upload or paste image", body: "Use Replace background or widget image upload.", background: "white", width: "half" },
@@ -72,8 +73,13 @@ function previewUrl(path: string, refreshKey: number) { return `${path}${path.in
 function cloneContent(content: SiteContent): SiteContent { return JSON.parse(JSON.stringify(content)); }
 function cmsPageKey(pageKey: PageKey): keyof SiteContent["pages"] | null { if (["home", "repair", "assetRecovery", "about", "contact"].includes(pageKey)) return pageKey as keyof SiteContent["pages"]; return null; }
 function policyKey(pageKey: PageKey): keyof SiteContent["policies"] | null { if (["terms", "privacy", "returns", "warranty", "payment"].includes(pageKey)) return pageKey as keyof SiteContent["policies"]; return null; }
-function blockFromWidget(widget: WidgetTemplate): CmsBlock { return { icon: widget.icon, title: widget.title, subtitle: widget.subtitle, body: widget.body, imageUrl: "", linkLabel: widget.linkLabel || "", linkHref: widget.linkHref || "#", blockType: widget.blockType, width: widget.width, align: "left", background: widget.background, animation: "none" }; }
-function faqFromWidget(widget?: WidgetTemplate): FaqItem { return { question: widget?.title || "New FAQ question", answer: widget?.body || "Add the answer here." }; }
+function blockFromWidget(widget: WidgetTemplate): CmsBlock { return { icon: widget.icon, title: widget.title, subtitle: widget.subtitle, body: widget.body, imageUrl: "", linkLabel: widget.linkLabel || "", linkHref: widget.linkHref || "#", blockType: widget.blockType === "faq" ? "card" : widget.blockType, width: widget.width, align: "left", background: widget.background, animation: "none" }; }
+function widgetByType(type: string): WidgetTemplate { return WIDGETS.find((widget) => widget.blockType === type) || WIDGETS[0]; }
+function faqFromWidget(widget?: WidgetTemplate): FaqItem {
+  const title = widget?.blockType === "faq" ? widget.title : "New FAQ question";
+  const body = widget?.blockType === "faq" ? widget.body : "Add the answer here. This answer is visible in Visual CMS so you can edit it before publishing.";
+  return { question: title, answer: body };
+}
 function stepFromWidget(widget?: WidgetTemplate, index = 0): CmsStep { return { number: String(index + 1).padStart(2, "0"), title: widget?.title || "New step", body: widget?.body || "Describe this step.", imageUrl: "" }; }
 function autoWidth(count: number) { if (count <= 1) return "full"; if (count === 2) return "half"; if (count === 3) return "third"; return "quarter"; }
 function normaliseBlockWidths(blocks: CmsBlock[]) { const width = autoWidth(blocks.length); return blocks.map((b) => b.blockType === "promotion" || b.width === "full" && blocks.length > 1 ? { ...b, width: blocks.length > 4 ? "half" : width } : { ...b, width }); }
@@ -139,7 +145,11 @@ export default function VisualCmsBuilder() {
         if (updateFirstStringMatch(next, String(data.oldText), String(data.newText))) { setContent(next); setMessage("Text changed on canvas. Click Save website to publish."); }
         else setMessage("This text is visible for exact preview but is not linked to CMS storage yet.");
       }
-      if (data.type === "VCMS_ADD_ITEM") addCollectionItem(String(data.collection || "page.blocks") as CollectionKey, data.widget || WIDGETS[0]);
+      if (data.type === "VCMS_ADD_ITEM") {
+        const incomingCollection = String(data.collection || "page.blocks") as CollectionKey;
+        const incomingWidget = data.widget as WidgetTemplate | undefined;
+        addCollectionItem(collectionForWidget(incomingCollection, incomingWidget), incomingWidget);
+      }
       if (data.type === "VCMS_DELETE_ITEM") deleteCollectionItem(String(data.collection || "page.blocks") as CollectionKey, Number(data.index));
       if (data.type === "VCMS_DUPLICATE_ITEM") duplicateCollectionItem(String(data.collection || "page.blocks") as CollectionKey, Number(data.index));
     }
@@ -174,7 +184,13 @@ export default function VisualCmsBuilder() {
     if (pageKey === "home") return "page.blocks";
     return "page.blocks";
   }
-  function addWidget(widget: WidgetTemplate) { addCollectionItem(defaultCollection(), widget); }
+  function collectionForWidget(collection: CollectionKey, widget?: WidgetTemplate | null): CollectionKey {
+    if (!widget) return collection;
+    if (widget.blockType === "faq") return collection.includes("faq") ? collection : (pageKey === "faq" ? "faq.groupItems:sales" : "faq.previewItems");
+    if (collection.includes("faq")) return "page.blocks";
+    return collection;
+  }
+  function addWidget(widget: WidgetTemplate) { addCollectionItem(collectionForWidget(defaultCollection(), widget), widget); }
   function duplicateBlock(index: number) { duplicateCollectionItem("page.blocks", index); }
   function deleteBlock(index: number) { deleteCollectionItem("page.blocks", index); }
   function addSameSizeCard() { addCollectionItem("page.blocks", WIDGETS[0]); }
@@ -193,13 +209,13 @@ export default function VisualCmsBuilder() {
       } else if (collection === "faq.previewItems") {
         draft.faq.previewItems = [...(draft.faq.previewItems || []), faqFromWidget(widget)];
       } else if (collection === "home.promotionStrip") {
-        const block = blockFromWidget(widget || WIDGETS[5]);
+        const block = blockFromWidget(widget || widgetByType("promotion"));
         block.blockType = "promotion";
         block.background = "accent";
         block.width = "full";
         draft.pages.home.blocks = normaliseBlockWidths([...(draft.pages.home.blocks || []), block]);
         draft.hiddenSections = draft.hiddenSections || {};
-        draft.hiddenSections.home = (draft.hiddenSections.home || []).filter((x) => x !== "serviceCards");
+        draft.hiddenSections.home = (draft.hiddenSections.home || []).filter((x) => x !== "promotionStrip");
       } else if (collection.startsWith("faq.groupItems:")) {
         const groupKey = collection.split(":")[1] || draft.faq.groups[0]?.key;
         const group = draft.faq.groups.find((g) => g.key === groupKey) || draft.faq.groups[0];
@@ -257,7 +273,7 @@ export default function VisualCmsBuilder() {
         if (!source) return;
         draft.faq.previewItems = [...items.slice(0, index + 1), { ...source, question: `${source.question} copy` }, ...items.slice(index + 1)];
       } else if (collection === "home.promotionStrip") {
-        const block = blockFromWidget(WIDGETS[5]);
+        const block = blockFromWidget(widgetByType("promotion"));
         block.title = "Promotion banner copy";
         block.width = "full";
         draft.pages.home.blocks = normaliseBlockWidths([...(draft.pages.home.blocks || []), block]);
@@ -283,9 +299,9 @@ export default function VisualCmsBuilder() {
     const doc = iframeRef.current?.contentDocument; if (!doc) return;
     const section = doc.querySelector<HTMLElement>("main section"); if (!section) return;
     section.style.backgroundSize = "cover"; section.style.backgroundPosition = "center";
-    if (value.startsWith("linear-gradient") || value.startsWith("radial-gradient")) { section.style.backgroundImage = value; section.style.backgroundColor = ""; return; }
-    if (value.startsWith("#") || value.startsWith("rgb") || value.startsWith("hsl")) { section.style.backgroundImage = ""; section.style.backgroundColor = value; return; }
-    section.style.backgroundImage = `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${value})`;
+    if (value.startsWith("linear-gradient") || value.startsWith("radial-gradient")) { section.style.setProperty("background-image", value, "important"); section.style.backgroundColor = ""; return; }
+    if (value.startsWith("#") || value.startsWith("rgb") || value.startsWith("hsl")) { section.style.setProperty("background-image", "none", "important"); section.style.setProperty("background-color", value, "important"); return; }
+    section.style.setProperty("background-image", `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${value})`, "important");
   }
   function setHeroBackground(value: string) { if (!content) return; const clean = value.trim(); if (!clean) return; mutateContent((draft) => { if (pageKey === "home") draft.heroSlides[0].backgroundImageUrl = clean; if (pageKey === "faq") draft.faq.backgroundImageUrl = clean; const key = cmsPageKey(pageKey); if (key && key !== "home") draft.pages[key].backgroundImageUrl = clean; }); applyBackgroundToPreview(clean); setMessage("Background changed on screen and in CMS draft. Save website to publish."); }
   async function save() { if (!content) return; setSaving(true); setMessage(""); try { const response = await fetch("/api/admin/content", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) }); const data = await response.json().catch(() => null); if (!response.ok || !data?.ok) throw new Error(data?.error || "Save failed"); setContent(data.content); setRefreshKey(Date.now()); setMessage("Saved. Live canvas refreshed."); } catch (err) { setMessage(err instanceof Error ? err.message : "Save failed."); } finally { setSaving(false); } }
@@ -434,9 +450,38 @@ export default function VisualCmsBuilder() {
     window.setTimeout(injectEditor, 1600);
   }
 
-  function dropWidgetOnCanvas(widget: WidgetTemplate | null) {
+  function pageDefaultCollection(): CollectionKey {
+    if (pageKey === "faq") return "faq.groupItems:sales";
+    return "page.blocks";
+  }
+
+  function collectionAtCanvasPoint(clientX: number, clientY: number): CollectionKey {
+    const iframe = iframeRef.current;
+    const doc = iframe?.contentDocument;
+    if (!iframe || !doc) return pageDefaultCollection();
+    const rect = iframe.getBoundingClientRect();
+    if (!rect.width || !rect.height) return pageDefaultCollection();
+    const scaleX = iframe.offsetWidth / rect.width;
+    const scaleY = iframe.offsetHeight / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    const element = doc.elementFromPoint(x, y) as HTMLElement | null;
+    const collectionElement = element?.closest?.("[data-vcms-collection],[data-vcms-item]") as HTMLElement | null;
+    const itemCollection = collectionElement?.dataset?.vcmsItem;
+    const sectionCollection = collectionElement?.dataset?.vcmsCollection;
+    if (itemCollection || sectionCollection) return (itemCollection || sectionCollection) as CollectionKey;
+    const section = element?.closest?.("main section") as HTMLElement | null;
+    const sectionText = (section?.textContent || "").toLowerCase();
+    if (sectionText.includes("frequently asked questions")) return pageKey === "faq" ? "faq.groupItems:sales" : "faq.previewItems";
+    if (sectionText.includes("how it works")) return "page.steps";
+    if (sectionText.includes("current combay offers") || sectionText.includes("copy the code")) return "home.promotionStrip";
+    return pageDefaultCollection();
+  }
+
+  function dropWidgetOnCanvas(widget: WidgetTemplate | null, clientX?: number, clientY?: number) {
     if (!widget) return;
-    addCollectionItem(defaultCollection(), widget);
+    const target = typeof clientX === "number" && typeof clientY === "number" ? collectionAtCanvasPoint(clientX, clientY) : defaultCollection();
+    addCollectionItem(collectionForWidget(target, widget), widget);
     setDraggingWidget(null);
   }
 
@@ -454,14 +499,14 @@ export default function VisualCmsBuilder() {
           <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs font-display font-900">Replace background</p><span className="rounded-full bg-accent/20 px-2 py-1 text-[10px] font-800">Hero</span></div><div className="flex gap-2"><input className="input h-9 flex-1 text-xs" placeholder="Paste image URL" value={backgroundUrl} onChange={(e) => setBackgroundUrl(e.target.value)} /><button type="button" className="rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white" onClick={() => setHeroBackground(backgroundUrl)}>Use</button></div><div className="mt-3"><ImageUploadButton onUploaded={(url) => { setBackgroundUrl(url); setHeroBackground(url); }} /></div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Colours</p><div className="mt-2 flex flex-wrap gap-2">{COLOURS.map((colour) => <button key={colour} type="button" title={colour} onClick={() => setHeroBackground(colour)} className="h-8 w-8 rounded-full border border-slate-300" style={{ background: colour }} />)}</div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Gradients</p><div className="mt-2 space-y-2">{GRADIENTS.map((g) => <button key={g.label} type="button" onClick={() => setHeroBackground(g.value)} className="h-10 w-full rounded border border-slate-200 px-3 text-left text-xs font-display font-800 text-white" style={{ backgroundImage: g.value }}>{g.label}</button>)}</div></div>
           <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">Delete / restore whole sections</p>{pageKey === "home" ? <div className="space-y-2">{HOME_SECTIONS.map(([key,label]) => <div key={key} className="flex items-center justify-between gap-2 rounded bg-slate-50 p-2"><span className="text-xs">{label}</span><button type="button" onClick={() => toggleHomeSection(key)} className={`rounded px-2 py-1 text-[11px] font-800 ${isHomeHidden(key) ? "bg-accent text-navy-950" : "bg-red-50 text-red-700"}`}>{isHomeHidden(key) ? "Restore" : "Delete"}</button></div>)}</div> : cmsPageKey(pageKey) ? <div className="space-y-2">{PAGE_SECTIONS.map(([key,label]) => <div key={key} className="flex items-center justify-between gap-2 rounded bg-slate-50 p-2"><span className="text-xs">{label}</span><button type="button" onClick={() => togglePageSection(key)} className={`rounded px-2 py-1 text-[11px] font-800 ${pageSectionVisible(key) ? "bg-red-50 text-red-700" : "bg-accent text-navy-950"}`}>{pageSectionVisible(key) ? "Delete" : "Restore"}</button></div>)}</div> : <p className="text-xs text-slate-500">This page has policy text editing only.</p>}</div>
           {cmsPageKey(pageKey) ? <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between"><p className="text-xs font-display font-900">Cards / section items</p><button type="button" onClick={addSameSizeCard} className="rounded bg-navy-950 px-2 py-1 text-[11px] font-800 text-white">+ Add card</button></div><div className="space-y-2">{pageBlocks.map((block, index) => <div key={`${block.title}-${index}`} className="rounded bg-slate-50 p-2"><p className="text-xs font-800">{block.title}</p><p className="text-[10px] text-slate-500">Auto width: {block.width || "quarter"}</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => duplicateBlock(index)} className="rounded bg-white px-2 py-1 text-[11px] font-800 text-navy-950 ring-1 ring-slate-200">Duplicate</button><button type="button" onClick={() => deleteBlock(index)} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete</button></div></div>)}</div></div> : null}
-          {pageKey === "faq" ? <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">FAQ items</p><div className="flex flex-wrap gap-2"><button type="button" onClick={() => addCollectionItem("faq.groupItems:sales", WIDGETS[0])} className="rounded bg-navy-950 px-2 py-1 text-[11px] font-800 text-white">+ Add FAQ</button><button type="button" onClick={() => addCollectionItem("faq.previewItems", WIDGETS[0])} className="rounded bg-white px-2 py-1 text-[11px] font-800 text-navy-950 ring-1 ring-slate-200">+ Add homepage FAQ preview</button></div></div> : null}
+          {pageKey === "faq" ? <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">FAQ items</p><div className="flex flex-wrap gap-2"><button type="button" onClick={() => addCollectionItem("faq.groupItems:sales")} className="rounded bg-navy-950 px-2 py-1 text-[11px] font-800 text-white">+ Add FAQ</button><button type="button" onClick={() => addCollectionItem("faq.previewItems")} className="rounded bg-white px-2 py-1 text-[11px] font-800 text-navy-950 ring-1 ring-slate-200">+ Add homepage FAQ preview</button></div></div> : null}
           {cmsPageKey(pageKey) || pageKey === "home" ? <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">Buttons</p><div className="flex gap-2"><button type="button" onClick={() => deleteHeroButton("primary")} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete primary button</button><button type="button" onClick={() => deleteHeroButton("secondary")} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete secondary button</button></div></div> : null}
           {policyKey(pageKey) ? <div className="rounded-xl border border-slate-200 bg-accent/10 p-3 text-xs leading-5 text-navy-950">This policy page is CMS-backed. Edit heading, date and paragraphs directly on the page, then save.</div> : null}
         </div> : null}
       </div>
       <div className="border-t border-slate-200 p-3"><button type="button" onClick={save} disabled={saving} className="w-full rounded bg-accent px-4 py-3 text-sm font-display font-900 text-navy-950 hover:bg-accent-dark disabled:opacity-60">{saving ? "Saving…" : "Save website"}</button>{message ? <p className="mt-2 text-xs text-slate-600">{message}</p> : null}</div>
     </aside>
-    <main className="flex min-w-0 flex-1 flex-col"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3"><div><p className="text-xs text-slate-500">Editing</p><h2 className="font-display text-lg font-900 text-navy-950">{config.label} {config.editable ? "" : "— protected"}</h2></div><div className="flex flex-wrap items-center gap-2"><select className="input h-9 w-36 text-xs" value={device} onChange={(e) => setDevice(e.target.value as DeviceMode)}><option value="desktop">PC desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select><select className="input h-9 w-28 text-xs" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}><option value="0.65">65%</option><option value="0.78">78%</option><option value="0.9">90%</option><option value="1">100%</option></select><a href={config.path} target="_blank" rel="noreferrer" className="rounded border border-slate-300 bg-white px-3 py-2 text-xs font-display font-900 text-navy-950 hover:border-accent">Open live page</a></div></div><div className="flex-1 overflow-auto bg-slate-300 p-6"><div className="mx-auto origin-top rounded-xl bg-white shadow-2xl ring-1 ring-slate-400/40" style={{ width: canvasWidth, minHeight: 760, transform: `scale(${zoom})`, transformOrigin: "top center", marginBottom: -(760 * (1 - zoom)) }}><div className="relative h-[760px] overflow-hidden rounded-xl bg-white" onDragOver={(event) => { if (draggingWidget) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDrop={(event) => { if (!draggingWidget) return; event.preventDefault(); dropWidgetOnCanvas(draggingWidget); }}>
+    <main className="flex min-w-0 flex-1 flex-col"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3"><div><p className="text-xs text-slate-500">Editing</p><h2 className="font-display text-lg font-900 text-navy-950">{config.label} {config.editable ? "" : "— protected"}</h2></div><div className="flex flex-wrap items-center gap-2"><select className="input h-9 w-36 text-xs" value={device} onChange={(e) => setDevice(e.target.value as DeviceMode)}><option value="desktop">PC desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select><select className="input h-9 w-28 text-xs" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}><option value="0.65">65%</option><option value="0.78">78%</option><option value="0.9">90%</option><option value="1">100%</option></select><a href={config.path} target="_blank" rel="noreferrer" className="rounded border border-slate-300 bg-white px-3 py-2 text-xs font-display font-900 text-navy-950 hover:border-accent">Open live page</a></div></div><div className="flex-1 overflow-auto bg-slate-300 p-6"><div className="mx-auto origin-top rounded-xl bg-white shadow-2xl ring-1 ring-slate-400/40" style={{ width: canvasWidth, minHeight: 760, transform: `scale(${zoom})`, transformOrigin: "top center", marginBottom: -(760 * (1 - zoom)) }}><div className="relative h-[760px] overflow-hidden rounded-xl bg-white" onDragOver={(event) => { if (draggingWidget) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDrop={(event) => { if (!draggingWidget) return; event.preventDefault(); dropWidgetOnCanvas(draggingWidget, event.clientX, event.clientY); }}>
             {!config.editable ? <div className="pointer-events-none absolute right-4 top-4 z-20 rounded-full bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white shadow-lg">🚫 Visible only — managed elsewhere</div> : null}
             {draggingWidget && config.editable ? <div className="absolute inset-0 z-30 flex items-center justify-center bg-navy-950/10 backdrop-blur-[1px]"><div className="rounded-2xl bg-white px-6 py-4 text-center shadow-2xl ring-2 ring-accent"><p className="font-display text-sm font-900 text-navy-950">Drop to add {draggingWidget.label}</p><p className="mt-1 text-xs text-slate-500">Target: {selectedCollection || defaultCollection()}</p></div></div> : null}
             <iframe ref={iframeRef} key={`${pageKey}-${refreshKey}-${device}`} src={previewUrl(config.path, refreshKey)} title={`${config.label} visual CMS`} className={`h-full w-full border-0 bg-white ${draggingWidget ? "pointer-events-none" : ""}`} onLoad={injectEditorStable} />

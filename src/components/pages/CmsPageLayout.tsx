@@ -8,10 +8,10 @@ function Paragraphs({ text, className }: { text: string; className: string }) {
   return <div className={className}>{parts.map((part, index) => <p key={index}>{part}</p>)}</div>;
 }
 
-function cardWidth(width?: string) {
-  if (width === "full") return "lg:col-span-full";
-  if (width === "half") return "lg:col-span-2";
-  if (width === "third") return "lg:col-span-1";
+function cardWidth(width?: string, blockType?: string) {
+  // Only true banners/promotions should span. Normal cards are governed by the adaptive grid,
+  // otherwise copied cards can become larger than the card they were copied from.
+  if (width === "full" || blockType === "promotion" || blockType === "slider" || blockType === "animation") return "lg:col-span-full";
   return "";
 }
 
@@ -48,7 +48,7 @@ function CmsBlockCard({ block, index, count }: { block: CmsBlock; index: number;
   const type = block.blockType || "icon";
   const isBanner = type === "promotion" || type === "slider" || type === "animation";
   return (
-    <div data-vcms-item="page.blocks" data-vcms-index={index} className={`${cardWidth(block.width)} ${adaptiveItemClass(count, index)} ${blockBg(block.background)} ${align} ${animationClass(block.animation)} border rounded-xl p-6 transition-all hover:border-accent/40 hover:shadow-sm`}>
+    <div data-vcms-item="page.blocks" data-vcms-index={index} className={`${cardWidth(block.width, block.blockType)} ${adaptiveItemClass(count, index)} ${blockBg(block.background)} ${align} ${animationClass(block.animation)} border rounded-xl p-6 transition-all hover:border-accent/40 hover:shadow-sm`}>
       {block.imageUrl ? <img src={block.imageUrl} alt={block.title} className={`w-full ${isBanner ? "h-56" : "h-32"} object-cover rounded-lg mb-4`} /> : <div className="text-3xl mb-3">{block.icon}</div>}
       {type !== "text" ? <p className="font-mono text-[10px] uppercase tracking-widest text-accent mb-2">{type}</p> : null}
       <h3 className={`font-display font-800 mb-1 ${isDark ? "text-white" : "text-navy-900"}`}>{block.title}</h3>

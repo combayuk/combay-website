@@ -1,0 +1,21 @@
+Phase 16T — Visual CMS targeted regression repair
+
+Fixes from user testing:
+- FAQ + controls no longer create a generic "New card". They create a real FAQ item with question and answer fields.
+- FAQ answers are forcibly expanded/visible when pages are opened with ?vcms=1 so admin can edit the answer text even though the public site keeps accordion/dropdown behaviour.
+- Card widget and FAQ widget are now separate widget types.
+- Drag/drop calculates the actual location dropped inside the live iframe/canvas and uses that section as the target, instead of always using the last selected FAQ target.
+- If a non-FAQ widget is dropped onto FAQ, it is routed to the page card collection instead of creating a dead FAQ text card.
+- Copied/added cards use equal adaptive grid sizing; normal cards no longer inherit span classes that can make copied cards larger than existing cards.
+- Hero colour swatches now override existing gradient background-image with background-image: none, so simple colour changes visibly apply and persist.
+
+Validation performed in this sandbox:
+- npm install completed.
+- TypeScript transpile syntax check passed for changed files:
+  src/components/admin/VisualCmsBuilder.tsx
+  src/components/home/FaqPreview.tsx
+  src/app/faq/page.tsx
+  src/components/pages/CmsPageLayout.tsx
+  src/components/home/ServiceTabs.tsx
+  src/lib/cmsBackground.ts
+- Full npm run build could not complete in this offline sandbox because Prisma tried to fetch engines from binaries.prisma.sh and the environment has no external network access.
