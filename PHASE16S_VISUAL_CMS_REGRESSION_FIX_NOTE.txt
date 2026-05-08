@@ -1,0 +1,26 @@
+Phase 16S — Visual CMS regression fix
+
+Fixes reported regression after 16R where:
+- nothing on the Visual CMS canvas was editable;
+- widget drag/drop showed disabled inside the page;
+- clicking widgets appeared to do nothing;
+- + / delete controls did not appear inside cards/FAQ sections.
+
+Root causes addressed:
+1. Previous controls were injected only once into the iframe; Next/React hydration can replace or alter DOM nodes after iframe load.
+2. Drag/drop from parent sidebar into an iframe is browser-sensitive and can be blocked before the iframe drop listener runs.
+3. Some live sections may lack data-vcms markers after partial deployment or hydration, causing controls to be absent.
+4. Item controls were hover-only and could be invisible/fragile, especially when injected into buttons/tabs.
+
+Changes:
+- Re-bind Visual CMS controls after iframe load at 250ms, 800ms and 1600ms.
+- Re-bind controls when selected target/content/page changes.
+- Use parent postMessage from iframe controls so +/delete/copy messages always reach the Visual CMS parent window.
+- Make + / Copy / Delete controls always visible inside editable cards/items, not only on hover.
+- Add fallback collection detection for common live sections: What We Do, FAQ, Current Offers, How It Works.
+- Add fallback item detection for common card/button/article elements inside editable collections.
+- Add parent-level drag/drop overlay so dragging a widget onto the website canvas is accepted even if the iframe itself blocks the drop.
+- Widget click now adds to the selected collection or a sensible default collection.
+- Canvas click on an editable section selects it as the widget target.
+
+No Prisma migration required.

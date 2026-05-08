@@ -115,6 +115,8 @@ export default function VisualCmsBuilder() {
   const [leftTab, setLeftTab] = useState<LeftTab>("widgets");
   const [refreshKey, setRefreshKey] = useState(Date.now());
   const [selectedText, setSelectedText] = useState("");
+  const [selectedCollection, setSelectedCollection] = useState<CollectionKey | null>(null);
+  const [draggingWidget, setDraggingWidget] = useState<WidgetTemplate | null>(null);
   const [backgroundUrl, setBackgroundUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -123,11 +125,15 @@ export default function VisualCmsBuilder() {
 
   useEffect(() => { let cancelled = false; fetch("/api/admin/content", { cache: "no-store" }).then((r) => r.json()).then((data) => { if (!cancelled && data?.content) setContent(data.content); }).catch(() => setMessage("Could not load CMS content.")); return () => { cancelled = true; }; }, []);
 
+
+  useEffect(() => { if (iframeRef.current?.contentDocument) injectEditorStable(); }, [selectedCollection, pageKey, content]);
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       const data = event.data || {};
       if (data.type === "VCMS_TEXT_SELECTED") setSelectedText(String(data.text || ""));
+      if (data.type === "VCMS_COLLECTION_SELECTED") { setSelectedCollection(String(data.collection || "page.blocks") as CollectionKey); setMessage(`Target selected: ${String(data.label || data.collection || "section")}. Click or drop a widget to add it here.`); }
       if (data.type === "VCMS_TEXT_UPDATE" && content && data.oldText && data.newText && String(data.oldText).trim() !== String(data.newText).trim()) {
         const next = cloneContent(content);
         if (updateFirstStringMatch(next, String(data.oldText), String(data.newText))) { setContent(next); setMessage("Text changed on canvas. Click Save website to publish."); }
@@ -162,7 +168,13 @@ export default function VisualCmsBuilder() {
   }
   function currentBlocks(c = content): CmsBlock[] { const key = cmsPageKey(pageKey); return key && c ? c.pages[key].blocks : []; }
   function setBlocks(blocks: CmsBlock[]) { const key = cmsPageKey(pageKey); if (!key) return; mutateContent((draft) => { draft.pages[key].blocks = normaliseBlockWidths(blocks); }, true); setMessage("Cards changed and layout was auto-adjusted. Save website to publish."); }
-  function addWidget(widget: WidgetTemplate) { addCollectionItem(pageKey === "faq" ? "faq.groupItems:sales" : "page.blocks", widget); }
+  function defaultCollection(): CollectionKey {
+    if (selectedCollection) return selectedCollection;
+    if (pageKey === "faq") return "faq.groupItems:sales";
+    if (pageKey === "home") return "page.blocks";
+    return "page.blocks";
+  }
+  function addWidget(widget: WidgetTemplate) { addCollectionItem(defaultCollection(), widget); }
   function duplicateBlock(index: number) { duplicateCollectionItem("page.blocks", index); }
   function deleteBlock(index: number) { deleteCollectionItem("page.blocks", index); }
   function addSameSizeCard() { addCollectionItem("page.blocks", WIDGETS[0]); }
@@ -278,26 +290,94 @@ export default function VisualCmsBuilder() {
   function setHeroBackground(value: string) { if (!content) return; const clean = value.trim(); if (!clean) return; mutateContent((draft) => { if (pageKey === "home") draft.heroSlides[0].backgroundImageUrl = clean; if (pageKey === "faq") draft.faq.backgroundImageUrl = clean; const key = cmsPageKey(pageKey); if (key && key !== "home") draft.pages[key].backgroundImageUrl = clean; }); applyBackgroundToPreview(clean); setMessage("Background changed on screen and in CMS draft. Save website to publish."); }
   async function save() { if (!content) return; setSaving(true); setMessage(""); try { const response = await fetch("/api/admin/content", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) }); const data = await response.json().catch(() => null); if (!response.ok || !data?.ok) throw new Error(data?.error || "Save failed"); setContent(data.content); setRefreshKey(Date.now()); setMessage("Saved. Live canvas refreshed."); } catch (err) { setMessage(err instanceof Error ? err.message : "Save failed."); } finally { setSaving(false); } }
 
+  function postCanvasMessage(message: Record<string, unknown>) {
+    window.postMessage(message, window.location.origin);
+  }
+
   function injectEditor() {
-    const doc = iframeRef.current?.contentDocument; if (!doc) return;
-    const style = doc.createElement("style");
-    style.textContent = `[data-vcms-text="1"]{outline:1px dashed transparent;cursor:text}[data-vcms-text="1"]:hover{outline-color:#EEB32C;outline-offset:3px}[data-vcms-text="1"]:focus{outline:2px solid #EEB32C!important;outline-offset:3px;box-shadow:0 0 0 3px rgba(238,179,44,.18)}[data-vcms-protected="1"]{position:relative;cursor:not-allowed!important}[data-vcms-protected="1"]:hover:after{content:"🚫 protected system area";position:absolute;z-index:999999;top:8px;right:8px;background:#111827;color:#fff;border-radius:999px;padding:6px 10px;font:700 11px Arial;pointer-events:none}[data-vcms-collection]{position:relative;outline:1px dashed transparent;min-height:38px}[data-vcms-collection]:hover{outline-color:rgba(238,179,44,.7);outline-offset:5px}.vcms-add{position:absolute;right:12px;top:12px;z-index:999999;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 12px Arial;padding:7px 10px;box-shadow:0 6px 20px rgba(0,0,0,.18);cursor:pointer}.vcms-item-tools{position:absolute;right:8px;top:8px;z-index:999998;display:none;gap:4px}.vcms-item-wrap{position:relative!important}.vcms-item-wrap:hover>.vcms-item-tools{display:flex}.vcms-mini-btn{border:0;border-radius:999px;background:#030E21;color:#fff;font:800 10px Arial;padding:5px 7px;cursor:pointer}.vcms-mini-btn-danger{background:#991B1B}`;
-    doc.head.appendChild(style);
-    if (!config.editable) { doc.querySelectorAll<HTMLElement>("main section, main form, main a, main button").forEach((el) => { el.dataset.vcmsProtected = "1"; }); return; }
+    const iframe = iframeRef.current;
+    const doc = iframe?.contentDocument;
+    if (!doc) return;
+    const targetWindow = doc.defaultView;
+    const send = (payload: Record<string, unknown>) => {
+      try { targetWindow?.parent?.postMessage(payload, window.location.origin); }
+      catch { postCanvasMessage(payload); }
+    };
+
+    let style = doc.getElementById("vcms-live-editor-style") as HTMLStyleElement | null;
+    if (!style) {
+      style = doc.createElement("style");
+      style.id = "vcms-live-editor-style";
+      doc.head.appendChild(style);
+    }
+    style.textContent = `[data-vcms-text="1"]{outline:1px dashed transparent;cursor:text}[data-vcms-text="1"]:hover{outline-color:#EEB32C;outline-offset:3px}[data-vcms-text="1"]:focus{outline:2px solid #EEB32C!important;outline-offset:3px;box-shadow:0 0 0 3px rgba(238,179,44,.18)}[data-vcms-protected="1"]{position:relative;cursor:not-allowed!important}[data-vcms-protected="1"]:hover:after{content:"🚫 protected system area";position:absolute;z-index:2147483647;top:8px;right:8px;background:#111827;color:#fff;border-radius:999px;padding:6px 10px;font:700 11px Arial;pointer-events:none}[data-vcms-collection]{position:relative!important;outline:2px dashed rgba(238,179,44,.25);outline-offset:6px;min-height:44px}[data-vcms-collection]:hover{outline-color:rgba(238,179,44,.95)}[data-vcms-collection].vcms-target-selected{outline-color:#EEB32C!important;box-shadow:0 0 0 5px rgba(238,179,44,.15)}.vcms-add{position:absolute;right:12px;top:12px;z-index:2147483647;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 12px Arial;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.22);cursor:pointer}.vcms-item-tools{position:absolute;right:8px;top:8px;z-index:2147483646;display:flex;gap:4px}.vcms-item-wrap{position:relative!important}.vcms-mini-btn{border:0;border-radius:999px;background:#030E21;color:#fff;font:800 10px Arial;padding:6px 8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)}.vcms-mini-btn-danger{background:#991B1B}.vcms-drop-hint{position:absolute;left:12px;top:12px;z-index:2147483645;border-radius:999px;background:#030E21;color:#fff;font:800 11px Arial;padding:7px 10px;box-shadow:0 4px 14px rgba(0,0,0,.16);pointer-events:none}`;
+
+    if (!config.editable) {
+      doc.querySelectorAll<HTMLElement>("main section, main form, main a, main button").forEach((el) => { el.dataset.vcmsProtected = "1"; });
+      return;
+    }
+
+    // Defensive fallback: older/public components may not yet have explicit markers after deployment.
+    // Mark obvious live sections so Visual CMS controls are not silently missing.
+    doc.querySelectorAll<HTMLElement>("main section").forEach((section) => {
+      const text = (section.textContent || "").toLowerCase();
+      if (!section.dataset.vcmsCollection) {
+        if (text.includes("frequently asked questions")) section.dataset.vcmsCollection = pageKey === "faq" ? "faq.groupItems:sales" : "faq.previewItems";
+        else if (text.includes("what we do") || text.includes("everything you need")) section.dataset.vcmsCollection = "page.blocks";
+        else if (text.includes("current combay offers") || text.includes("copy the code")) section.dataset.vcmsCollection = "home.promotionStrip";
+        else if (text.includes("how it works")) section.dataset.vcmsCollection = "page.steps";
+      }
+    });
 
     doc.querySelectorAll<HTMLElement>("[data-vcms-collection]").forEach((section) => {
-      const collection = section.dataset.vcmsCollection || "page.blocks";
+      const collection = (section.dataset.vcmsCollection || "page.blocks") as CollectionKey;
+      section.classList.toggle("vcms-target-selected", selectedCollection === collection);
+      section.addEventListener("click", (event) => {
+        if ((event.target as HTMLElement).closest(".vcms-add,.vcms-item-tools")) return;
+        send({ type: "VCMS_COLLECTION_SELECTED", collection, label: collection });
+      });
       if (!section.querySelector(":scope > .vcms-add")) {
         const add = doc.createElement("button");
         add.type = "button";
         add.className = "vcms-add";
-        add.textContent = "+ Add similar item";
-        add.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); window.postMessage({ type: "VCMS_ADD_ITEM", collection }, window.location.origin); });
+        add.textContent = collection.includes("faq") ? "+ Add FAQ" : "+ Add similar item";
+        add.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          send({ type: "VCMS_ADD_ITEM", collection });
+        });
         section.appendChild(add);
       }
-      section.addEventListener("dragover", (event) => { event.preventDefault(); section.style.outlineColor = "#EEB32C"; });
+      if (!section.querySelector(":scope > .vcms-drop-hint")) {
+        const hint = doc.createElement("div");
+        hint.className = "vcms-drop-hint";
+        hint.textContent = collection.includes("faq") ? "FAQ group" : "Editable section";
+        section.appendChild(hint);
+      }
+      section.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        section.style.outlineColor = "#EEB32C";
+      });
       section.addEventListener("dragleave", () => { section.style.outlineColor = ""; });
-      section.addEventListener("drop", (event) => { event.preventDefault(); section.style.outlineColor = ""; const raw = event.dataTransfer?.getData("application/x-combay-widget"); let widget = null; try { widget = raw ? JSON.parse(raw) : null; } catch { widget = null; } window.postMessage({ type: "VCMS_ADD_ITEM", collection, widget }, window.location.origin); });
+      section.addEventListener("drop", (event) => {
+        event.preventDefault();
+        section.style.outlineColor = "";
+        const raw = event.dataTransfer?.getData("application/x-combay-widget");
+        let widget: WidgetTemplate | null = null;
+        try { widget = raw ? JSON.parse(raw) : null; } catch { widget = null; }
+        send({ type: "VCMS_ADD_ITEM", collection, widget });
+      });
+    });
+
+    // If public cards have not been marked individually, mark common direct children as editable items.
+    doc.querySelectorAll<HTMLElement>("[data-vcms-collection]").forEach((section) => {
+      const collection = section.dataset.vcmsCollection || "page.blocks";
+      if (section.querySelector("[data-vcms-item]")) return;
+      const candidates = Array.from(section.querySelectorAll<HTMLElement>(".rounded-xl,.rounded-lg,details,article,button")).filter((el) => !el.closest(".vcms-add,.vcms-drop-hint") && (el.textContent || "").trim().length > 8);
+      candidates.slice(0, 12).forEach((el, index) => {
+        el.dataset.vcmsItem = collection;
+        el.dataset.vcmsIndex = String(index);
+      });
     });
 
     doc.querySelectorAll<HTMLElement>("[data-vcms-item]").forEach((item) => {
@@ -307,23 +387,57 @@ export default function VisualCmsBuilder() {
       if (!item.querySelector(":scope > .vcms-item-tools")) {
         const tools = doc.createElement("div");
         tools.className = "vcms-item-tools";
+        const add = doc.createElement("button");
+        add.type = "button";
+        add.className = "vcms-mini-btn";
+        add.textContent = "+";
+        add.title = "Add another item in this same style";
+        add.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ADD_ITEM", collection }); });
         const duplicate = doc.createElement("button");
         duplicate.type = "button";
         duplicate.className = "vcms-mini-btn";
         duplicate.textContent = "Copy";
-        duplicate.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); window.postMessage({ type: "VCMS_DUPLICATE_ITEM", collection, index }, window.location.origin); });
+        duplicate.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DUPLICATE_ITEM", collection, index }); });
         const del = doc.createElement("button");
         del.type = "button";
         del.className = "vcms-mini-btn vcms-mini-btn-danger";
         del.textContent = "Delete";
-        del.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); window.postMessage({ type: "VCMS_DELETE_ITEM", collection, index }, window.location.origin); });
-        tools.appendChild(duplicate); tools.appendChild(del); item.appendChild(tools);
+        del.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DELETE_ITEM", collection, index }); });
+        tools.appendChild(add); tools.appendChild(duplicate); tools.appendChild(del); item.appendChild(tools);
       }
     });
 
     const textSelector = "main h1,main h2,main h3,main h4,main p,main li,main label,main a,main button,footer p,footer a,footer span,footer h4";
-    doc.querySelectorAll<HTMLElement>(textSelector).forEach((el) => { if (!el.textContent?.trim() || el.closest("script,style,svg,.vcms-item-tools,.vcms-add")) return; el.dataset.vcmsText = "1"; const initial = el.textContent.trim(); el.setAttribute("contenteditable", "true"); el.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); window.postMessage({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "" }, window.location.origin); }); el.addEventListener("focus", () => window.postMessage({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "" }, window.location.origin)); el.addEventListener("blur", () => { const next = el.textContent?.trim() || ""; if (next && next !== initial) window.postMessage({ type: "VCMS_TEXT_UPDATE", oldText: initial, newText: next }, window.location.origin); }); });
+    doc.querySelectorAll<HTMLElement>(textSelector).forEach((el) => {
+      if (!el.textContent?.trim() || el.closest("script,style,svg,.vcms-item-tools,.vcms-add,.vcms-drop-hint")) return;
+      el.dataset.vcmsText = "1";
+      const initial = el.textContent.trim();
+      el.setAttribute("contenteditable", "true");
+      el.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "" });
+      });
+      el.addEventListener("focus", () => send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "" }));
+      el.addEventListener("blur", () => {
+        const next = el.textContent?.trim() || "";
+        if (next && next !== initial) send({ type: "VCMS_TEXT_UPDATE", oldText: initial, newText: next });
+      });
+    });
     doc.querySelectorAll<HTMLElement>("[data-system-protected], [data-admin-only], .stripe, .checkout, [href*='/checkout'], [href*='/cart']").forEach((el) => { el.dataset.vcmsProtected = "1"; });
+  }
+
+  function injectEditorStable() {
+    injectEditor();
+    window.setTimeout(injectEditor, 250);
+    window.setTimeout(injectEditor, 800);
+    window.setTimeout(injectEditor, 1600);
+  }
+
+  function dropWidgetOnCanvas(widget: WidgetTemplate | null) {
+    if (!widget) return;
+    addCollectionItem(defaultCollection(), widget);
+    setDraggingWidget(null);
   }
 
   if (!content) return <div className="p-8 text-sm text-slate-600">Loading Visual CMS…</div>;
@@ -334,7 +448,7 @@ export default function VisualCmsBuilder() {
       <div className="grid grid-cols-3 gap-1 border-b border-slate-200 p-2">{(["pages", "widgets", "style"] as LeftTab[]).map((tab) => <button key={tab} type="button" onClick={() => setLeftTab(tab)} className={`rounded py-2 text-xs font-display font-900 capitalize ${leftTab === tab ? "bg-navy-950 text-white" : "bg-slate-50 text-navy-950"}`}>{tab}</button>)}</div>
       <div className="flex-1 overflow-auto p-3">
         {leftTab === "pages" ? <div className="space-y-2">{PAGES.map((page) => <button key={page.key} type="button" onClick={() => { setPageKey(page.key); setRefreshKey(Date.now()); }} className={`w-full rounded px-3 py-2 text-left text-sm font-display font-800 ${pageKey === page.key ? "bg-navy-950 text-white" : "bg-gray-50 text-navy-900 hover:bg-gray-100"}`}><span>{page.label}</span>{!page.editable ? <span className="ml-2 text-xs">🚫</span> : null}<span className="block text-[10px] font-normal opacity-70">{page.editable ? "Editable page" : page.note || "Visible but protected"}</span></button>)}</div> : null}
-        {leftTab === "widgets" ? <div className="space-y-3"><p className="text-xs text-slate-500">Click to add to the current editable section, or drag into a highlighted section on the canvas.</p><div className="grid grid-cols-2 gap-2">{WIDGETS.map((widget) => <button key={widget.label} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-combay-widget", JSON.stringify(widget)); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addWidget(widget)} className="rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-accent hover:bg-accent/5"><span className="text-xl">{widget.icon}</span><span className="mt-2 block text-xs font-display font-900 text-navy-950">{widget.label}</span><span className="mt-1 block text-[10px] text-slate-500">Click or drag</span></button>)}</div><div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-5 text-navy-950">Card and button widgets now adapt to the target section. If 3 cards become 4, the layout changes to a consistent four-column row on desktop; larger sets wrap cleanly into rows.</div></div> : null}
+        {leftTab === "widgets" ? <div className="space-y-3"><p className="text-xs text-slate-500">Click to add to the selected editable section, or drag onto the website canvas. Current target: <strong>{selectedCollection || defaultCollection()}</strong>.</p><div className="grid grid-cols-2 gap-2">{WIDGETS.map((widget) => <button key={widget.label} type="button" draggable onDragStart={(event) => { setDraggingWidget(widget); event.dataTransfer.setData("application/x-combay-widget", JSON.stringify(widget)); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => setDraggingWidget(null)} onClick={() => addWidget(widget)} className="rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-accent hover:bg-accent/5"><span className="text-xl">{widget.icon}</span><span className="mt-2 block text-xs font-display font-900 text-navy-950">{widget.label}</span><span className="mt-1 block text-[10px] text-slate-500">Click or drag</span></button>)}</div><div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-5 text-navy-950">Card and button widgets now adapt to the target section. If 3 cards become 4, the layout changes to a consistent four-column row on desktop; larger sets wrap cleanly into rows.</div></div> : null}
         {leftTab === "style" ? <div className="space-y-5">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-display font-900">Selected text</p><p className="mt-1 break-words text-xs text-slate-600">{selectedText || "Click text on the website screen."}</p></div>
           <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs font-display font-900">Replace background</p><span className="rounded-full bg-accent/20 px-2 py-1 text-[10px] font-800">Hero</span></div><div className="flex gap-2"><input className="input h-9 flex-1 text-xs" placeholder="Paste image URL" value={backgroundUrl} onChange={(e) => setBackgroundUrl(e.target.value)} /><button type="button" className="rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white" onClick={() => setHeroBackground(backgroundUrl)}>Use</button></div><div className="mt-3"><ImageUploadButton onUploaded={(url) => { setBackgroundUrl(url); setHeroBackground(url); }} /></div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Colours</p><div className="mt-2 flex flex-wrap gap-2">{COLOURS.map((colour) => <button key={colour} type="button" title={colour} onClick={() => setHeroBackground(colour)} className="h-8 w-8 rounded-full border border-slate-300" style={{ background: colour }} />)}</div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Gradients</p><div className="mt-2 space-y-2">{GRADIENTS.map((g) => <button key={g.label} type="button" onClick={() => setHeroBackground(g.value)} className="h-10 w-full rounded border border-slate-200 px-3 text-left text-xs font-display font-800 text-white" style={{ backgroundImage: g.value }}>{g.label}</button>)}</div></div>
@@ -347,6 +461,10 @@ export default function VisualCmsBuilder() {
       </div>
       <div className="border-t border-slate-200 p-3"><button type="button" onClick={save} disabled={saving} className="w-full rounded bg-accent px-4 py-3 text-sm font-display font-900 text-navy-950 hover:bg-accent-dark disabled:opacity-60">{saving ? "Saving…" : "Save website"}</button>{message ? <p className="mt-2 text-xs text-slate-600">{message}</p> : null}</div>
     </aside>
-    <main className="flex min-w-0 flex-1 flex-col"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3"><div><p className="text-xs text-slate-500">Editing</p><h2 className="font-display text-lg font-900 text-navy-950">{config.label} {config.editable ? "" : "— protected"}</h2></div><div className="flex flex-wrap items-center gap-2"><select className="input h-9 w-36 text-xs" value={device} onChange={(e) => setDevice(e.target.value as DeviceMode)}><option value="desktop">PC desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select><select className="input h-9 w-28 text-xs" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}><option value="0.65">65%</option><option value="0.78">78%</option><option value="0.9">90%</option><option value="1">100%</option></select><a href={config.path} target="_blank" rel="noreferrer" className="rounded border border-slate-300 bg-white px-3 py-2 text-xs font-display font-900 text-navy-950 hover:border-accent">Open live page</a></div></div><div className="flex-1 overflow-auto bg-slate-300 p-6"><div className="mx-auto origin-top rounded-xl bg-white shadow-2xl ring-1 ring-slate-400/40" style={{ width: canvasWidth, minHeight: 760, transform: `scale(${zoom})`, transformOrigin: "top center", marginBottom: -(760 * (1 - zoom)) }}><div className="relative h-[760px] overflow-hidden rounded-xl bg-white">{!config.editable ? <div className="pointer-events-none absolute right-4 top-4 z-20 rounded-full bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white shadow-lg">🚫 Visible only — managed elsewhere</div> : null}<iframe ref={iframeRef} key={`${pageKey}-${refreshKey}-${device}`} src={previewUrl(config.path, refreshKey)} title={`${config.label} visual CMS`} className="h-full w-full border-0 bg-white" onLoad={injectEditor} /></div></div></div></main>
+    <main className="flex min-w-0 flex-1 flex-col"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3"><div><p className="text-xs text-slate-500">Editing</p><h2 className="font-display text-lg font-900 text-navy-950">{config.label} {config.editable ? "" : "— protected"}</h2></div><div className="flex flex-wrap items-center gap-2"><select className="input h-9 w-36 text-xs" value={device} onChange={(e) => setDevice(e.target.value as DeviceMode)}><option value="desktop">PC desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select><select className="input h-9 w-28 text-xs" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}><option value="0.65">65%</option><option value="0.78">78%</option><option value="0.9">90%</option><option value="1">100%</option></select><a href={config.path} target="_blank" rel="noreferrer" className="rounded border border-slate-300 bg-white px-3 py-2 text-xs font-display font-900 text-navy-950 hover:border-accent">Open live page</a></div></div><div className="flex-1 overflow-auto bg-slate-300 p-6"><div className="mx-auto origin-top rounded-xl bg-white shadow-2xl ring-1 ring-slate-400/40" style={{ width: canvasWidth, minHeight: 760, transform: `scale(${zoom})`, transformOrigin: "top center", marginBottom: -(760 * (1 - zoom)) }}><div className="relative h-[760px] overflow-hidden rounded-xl bg-white" onDragOver={(event) => { if (draggingWidget) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDrop={(event) => { if (!draggingWidget) return; event.preventDefault(); dropWidgetOnCanvas(draggingWidget); }}>
+            {!config.editable ? <div className="pointer-events-none absolute right-4 top-4 z-20 rounded-full bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white shadow-lg">🚫 Visible only — managed elsewhere</div> : null}
+            {draggingWidget && config.editable ? <div className="absolute inset-0 z-30 flex items-center justify-center bg-navy-950/10 backdrop-blur-[1px]"><div className="rounded-2xl bg-white px-6 py-4 text-center shadow-2xl ring-2 ring-accent"><p className="font-display text-sm font-900 text-navy-950">Drop to add {draggingWidget.label}</p><p className="mt-1 text-xs text-slate-500">Target: {selectedCollection || defaultCollection()}</p></div></div> : null}
+            <iframe ref={iframeRef} key={`${pageKey}-${refreshKey}-${device}`} src={previewUrl(config.path, refreshKey)} title={`${config.label} visual CMS`} className={`h-full w-full border-0 bg-white ${draggingWidget ? "pointer-events-none" : ""}`} onLoad={injectEditorStable} />
+          </div></div></div></main>
   </div>;
 }
