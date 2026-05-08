@@ -6,6 +6,7 @@ import Footer from "@/components/layout/Footer";
 import ContactForm from "@/components/forms/ContactForm";
 import { getSiteContent } from "@/lib/siteContent";
 import { cmsBackgroundStyle } from "@/lib/cmsBackground";
+import VisualWidgetZone from "@/components/visual-cms/VisualWidgetZone";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Contact Combay", description: "Get in touch with Combay." };
@@ -19,6 +20,7 @@ export default async function ContactPage() {
     <main>
       <TopBar />
       <Navigation />
+      <VisualWidgetZone pageKey="contact" zone="top" widgets={c.visualWidgets?.["contact:top"] || []} />
 
       <section className="bg-navy-950 text-white py-12" style={heroStyle}>
         <div className="max-w-7xl mx-auto px-4">
@@ -27,6 +29,7 @@ export default async function ContactPage() {
           <p className="text-white/65 text-sm max-w-2xl">{page.body}</p>
         </div>
       </section>
+      <VisualWidgetZone pageKey="contact" zone="afterHero" widgets={c.visualWidgets?.["contact:afterHero"] || []} />
 
       <section className="py-10 bg-gray-50 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
@@ -48,6 +51,7 @@ export default async function ContactPage() {
           </div>
         </div>
       </section>
+      <VisualWidgetZone pageKey="contact" zone="afterContactCards" widgets={c.visualWidgets?.["contact:afterContactCards"] || []} />
 
       <section id="form" className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4">
@@ -74,6 +78,7 @@ export default async function ContactPage() {
           </div>
         </div>
       </section>
+      <VisualWidgetZone pageKey="contact" zone="beforeFooter" widgets={c.visualWidgets?.["contact:beforeFooter"] || []} />
 
       <Footer content={{ description: c.footer.description, backgroundImageUrl: c.footer.backgroundImageUrl, contact: c.contact }} />
     </main>

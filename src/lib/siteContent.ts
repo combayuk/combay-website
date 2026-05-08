@@ -5,10 +5,12 @@ export type CmsBlock = { icon:string; title:string; subtitle:string; body:string
 export type CmsStep = { number:string; title:string; body:string; imageUrl:string };
 export type CmsPage = { eyebrow:string; heading:string; accent:string; body:string; backgroundImageUrl:string; heroImageUrl:string; primaryLabel:string; primaryHref:string; secondaryLabel:string; secondaryHref:string; sectionEyebrow:string; sectionHeading:string; sectionBody:string; blocks:CmsBlock[]; steps:CmsStep[]; ctaHeading:string; ctaBody:string; ctaPrimaryLabel:string; ctaPrimaryHref:string; ctaSecondaryLabel:string; ctaSecondaryHref:string; sectionOrder:string[] };
 export type FaqItem = { question:string; answer:string };
+export type VisualWidget = { id:string; type:string; title?:string; subtitle?:string; body?:string; text?:string; textKind?:"heading"|"subheading"|"paragraph"|"caption"; icon?:string; imageUrl?:string; videoUrl?:string; thumbnailUrl?:string; caption?:string; url?:string; linkLabel?:string; promoCode?:string; openInNewTab?:boolean; buttonStyle?:"primary"|"secondary"|"outline"; autoplay?:boolean; muted?:boolean; loop?:boolean; width?:string; align?:"left"|"center"|"right"; height?:number; visible?:boolean };
 export type FaqGroup = { key:string; label:string; items:FaqItem[] };
 export type PolicyPageContent = { eyebrow:string; heading:string; lastUpdated:string; body:string; footer:string };
 export type SiteContent = {
   hiddenSections?: Record<string, string[]>;
+  visualWidgets?: Record<string, VisualWidget[]>;
   policies: { terms:PolicyPageContent; privacy:PolicyPageContent; returns:PolicyPageContent; warranty:PolicyPageContent; payment:PolicyPageContent };
   heroSlides: SiteHeroSlide[];
   trust: { eyebrow:string; heading:string; accent:string; clients:string[]; backgroundImageUrl:string };
@@ -24,6 +26,7 @@ const step=(number:string,title:string,body:string):CmsStep=>({number,title,body
 const page=(p:Partial<CmsPage>):CmsPage=>({ eyebrow:"",heading:"",accent:"",body:"",backgroundImageUrl:"",heroImageUrl:"",primaryLabel:"",primaryHref:"#",secondaryLabel:"",secondaryHref:"#",sectionEyebrow:"",sectionHeading:"",sectionBody:"",blocks:[],steps:[],ctaHeading:"",ctaBody:"",ctaPrimaryLabel:"",ctaPrimaryHref:"#",ctaSecondaryLabel:"",ctaSecondaryHref:"#",sectionOrder:["hero","contactBar","content","process","formOrCta"],...p });
 export const defaultSiteContent: SiteContent = {
   hiddenSections: {},
+  visualWidgets: {},
   policies: {
     payment: { eyebrow:"Policies", heading:"Payment Policy", lastUpdated:"January 2025", body:"100% payment is required in advance prior to dispatch on all orders. Accepted methods: bank transfer (BACS/CHAPS), credit/debit card, PayPal (where available), and cash (in-person collection only). Credit accounts are available to businesses with a proven purchasing history. Contact info@combay.co.uk to apply.", footer:"For the full policy or questions, contact us at info@combay.co.uk." },
     privacy: { eyebrow:"Policies", heading:"Privacy Policy", lastUpdated:"January 2025", body:"We collect only the data necessary to process your order and provide our services. This includes name, email, phone, company, and delivery address. We do not sell your data to third parties. You may request deletion or access to your data by emailing info@combay.co.uk. We comply with UK GDPR.", footer:"For the full policy or questions, contact us at info@combay.co.uk." },
@@ -70,6 +73,36 @@ function mergeFaqItem(i:any,f:FaqItem):FaqItem{return{question:text(i?.question,
 function mergeFaqGroup(i:any,f:FaqGroup):FaqGroup{return{key:text(i?.key,f.key).toLowerCase().replace(/[^a-z0-9-]/g,"-")||f.key,label:text(i?.label,f.label),items:arr(i?.items,f.items,mergeFaqItem,40)}}
 
 function mergePolicy(i:any,f:PolicyPageContent):PolicyPageContent{return{eyebrow:text(i?.eyebrow,f.eyebrow),heading:text(i?.heading,f.heading),lastUpdated:text(i?.lastUpdated,f.lastUpdated),body:text(i?.body,f.body),footer:text(i?.footer,f.footer)}}
+
+function mergeVisualWidget(i:any, fallbackIndex=0): VisualWidget {
+  const allowed = new Set(["video","card","button","text","promotion","spacer","divider"]);
+  const rawType = String(i?.type || "card");
+  const type = allowed.has(rawType) ? rawType : "card";
+  return {
+    id: text(i?.id, `vw-${Date.now()}-${fallbackIndex}`),
+    type,
+    title: opt(i?.title), subtitle: opt(i?.subtitle), body: opt(i?.body), text: opt(i?.text),
+    textKind: ["heading","subheading","paragraph","caption"].includes(String(i?.textKind)) ? i.textKind : "paragraph",
+    icon: opt(i?.icon), imageUrl: opt(i?.imageUrl), videoUrl: opt(i?.videoUrl), thumbnailUrl: opt(i?.thumbnailUrl), caption: opt(i?.caption),
+    url: href(i?.url, i?.type === "button" ? "/contact" : "#"), linkLabel: opt(i?.linkLabel), promoCode: opt(i?.promoCode),
+    openInNewTab: Boolean(i?.openInNewTab), buttonStyle: ["primary","secondary","outline"].includes(String(i?.buttonStyle)) ? i.buttonStyle : "primary",
+    autoplay: Boolean(i?.autoplay), muted: Boolean(i?.muted), loop: Boolean(i?.loop),
+    width: text(i?.width, type === "promotion" || type === "divider" || type === "spacer" ? "full" : "quarter"),
+    align: ["left","center","right"].includes(String(i?.align)) ? i.align : "left",
+    height: Number.isFinite(Number(i?.height)) ? Number(i.height) : (type === "spacer" ? 48 : undefined),
+    visible: i?.visible === false ? false : true,
+  };
+}
+function mergeVisualWidgets(raw:any): Record<string, VisualWidget[]> {
+  const out: Record<string, VisualWidget[]> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [zone, items] of Object.entries(raw)) {
+    if (!Array.isArray(items)) continue;
+    out[String(zone)] = items.map((item, index) => mergeVisualWidget(item, index)).filter((item) => item.visible !== false).slice(0, 80);
+  }
+  return out;
+}
+
 function hiddenSections(raw:any):Record<string,string[]>{
   const out:Record<string,string[]>={};
   if(!raw||typeof raw!=="object") return out;
@@ -83,6 +116,6 @@ export function isSectionHidden(content: SiteContent | undefined, page: string, 
   if (!content?.hiddenSections) return false;
   return Array.isArray(content.hiddenSections[page]) && content.hiddenSections[page].includes(section);
 }
-export function normaliseSiteContent(input: unknown): SiteContent { const raw:any=typeof input==="object"&&input?input:{}; const f=defaultSiteContent; return { hiddenSections:hiddenSections(raw.hiddenSections), policies:{terms:mergePolicy(raw.policies?.terms,f.policies.terms),privacy:mergePolicy(raw.policies?.privacy,f.policies.privacy),returns:mergePolicy(raw.policies?.returns,f.policies.returns),warranty:mergePolicy(raw.policies?.warranty,f.policies.warranty),payment:mergePolicy(raw.policies?.payment,f.policies.payment)}, heroSlides:f.heroSlides.map((x,i)=>mergeSlide(raw.heroSlides?.[i],x)), trust:{eyebrow:text(raw.trust?.eyebrow,f.trust.eyebrow),heading:text(raw.trust?.heading,f.trust.heading),accent:text(raw.trust?.accent,f.trust.accent),clients:Array.isArray(raw.trust?.clients)?raw.trust.clients.map((x:any)=>String(x||"").trim()).filter(Boolean):f.trust.clients,backgroundImageUrl:opt(raw.trust?.backgroundImageUrl)||f.trust.backgroundImageUrl}, finalCta:{eyebrow:text(raw.finalCta?.eyebrow,f.finalCta.eyebrow),heading:text(raw.finalCta?.heading,f.finalCta.heading),body:text(raw.finalCta?.body,f.finalCta.body),primaryLabel:text(raw.finalCta?.primaryLabel,f.finalCta.primaryLabel),primaryHref:href(raw.finalCta?.primaryHref,f.finalCta.primaryHref),secondaryLabel:text(raw.finalCta?.secondaryLabel,f.finalCta.secondaryLabel),secondaryHref:href(raw.finalCta?.secondaryHref,f.finalCta.secondaryHref),tertiaryLabel:text(raw.finalCta?.tertiaryLabel,f.finalCta.tertiaryLabel),tertiaryHref:href(raw.finalCta?.tertiaryHref,f.finalCta.tertiaryHref),backgroundImageUrl:opt(raw.finalCta?.backgroundImageUrl)||f.finalCta.backgroundImageUrl}, contact:{salesEmail:text(raw.contact?.salesEmail,f.contact.salesEmail),infoEmail:text(raw.contact?.infoEmail,f.contact.infoEmail),phone:text(raw.contact?.phone,f.contact.phone),location:text(raw.contact?.location,f.contact.location),whatsapp:text(raw.contact?.whatsapp,f.contact.whatsapp),businessHours:text(raw.contact?.businessHours,f.contact.businessHours),mapEmbedUrl:text(raw.contact?.mapEmbedUrl,f.contact.mapEmbedUrl)}, footer:{description:text(raw.footer?.description,f.footer.description),backgroundImageUrl:opt(raw.footer?.backgroundImageUrl)||f.footer.backgroundImageUrl}, pages:{home:mergePage(raw.pages?.home,f.pages.home),repair:mergePage(raw.pages?.repair,f.pages.repair),assetRecovery:mergePage(raw.pages?.assetRecovery,f.pages.assetRecovery),about:upgradeAboutPage(mergePage(raw.pages?.about,f.pages.about)),contact:mergePage(raw.pages?.contact,f.pages.contact)}, faq:{eyebrow:text(raw.faq?.eyebrow,f.faq.eyebrow),heading:text(raw.faq?.heading,f.faq.heading),body:text(raw.faq?.body,f.faq.body),backgroundImageUrl:opt(raw.faq?.backgroundImageUrl)||f.faq.backgroundImageUrl,groups:arr(raw.faq?.groups,f.faq.groups,mergeFaqGroup,12),previewItems:arr(raw.faq?.previewItems,f.faq.previewItems,mergeFaqItem,10),ctaHeading:text(raw.faq?.ctaHeading,f.faq.ctaHeading),ctaBody:text(raw.faq?.ctaBody,f.faq.ctaBody),ctaLabel:text(raw.faq?.ctaLabel,f.faq.ctaLabel),ctaHref:href(raw.faq?.ctaHref,f.faq.ctaHref)} } }
+export function normaliseSiteContent(input: unknown): SiteContent { const raw:any=typeof input==="object"&&input?input:{}; const f=defaultSiteContent; return { hiddenSections:hiddenSections(raw.hiddenSections), visualWidgets:mergeVisualWidgets(raw.visualWidgets), policies:{terms:mergePolicy(raw.policies?.terms,f.policies.terms),privacy:mergePolicy(raw.policies?.privacy,f.policies.privacy),returns:mergePolicy(raw.policies?.returns,f.policies.returns),warranty:mergePolicy(raw.policies?.warranty,f.policies.warranty),payment:mergePolicy(raw.policies?.payment,f.policies.payment)}, heroSlides:f.heroSlides.map((x,i)=>mergeSlide(raw.heroSlides?.[i],x)), trust:{eyebrow:text(raw.trust?.eyebrow,f.trust.eyebrow),heading:text(raw.trust?.heading,f.trust.heading),accent:text(raw.trust?.accent,f.trust.accent),clients:Array.isArray(raw.trust?.clients)?raw.trust.clients.map((x:any)=>String(x||"").trim()).filter(Boolean):f.trust.clients,backgroundImageUrl:opt(raw.trust?.backgroundImageUrl)||f.trust.backgroundImageUrl}, finalCta:{eyebrow:text(raw.finalCta?.eyebrow,f.finalCta.eyebrow),heading:text(raw.finalCta?.heading,f.finalCta.heading),body:text(raw.finalCta?.body,f.finalCta.body),primaryLabel:text(raw.finalCta?.primaryLabel,f.finalCta.primaryLabel),primaryHref:href(raw.finalCta?.primaryHref,f.finalCta.primaryHref),secondaryLabel:text(raw.finalCta?.secondaryLabel,f.finalCta.secondaryLabel),secondaryHref:href(raw.finalCta?.secondaryHref,f.finalCta.secondaryHref),tertiaryLabel:text(raw.finalCta?.tertiaryLabel,f.finalCta.tertiaryLabel),tertiaryHref:href(raw.finalCta?.tertiaryHref,f.finalCta.tertiaryHref),backgroundImageUrl:opt(raw.finalCta?.backgroundImageUrl)||f.finalCta.backgroundImageUrl}, contact:{salesEmail:text(raw.contact?.salesEmail,f.contact.salesEmail),infoEmail:text(raw.contact?.infoEmail,f.contact.infoEmail),phone:text(raw.contact?.phone,f.contact.phone),location:text(raw.contact?.location,f.contact.location),whatsapp:text(raw.contact?.whatsapp,f.contact.whatsapp),businessHours:text(raw.contact?.businessHours,f.contact.businessHours),mapEmbedUrl:text(raw.contact?.mapEmbedUrl,f.contact.mapEmbedUrl)}, footer:{description:text(raw.footer?.description,f.footer.description),backgroundImageUrl:opt(raw.footer?.backgroundImageUrl)||f.footer.backgroundImageUrl}, pages:{home:mergePage(raw.pages?.home,f.pages.home),repair:mergePage(raw.pages?.repair,f.pages.repair),assetRecovery:mergePage(raw.pages?.assetRecovery,f.pages.assetRecovery),about:upgradeAboutPage(mergePage(raw.pages?.about,f.pages.about)),contact:mergePage(raw.pages?.contact,f.pages.contact)}, faq:{eyebrow:text(raw.faq?.eyebrow,f.faq.eyebrow),heading:text(raw.faq?.heading,f.faq.heading),body:text(raw.faq?.body,f.faq.body),backgroundImageUrl:opt(raw.faq?.backgroundImageUrl)||f.faq.backgroundImageUrl,groups:arr(raw.faq?.groups,f.faq.groups,mergeFaqGroup,12),previewItems:arr(raw.faq?.previewItems,f.faq.previewItems,mergeFaqItem,10),ctaHeading:text(raw.faq?.ctaHeading,f.faq.ctaHeading),ctaBody:text(raw.faq?.ctaBody,f.faq.ctaBody),ctaLabel:text(raw.faq?.ctaLabel,f.faq.ctaLabel),ctaHref:href(raw.faq?.ctaHref,f.faq.ctaHref)} } }
 export async function getSiteContent(): Promise<SiteContent> { const dbResult=await withDatabase(async()=>{ const row=await prisma.siteSetting.findUnique({where:{key:SITE_CONTENT_KEY}}); if(!row?.value) return defaultSiteContent; try{return normaliseSiteContent(JSON.parse(row.value))}catch{return defaultSiteContent} }); return dbResult.ok?dbResult.data:defaultSiteContent }
 export async function saveSiteContent(content: SiteContent): Promise<SiteContent> { const safe=normaliseSiteContent(content); await prisma.siteSetting.upsert({where:{key:SITE_CONTENT_KEY},update:{value:JSON.stringify(safe)},create:{key:SITE_CONTENT_KEY,value:JSON.stringify(safe)}}); return safe }

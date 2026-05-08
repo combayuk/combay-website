@@ -10,6 +10,7 @@ import FaqPreview from "@/components/home/FaqPreview";
 import FinalCta from "@/components/home/FinalCta";
 import PublicPromotionStrip from "@/components/promotions/PublicPromotionStrip";
 import { getSiteContent, isSectionHidden } from "@/lib/siteContent";
+import VisualWidgetZone from "@/components/visual-cms/VisualWidgetZone";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +25,21 @@ export default async function HomePage() {
     <main>
       <TopBar />
       <Navigation />
+      <VisualWidgetZone pageKey="home" zone="top" widgets={content.visualWidgets?.["home:top"] || []} />
       {!isSectionHidden(content, "home", "hero") && <HeroCarousel slides={content.heroSlides} />}
+      <VisualWidgetZone pageKey="home" zone="afterHero" widgets={content.visualWidgets?.["home:afterHero"] || []} />
       {!isSectionHidden(content, "home", "promotionStrip") && <PublicPromotionStrip placement="home" />}
+      <VisualWidgetZone pageKey="home" zone="afterPromotion" widgets={content.visualWidgets?.["home:afterPromotion"] || []} />
       {!isSectionHidden(content, "home", "industryStrip") && <IndustryStrip />}
+      <VisualWidgetZone pageKey="home" zone="afterIndustry" widgets={content.visualWidgets?.["home:afterIndustry"] || []} />
       {!isSectionHidden(content, "home", "serviceCards") && <ServiceTabs content={content.pages.home} />}
+      <VisualWidgetZone pageKey="home" zone="afterServices" widgets={content.visualWidgets?.["home:afterServices"] || []} />
       {!isSectionHidden(content, "home", "trust") && <TrustSection content={content.trust} />}
+      <VisualWidgetZone pageKey="home" zone="afterTrust" widgets={content.visualWidgets?.["home:afterTrust"] || []} />
       {!isSectionHidden(content, "home", "faqPreview") && <FaqPreview items={content.faq.previewItems} />}
+      <VisualWidgetZone pageKey="home" zone="afterFaq" widgets={content.visualWidgets?.["home:afterFaq"] || []} />
       {!isSectionHidden(content, "home", "finalCta") && <FinalCta content={content.finalCta} />}
+      <VisualWidgetZone pageKey="home" zone="beforeFooter" widgets={content.visualWidgets?.["home:beforeFooter"] || []} />
       <Footer content={{ description: content.footer.description, backgroundImageUrl: content.footer.backgroundImageUrl, contact: content.contact }} />
     </main>
   );
