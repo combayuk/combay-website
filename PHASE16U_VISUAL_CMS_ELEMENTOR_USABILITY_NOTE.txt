@@ -1,0 +1,13 @@
+Phase 16U — Visual CMS Elementor-style usability corrections
+
+This patch is cumulative from Phase 16T and focuses on Visual CMS interaction quality.
+
+Implemented:
+- Copy/delete/+ controls are no longer static. They appear only when hovering over the relevant editable card/item/section.
+- Sidebar drag/drop now shows a yellow placement guide line on the canvas while dragging.
+- Drop targeting is calculated from the actual mouse release position inside the iframe, with fallback to the nearest editable collection rather than reusing the previously selected section.
+- Non-FAQ widgets are prevented from accidentally becoming FAQ items. FAQ widgets add FAQ records; card/button/text widgets add normal card/content records.
+- Button/link URL editing added in the Style panel. Click any editable button/link on the canvas, then edit the URL in the Button/link URL field.
+- Widget side panel copy updated to explain the placement line behaviour.
+
+No Prisma migration required.

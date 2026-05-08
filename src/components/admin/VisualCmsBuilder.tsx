@@ -10,6 +10,8 @@ type PageConfig = { key: PageKey; label: string; path: string; editable: boolean
 type WidgetTemplate = { label: string; icon: string; blockType: string; title: string; subtitle: string; body: string; background: string; width: string; linkLabel?: string; linkHref?: string };
 
 type CollectionKey = "page.blocks" | "page.steps" | "faq.previewItems" | "home.promotionStrip" | `faq.groupItems:${string}`;
+type DropPreview = { collection: CollectionKey; label: string; y: number; mode: "before" | "inside" | "after" };
+type SelectedLink = { text: string; href: string };
 
 const HIDDEN = "__HIDDEN__";
 const PAGES: PageConfig[] = [
@@ -95,6 +97,29 @@ function updateFirstStringMatch(target: unknown, oldText: string, newText: strin
   return false;
 }
 
+function updateFirstHrefMatch(target: unknown, oldHref: string, newHref: string): boolean {
+  if (!target || typeof target !== "object") return false;
+  for (const key of Object.keys(target as Record<string, unknown>)) {
+    const value = (target as Record<string, unknown>)[key];
+    const lower = key.toLowerCase();
+    if (typeof value === "string" && lower.includes("href") && value.trim() === oldHref.trim()) {
+      (target as Record<string, unknown>)[key] = newHref;
+      return true;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) if (updateFirstHrefMatch(item, oldHref, newHref)) return true;
+    } else if (value && typeof value === "object" && updateFirstHrefMatch(value, oldHref, newHref)) return true;
+  }
+  return false;
+}
+
+function safeHrefInput(value: string) {
+  const clean = value.trim();
+  if (!clean) return "#";
+  if (clean.startsWith("/") || clean.startsWith("#") || clean.startsWith("mailto:") || clean.startsWith("tel:") || clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+  return `/${clean.replace(/^\/+/, "")}`;
+}
+
 function ImageUploadButton({ onUploaded }: { onUploaded: (url: string) => void }) {
   const [uploading, setUploading] = useState(false);
   async function upload(file: File | null) {
@@ -121,8 +146,10 @@ export default function VisualCmsBuilder() {
   const [leftTab, setLeftTab] = useState<LeftTab>("widgets");
   const [refreshKey, setRefreshKey] = useState(Date.now());
   const [selectedText, setSelectedText] = useState("");
+  const [selectedLink, setSelectedLink] = useState<SelectedLink | null>(null);
   const [selectedCollection, setSelectedCollection] = useState<CollectionKey | null>(null);
   const [draggingWidget, setDraggingWidget] = useState<WidgetTemplate | null>(null);
+  const [dropPreview, setDropPreview] = useState<DropPreview | null>(null);
   const [backgroundUrl, setBackgroundUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -138,7 +165,10 @@ export default function VisualCmsBuilder() {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       const data = event.data || {};
-      if (data.type === "VCMS_TEXT_SELECTED") setSelectedText(String(data.text || ""));
+      if (data.type === "VCMS_TEXT_SELECTED") {
+        setSelectedText(String(data.text || ""));
+        if (data.href) setSelectedLink({ text: String(data.text || "Button/link"), href: String(data.href || "#") });
+      }
       if (data.type === "VCMS_COLLECTION_SELECTED") { setSelectedCollection(String(data.collection || "page.blocks") as CollectionKey); setMessage(`Target selected: ${String(data.label || data.collection || "section")}. Click or drop a widget to add it here.`); }
       if (data.type === "VCMS_TEXT_UPDATE" && content && data.oldText && data.newText && String(data.oldText).trim() !== String(data.newText).trim()) {
         const next = cloneContent(content);
@@ -155,6 +185,21 @@ export default function VisualCmsBuilder() {
     }
     window.addEventListener("message", onMessage); return () => window.removeEventListener("message", onMessage);
   }, [content, pageKey]);
+
+  function updateSelectedLinkHref(hrefValue: string) {
+    if (!content || !selectedLink) return;
+    const nextHref = safeHrefInput(hrefValue);
+    const draft = cloneContent(content);
+    if (updateFirstHrefMatch(draft, selectedLink.href, nextHref)) {
+      setSelectedLink({ ...selectedLink, href: nextHref });
+      setContent(draft);
+      setMessage("Button/link URL updated in draft. Click Save website to publish.");
+      const doc = iframeRef.current?.contentDocument;
+      doc?.querySelectorAll<HTMLAnchorElement>(`a[href=\"${CSS.escape(selectedLink.href)}\"]`).forEach((a) => a.setAttribute("href", nextHref));
+    } else {
+      setMessage("This button/link is visible on the page but its URL is not linked to CMS storage yet.");
+    }
+  }
 
   async function autoSaveDraft(draft: SiteContent) {
     try {
@@ -326,7 +371,7 @@ export default function VisualCmsBuilder() {
       style.id = "vcms-live-editor-style";
       doc.head.appendChild(style);
     }
-    style.textContent = `[data-vcms-text="1"]{outline:1px dashed transparent;cursor:text}[data-vcms-text="1"]:hover{outline-color:#EEB32C;outline-offset:3px}[data-vcms-text="1"]:focus{outline:2px solid #EEB32C!important;outline-offset:3px;box-shadow:0 0 0 3px rgba(238,179,44,.18)}[data-vcms-protected="1"]{position:relative;cursor:not-allowed!important}[data-vcms-protected="1"]:hover:after{content:"🚫 protected system area";position:absolute;z-index:2147483647;top:8px;right:8px;background:#111827;color:#fff;border-radius:999px;padding:6px 10px;font:700 11px Arial;pointer-events:none}[data-vcms-collection]{position:relative!important;outline:2px dashed rgba(238,179,44,.25);outline-offset:6px;min-height:44px}[data-vcms-collection]:hover{outline-color:rgba(238,179,44,.95)}[data-vcms-collection].vcms-target-selected{outline-color:#EEB32C!important;box-shadow:0 0 0 5px rgba(238,179,44,.15)}.vcms-add{position:absolute;right:12px;top:12px;z-index:2147483647;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 12px Arial;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.22);cursor:pointer}.vcms-item-tools{position:absolute;right:8px;top:8px;z-index:2147483646;display:flex;gap:4px}.vcms-item-wrap{position:relative!important}.vcms-mini-btn{border:0;border-radius:999px;background:#030E21;color:#fff;font:800 10px Arial;padding:6px 8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)}.vcms-mini-btn-danger{background:#991B1B}.vcms-drop-hint{position:absolute;left:12px;top:12px;z-index:2147483645;border-radius:999px;background:#030E21;color:#fff;font:800 11px Arial;padding:7px 10px;box-shadow:0 4px 14px rgba(0,0,0,.16);pointer-events:none}`;
+    style.textContent = `[data-vcms-text="1"]{outline:1px dashed transparent;cursor:text}[data-vcms-text="1"]:hover{outline-color:#EEB32C;outline-offset:3px}[data-vcms-text="1"]:focus{outline:2px solid #EEB32C!important;outline-offset:3px;box-shadow:0 0 0 3px rgba(238,179,44,.18)}[data-vcms-protected="1"]{position:relative;cursor:not-allowed!important}[data-vcms-protected="1"]:hover:after{content:"🚫 protected system area";position:absolute;z-index:2147483647;top:8px;right:8px;background:#111827;color:#fff;border-radius:999px;padding:6px 10px;font:700 11px Arial;pointer-events:none}[data-vcms-collection]{position:relative!important;outline:2px dashed transparent;outline-offset:6px;min-height:44px}[data-vcms-collection]:hover{outline-color:rgba(238,179,44,.75)}[data-vcms-collection].vcms-target-selected{outline-color:#EEB32C!important;box-shadow:0 0 0 5px rgba(238,179,44,.15)}.vcms-add{position:absolute;right:12px;top:12px;z-index:2147483647;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 12px Arial;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.22);cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}.vcms-item-tools{position:absolute;right:8px;top:8px;z-index:2147483646;display:flex;gap:4px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}.vcms-item-wrap{position:relative!important}.vcms-item-wrap:hover>.vcms-item-tools,[data-vcms-collection]:hover>.vcms-add,[data-vcms-collection].vcms-target-selected>.vcms-add{opacity:1;pointer-events:auto;transform:translateY(0)}.vcms-mini-btn{border:0;border-radius:999px;background:#030E21;color:#fff;font:800 10px Arial;padding:6px 8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)}.vcms-mini-btn-danger{background:#991B1B}.vcms-drop-hint{position:absolute;left:12px;top:12px;z-index:2147483645;border-radius:999px;background:#030E21;color:#fff;font:800 11px Arial;padding:7px 10px;box-shadow:0 4px 14px rgba(0,0,0,.16);pointer-events:none;opacity:0;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}[data-vcms-collection]:hover>.vcms-drop-hint,[data-vcms-collection].vcms-target-selected>.vcms-drop-hint{opacity:1;transform:translateY(0)}.vcms-placement-zone{position:absolute;left:0;right:0;height:3px;background:#EEB32C;box-shadow:0 0 0 3px rgba(238,179,44,.18);z-index:2147483647;pointer-events:none}.vcms-edit-link{outline:1px dotted rgba(238,179,44,.75);outline-offset:2px}`;
 
     if (!config.editable) {
       doc.querySelectorAll<HTMLElement>("main section, main form, main a, main button").forEach((el) => { el.dataset.vcmsProtected = "1"; });
@@ -427,14 +472,16 @@ export default function VisualCmsBuilder() {
     doc.querySelectorAll<HTMLElement>(textSelector).forEach((el) => {
       if (!el.textContent?.trim() || el.closest("script,style,svg,.vcms-item-tools,.vcms-add,.vcms-drop-hint")) return;
       el.dataset.vcmsText = "1";
+      const linkEl = (el.closest("a") || (el.tagName.toLowerCase() === "a" ? el : null)) as HTMLAnchorElement | null;
+      if (linkEl?.href) el.classList.add("vcms-edit-link");
       const initial = el.textContent.trim();
       el.setAttribute("contenteditable", "true");
       el.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "" });
+        send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "" });
       });
-      el.addEventListener("focus", () => send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "" }));
+      el.addEventListener("focus", () => send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "" }));
       el.addEventListener("blur", () => {
         const next = el.textContent?.trim() || "";
         if (next && next !== initial) send({ type: "VCMS_TEXT_UPDATE", oldText: initial, newText: next });
@@ -455,34 +502,69 @@ export default function VisualCmsBuilder() {
     return "page.blocks";
   }
 
-  function collectionAtCanvasPoint(clientX: number, clientY: number): CollectionKey {
+  function collectionLabel(collection: CollectionKey) {
+    if (collection.includes("faq")) return "FAQ items";
+    if (collection === "page.steps") return "Process/steps";
+    if (collection === "home.promotionStrip") return "Promotion banner";
+    return "Cards/content";
+  }
+
+  function dropPreviewAtCanvasPoint(clientX: number, clientY: number): DropPreview {
     const iframe = iframeRef.current;
     const doc = iframe?.contentDocument;
-    if (!iframe || !doc) return pageDefaultCollection();
+    if (!iframe || !doc) return { collection: pageDefaultCollection(), label: collectionLabel(pageDefaultCollection()), y: 120, mode: "inside" };
     const rect = iframe.getBoundingClientRect();
-    if (!rect.width || !rect.height) return pageDefaultCollection();
+    if (!rect.width || !rect.height) return { collection: pageDefaultCollection(), label: collectionLabel(pageDefaultCollection()), y: 120, mode: "inside" };
     const scaleX = iframe.offsetWidth / rect.width;
     const scaleY = iframe.offsetHeight / rect.height;
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-    const element = doc.elementFromPoint(x, y) as HTMLElement | null;
-    const collectionElement = element?.closest?.("[data-vcms-collection],[data-vcms-item]") as HTMLElement | null;
+    const x = Math.max(0, Math.min(iframe.offsetWidth, (clientX - rect.left) * scaleX));
+    const y = Math.max(0, Math.min(iframe.offsetHeight, (clientY - rect.top) * scaleY));
+    const elements = doc.elementsFromPoint(x, y) as HTMLElement[];
+    let collectionElement = elements.map((el) => el.closest?.("[data-vcms-item],[data-vcms-collection]") as HTMLElement | null).find(Boolean) || null;
+
+    const collections = Array.from(doc.querySelectorAll<HTMLElement>("[data-vcms-collection]")).map((el) => {
+      const r = el.getBoundingClientRect();
+      return { el, top: r.top, bottom: r.bottom, height: r.height || 1, center: r.top + (r.height || 1) / 2 };
+    }).filter((entry) => entry.height > 20);
+
+    if (!collectionElement && collections.length) {
+      const containing = collections.find((entry) => y >= entry.top && y <= entry.bottom);
+      const nearest = containing || collections.sort((a, b) => Math.abs(a.center - y) - Math.abs(b.center - y))[0];
+      collectionElement = nearest.el;
+    }
+
     const itemCollection = collectionElement?.dataset?.vcmsItem;
     const sectionCollection = collectionElement?.dataset?.vcmsCollection;
-    if (itemCollection || sectionCollection) return (itemCollection || sectionCollection) as CollectionKey;
-    const section = element?.closest?.("main section") as HTMLElement | null;
-    const sectionText = (section?.textContent || "").toLowerCase();
-    if (sectionText.includes("frequently asked questions")) return pageKey === "faq" ? "faq.groupItems:sales" : "faq.previewItems";
-    if (sectionText.includes("how it works")) return "page.steps";
-    if (sectionText.includes("current combay offers") || sectionText.includes("copy the code")) return "home.promotionStrip";
-    return pageDefaultCollection();
+    let collection = (itemCollection || sectionCollection || pageDefaultCollection()) as CollectionKey;
+
+    // Only use FAQ when the pointer is genuinely in an FAQ section. This prevents accidental FAQ drops.
+    if (collection.includes("faq")) {
+      const faqHost = collectionElement?.closest?.("[data-vcms-collection*='faq']") as HTMLElement | null;
+      if (!faqHost) collection = pageDefaultCollection();
+    }
+
+    const host = (collectionElement?.closest?.("[data-vcms-collection]") as HTMLElement | null) || collections.find((entry) => (entry.el.dataset.vcmsCollection || "") === collection)?.el || null;
+    const hostRect = host?.getBoundingClientRect();
+    const rel = hostRect ? (y - hostRect.top) / Math.max(hostRect.height, 1) : 0.5;
+    const mode: DropPreview["mode"] = rel < 0.18 ? "before" : rel > 0.82 ? "after" : "inside";
+    const lineY = hostRect ? (mode === "before" ? hostRect.top : mode === "after" ? hostRect.bottom : Math.max(hostRect.top + 8, Math.min(y, hostRect.bottom - 8))) : y;
+
+    return { collection, label: `${mode === "inside" ? "Add inside" : mode === "before" ? "Add near top of" : "Add near bottom of"} ${collectionLabel(collection)}`, y: lineY, mode };
+  }
+
+  function collectionAtCanvasPoint(clientX: number, clientY: number): CollectionKey {
+    return dropPreviewAtCanvasPoint(clientX, clientY).collection;
   }
 
   function dropWidgetOnCanvas(widget: WidgetTemplate | null, clientX?: number, clientY?: number) {
     if (!widget) return;
-    const target = typeof clientX === "number" && typeof clientY === "number" ? collectionAtCanvasPoint(clientX, clientY) : defaultCollection();
-    addCollectionItem(collectionForWidget(target, widget), widget);
+    const preview = typeof clientX === "number" && typeof clientY === "number" ? dropPreviewAtCanvasPoint(clientX, clientY) : null;
+    const target = preview ? preview.collection : defaultCollection();
+    const resolved = collectionForWidget(target, widget);
+    setSelectedCollection(resolved);
+    addCollectionItem(resolved, widget);
     setDraggingWidget(null);
+    setDropPreview(null);
   }
 
   if (!content) return <div className="p-8 text-sm text-slate-600">Loading Visual CMS…</div>;
@@ -493,9 +575,9 @@ export default function VisualCmsBuilder() {
       <div className="grid grid-cols-3 gap-1 border-b border-slate-200 p-2">{(["pages", "widgets", "style"] as LeftTab[]).map((tab) => <button key={tab} type="button" onClick={() => setLeftTab(tab)} className={`rounded py-2 text-xs font-display font-900 capitalize ${leftTab === tab ? "bg-navy-950 text-white" : "bg-slate-50 text-navy-950"}`}>{tab}</button>)}</div>
       <div className="flex-1 overflow-auto p-3">
         {leftTab === "pages" ? <div className="space-y-2">{PAGES.map((page) => <button key={page.key} type="button" onClick={() => { setPageKey(page.key); setRefreshKey(Date.now()); }} className={`w-full rounded px-3 py-2 text-left text-sm font-display font-800 ${pageKey === page.key ? "bg-navy-950 text-white" : "bg-gray-50 text-navy-900 hover:bg-gray-100"}`}><span>{page.label}</span>{!page.editable ? <span className="ml-2 text-xs">🚫</span> : null}<span className="block text-[10px] font-normal opacity-70">{page.editable ? "Editable page" : page.note || "Visible but protected"}</span></button>)}</div> : null}
-        {leftTab === "widgets" ? <div className="space-y-3"><p className="text-xs text-slate-500">Click to add to the selected editable section, or drag onto the website canvas. Current target: <strong>{selectedCollection || defaultCollection()}</strong>.</p><div className="grid grid-cols-2 gap-2">{WIDGETS.map((widget) => <button key={widget.label} type="button" draggable onDragStart={(event) => { setDraggingWidget(widget); event.dataTransfer.setData("application/x-combay-widget", JSON.stringify(widget)); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => setDraggingWidget(null)} onClick={() => addWidget(widget)} className="rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-accent hover:bg-accent/5"><span className="text-xl">{widget.icon}</span><span className="mt-2 block text-xs font-display font-900 text-navy-950">{widget.label}</span><span className="mt-1 block text-[10px] text-slate-500">Click or drag</span></button>)}</div><div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-5 text-navy-950">Card and button widgets now adapt to the target section. If 3 cards become 4, the layout changes to a consistent four-column row on desktop; larger sets wrap cleanly into rows.</div></div> : null}
+        {leftTab === "widgets" ? <div className="space-y-3"><p className="text-xs text-slate-500">Click a widget to add to the selected section, or drag it onto the page. A yellow placement line shows where it will land. Current target: <strong>{selectedCollection || defaultCollection()}</strong>.</p><div className="grid grid-cols-2 gap-2">{WIDGETS.map((widget) => <button key={widget.label} type="button" draggable onDragStart={(event) => { setDraggingWidget(widget); event.dataTransfer.setData("application/x-combay-widget", JSON.stringify(widget)); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => { setDraggingWidget(null); setDropPreview(null); }} onClick={() => addWidget(widget)} className="rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-accent hover:bg-accent/5"><span className="text-xl">{widget.icon}</span><span className="mt-2 block text-xs font-display font-900 text-navy-950">{widget.label}</span><span className="mt-1 block text-[10px] text-slate-500">Click or drag</span></button>)}</div><div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-5 text-navy-950">Card and button widgets now adapt to the target section. If 3 cards become 4, the layout changes to a consistent four-column row on desktop; larger sets wrap cleanly into rows.</div></div> : null}
         {leftTab === "style" ? <div className="space-y-5">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-display font-900">Selected text</p><p className="mt-1 break-words text-xs text-slate-600">{selectedText || "Click text on the website screen."}</p></div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-display font-900">Selected text</p><p className="mt-1 break-words text-xs text-slate-600">{selectedText || "Click text on the website screen."}</p>{selectedLink ? <div className="mt-3 rounded-lg border border-accent/30 bg-white p-2"><label className="block text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Button/link URL</label><input className="input mt-1 h-9 w-full text-xs" value={selectedLink.href} onChange={(e) => updateSelectedLinkHref(e.target.value)} placeholder="/contact, /shop, mailto:, tel:, https://..." /><p className="mt-1 text-[10px] text-slate-500">Works for all CMS-linked buttons and text links.</p></div> : null}</div>
           <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs font-display font-900">Replace background</p><span className="rounded-full bg-accent/20 px-2 py-1 text-[10px] font-800">Hero</span></div><div className="flex gap-2"><input className="input h-9 flex-1 text-xs" placeholder="Paste image URL" value={backgroundUrl} onChange={(e) => setBackgroundUrl(e.target.value)} /><button type="button" className="rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white" onClick={() => setHeroBackground(backgroundUrl)}>Use</button></div><div className="mt-3"><ImageUploadButton onUploaded={(url) => { setBackgroundUrl(url); setHeroBackground(url); }} /></div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Colours</p><div className="mt-2 flex flex-wrap gap-2">{COLOURS.map((colour) => <button key={colour} type="button" title={colour} onClick={() => setHeroBackground(colour)} className="h-8 w-8 rounded-full border border-slate-300" style={{ background: colour }} />)}</div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Gradients</p><div className="mt-2 space-y-2">{GRADIENTS.map((g) => <button key={g.label} type="button" onClick={() => setHeroBackground(g.value)} className="h-10 w-full rounded border border-slate-200 px-3 text-left text-xs font-display font-800 text-white" style={{ backgroundImage: g.value }}>{g.label}</button>)}</div></div>
           <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">Delete / restore whole sections</p>{pageKey === "home" ? <div className="space-y-2">{HOME_SECTIONS.map(([key,label]) => <div key={key} className="flex items-center justify-between gap-2 rounded bg-slate-50 p-2"><span className="text-xs">{label}</span><button type="button" onClick={() => toggleHomeSection(key)} className={`rounded px-2 py-1 text-[11px] font-800 ${isHomeHidden(key) ? "bg-accent text-navy-950" : "bg-red-50 text-red-700"}`}>{isHomeHidden(key) ? "Restore" : "Delete"}</button></div>)}</div> : cmsPageKey(pageKey) ? <div className="space-y-2">{PAGE_SECTIONS.map(([key,label]) => <div key={key} className="flex items-center justify-between gap-2 rounded bg-slate-50 p-2"><span className="text-xs">{label}</span><button type="button" onClick={() => togglePageSection(key)} className={`rounded px-2 py-1 text-[11px] font-800 ${pageSectionVisible(key) ? "bg-red-50 text-red-700" : "bg-accent text-navy-950"}`}>{pageSectionVisible(key) ? "Delete" : "Restore"}</button></div>)}</div> : <p className="text-xs text-slate-500">This page has policy text editing only.</p>}</div>
           {cmsPageKey(pageKey) ? <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between"><p className="text-xs font-display font-900">Cards / section items</p><button type="button" onClick={addSameSizeCard} className="rounded bg-navy-950 px-2 py-1 text-[11px] font-800 text-white">+ Add card</button></div><div className="space-y-2">{pageBlocks.map((block, index) => <div key={`${block.title}-${index}`} className="rounded bg-slate-50 p-2"><p className="text-xs font-800">{block.title}</p><p className="text-[10px] text-slate-500">Auto width: {block.width || "quarter"}</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => duplicateBlock(index)} className="rounded bg-white px-2 py-1 text-[11px] font-800 text-navy-950 ring-1 ring-slate-200">Duplicate</button><button type="button" onClick={() => deleteBlock(index)} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete</button></div></div>)}</div></div> : null}
@@ -506,9 +588,9 @@ export default function VisualCmsBuilder() {
       </div>
       <div className="border-t border-slate-200 p-3"><button type="button" onClick={save} disabled={saving} className="w-full rounded bg-accent px-4 py-3 text-sm font-display font-900 text-navy-950 hover:bg-accent-dark disabled:opacity-60">{saving ? "Saving…" : "Save website"}</button>{message ? <p className="mt-2 text-xs text-slate-600">{message}</p> : null}</div>
     </aside>
-    <main className="flex min-w-0 flex-1 flex-col"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3"><div><p className="text-xs text-slate-500">Editing</p><h2 className="font-display text-lg font-900 text-navy-950">{config.label} {config.editable ? "" : "— protected"}</h2></div><div className="flex flex-wrap items-center gap-2"><select className="input h-9 w-36 text-xs" value={device} onChange={(e) => setDevice(e.target.value as DeviceMode)}><option value="desktop">PC desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select><select className="input h-9 w-28 text-xs" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}><option value="0.65">65%</option><option value="0.78">78%</option><option value="0.9">90%</option><option value="1">100%</option></select><a href={config.path} target="_blank" rel="noreferrer" className="rounded border border-slate-300 bg-white px-3 py-2 text-xs font-display font-900 text-navy-950 hover:border-accent">Open live page</a></div></div><div className="flex-1 overflow-auto bg-slate-300 p-6"><div className="mx-auto origin-top rounded-xl bg-white shadow-2xl ring-1 ring-slate-400/40" style={{ width: canvasWidth, minHeight: 760, transform: `scale(${zoom})`, transformOrigin: "top center", marginBottom: -(760 * (1 - zoom)) }}><div className="relative h-[760px] overflow-hidden rounded-xl bg-white" onDragOver={(event) => { if (draggingWidget) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDrop={(event) => { if (!draggingWidget) return; event.preventDefault(); dropWidgetOnCanvas(draggingWidget, event.clientX, event.clientY); }}>
+    <main className="flex min-w-0 flex-1 flex-col"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3"><div><p className="text-xs text-slate-500">Editing</p><h2 className="font-display text-lg font-900 text-navy-950">{config.label} {config.editable ? "" : "— protected"}</h2></div><div className="flex flex-wrap items-center gap-2"><select className="input h-9 w-36 text-xs" value={device} onChange={(e) => setDevice(e.target.value as DeviceMode)}><option value="desktop">PC desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select><select className="input h-9 w-28 text-xs" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}><option value="0.65">65%</option><option value="0.78">78%</option><option value="0.9">90%</option><option value="1">100%</option></select><a href={config.path} target="_blank" rel="noreferrer" className="rounded border border-slate-300 bg-white px-3 py-2 text-xs font-display font-900 text-navy-950 hover:border-accent">Open live page</a></div></div><div className="flex-1 overflow-auto bg-slate-300 p-6"><div className="mx-auto origin-top rounded-xl bg-white shadow-2xl ring-1 ring-slate-400/40" style={{ width: canvasWidth, minHeight: 760, transform: `scale(${zoom})`, transformOrigin: "top center", marginBottom: -(760 * (1 - zoom)) }}><div className="relative h-[760px] overflow-hidden rounded-xl bg-white" onDragOver={(event) => { if (draggingWidget) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropPreview(dropPreviewAtCanvasPoint(event.clientX, event.clientY)); } }} onDragLeave={() => setDropPreview(null)} onDrop={(event) => { if (!draggingWidget) return; event.preventDefault(); dropWidgetOnCanvas(draggingWidget, event.clientX, event.clientY); }}>
             {!config.editable ? <div className="pointer-events-none absolute right-4 top-4 z-20 rounded-full bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white shadow-lg">🚫 Visible only — managed elsewhere</div> : null}
-            {draggingWidget && config.editable ? <div className="absolute inset-0 z-30 flex items-center justify-center bg-navy-950/10 backdrop-blur-[1px]"><div className="rounded-2xl bg-white px-6 py-4 text-center shadow-2xl ring-2 ring-accent"><p className="font-display text-sm font-900 text-navy-950">Drop to add {draggingWidget.label}</p><p className="mt-1 text-xs text-slate-500">Target: {selectedCollection || defaultCollection()}</p></div></div> : null}
+            {draggingWidget && config.editable ? <div className="pointer-events-none absolute inset-0 z-30 bg-navy-950/5"><div className="absolute left-0 right-0 h-[3px] bg-accent shadow-[0_0_0_4px_rgba(238,179,44,.22)]" style={{ top: dropPreview?.y ?? 120 }} /><div className="absolute left-1/2 -translate-x-1/2 rounded-full bg-navy-950 px-4 py-2 text-xs font-display font-900 text-white shadow-2xl" style={{ top: Math.max(16, (dropPreview?.y ?? 120) - 42) }}>{dropPreview?.label || `Drop to add ${draggingWidget.label}`}</div></div> : null}
             <iframe ref={iframeRef} key={`${pageKey}-${refreshKey}-${device}`} src={previewUrl(config.path, refreshKey)} title={`${config.label} visual CMS`} className={`h-full w-full border-0 bg-white ${draggingWidget ? "pointer-events-none" : ""}`} onLoad={injectEditorStable} />
           </div></div></div></main>
   </div>;
