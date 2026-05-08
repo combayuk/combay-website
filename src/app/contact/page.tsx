@@ -5,6 +5,7 @@ import Navigation from "@/components/layout/Navigation";
 import Footer from "@/components/layout/Footer";
 import ContactForm from "@/components/forms/ContactForm";
 import { getSiteContent } from "@/lib/siteContent";
+import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Contact Combay", description: "Get in touch with Combay." };
@@ -12,9 +13,7 @@ export const metadata: Metadata = { title: "Contact Combay", description: "Get i
 export default async function ContactPage() {
   const c = await getSiteContent();
   const page = c.pages.contact;
-  const heroStyle = page.backgroundImageUrl
-    ? { backgroundImage: `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${page.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
-    : undefined;
+  const heroStyle = cmsBackgroundStyle(page.backgroundImageUrl);
 
   return (
     <main>

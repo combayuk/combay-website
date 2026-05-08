@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CmsBlock, CmsPage, CmsStep, SiteContent } from "@/lib/siteContent";
+import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 
 function Paragraphs({ text, className }: { text: string; className: string }) {
   const parts = String(text || "").split(/\n{1,}/).map((part) => part.trim()).filter(Boolean);
@@ -46,7 +47,7 @@ function CmsBlockCard({ block, index }: { block: CmsBlock; index: number }) {
 }
 
 function HeroSection({ page }: { page: CmsPage }) {
-  const heroStyle = page.backgroundImageUrl ? { backgroundImage: `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${page.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined;
+  const heroStyle = cmsBackgroundStyle(page.backgroundImageUrl);
   return (
     <section className="bg-navy-950 text-white py-16" style={heroStyle}>
       <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-[1fr_420px] gap-10 items-center">

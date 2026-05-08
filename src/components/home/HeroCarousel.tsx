@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 
 type HeroSlide = {
   eyebrow: string;
@@ -121,7 +122,7 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
 
   return (
     <section className={`relative bg-gradient-to-br ${s.bg} text-white overflow-hidden transition-all duration-700`}
-      style={{minHeight:"520px", backgroundImage: s.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${s.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center"}}>
+      style={{minHeight:"520px", ...cmsBackgroundStyle(s.backgroundImageUrl)}}>
       {/* Grid texture */}
       <div className="absolute inset-0 opacity-[0.035]" style={{
         backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 47px,rgba(255,255,255,.4) 48px),repeating-linear-gradient(90deg,transparent,transparent 47px,rgba(255,255,255,.4) 48px)"
