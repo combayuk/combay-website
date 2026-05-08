@@ -1,0 +1,17 @@
+Phase 16O - Visual CMS left-toolbar inline editable builder
+
+This patch corrects the Visual CMS workflow so the admin does not have a separate right-side editor panel and does not need a separate read-only live preview/edit canvas mode.
+
+Implemented:
+- Single editable website screen/canvas.
+- Left side panel only: Pages, Widgets, Style.
+- Removed right-side inspector panel that cropped the usable screen.
+- Text is edited directly by clicking and typing on the canvas.
+- Widgets can be clicked or dragged from the left panel into the page content area.
+- Cards and process steps can be dragged to swap/reorder.
+- Style controls live on the left panel only: width, background, alignment, image URL/upload, button URL, move/duplicate/delete.
+- PC/tablet/mobile and zoom controls remain in the top bar.
+
+Notes:
+- This is a CMS-safe visual builder for editable content regions. Critical ecommerce workflows remain managed in their own admin modules.
+- No Prisma migration is required.
