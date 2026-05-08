@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
-import { emailButton, escapeHtml, htmlShell, sendEmail, siteUrl } from "@/lib/mailer";
+import { escapeHtml, htmlShell, sendEmail, siteUrl } from "@/lib/mailer";
 
 const CODE_TTL_MINUTES = 20;
 
@@ -23,7 +23,7 @@ export async function sendEmailVerificationCode(args: { email: string; name?: st
   const firstName = String(args.name || "Customer").trim().split(/\s+/)[0] || "Customer";
   const html = htmlShell(
     "Verify your Combay account",
-    `<p style="margin-top:0;">Dear ${escapeHtml(firstName)},</p><p>Thank you for creating a Combay customer account. Enter the verification code below to activate your account.</p><div style="letter-spacing:10px;font-size:30px;font-weight:800;color:#0f172a;background:#f8fafc;border:1px solid #dbe3ea;border-radius:12px;padding:18px 20px;text-align:center;margin:20px 0;">${escapeHtml(args.code)}</div><p>This code expires in ${CODE_TTL_MINUTES} minutes. If you did not create a Combay account, you can ignore this email.</p>${emailButton(verifyUrl, "Open verification page")}`,
+    `<p style="margin-top:0;">Dear ${escapeHtml(firstName)},</p><p>Thank you for creating a Combay customer account. Enter the verification code below to activate your account.</p><div style="letter-spacing:10px;font-size:30px;font-weight:800;color:#0f172a;background:#f8fafc;border:1px solid #dbe3ea;border-radius:12px;padding:18px 20px;text-align:center;margin:20px 0;">${escapeHtml(args.code)}</div><p>This code expires in ${CODE_TTL_MINUTES} minutes. If you did not create a Combay account, you can ignore this email.</p><p style="margin:18px 0 0;color:#475569;font-size:13px;line-height:1.6;">If you need to reopen the verification page, copy this link into your browser:<br/><a href="${escapeHtml(verifyUrl)}" style="color:#0f172a;text-decoration:underline;word-break:break-all;">${escapeHtml(verifyUrl)}</a></p>`,
     "Your Combay verification code"
   );
   return sendEmail({ to: args.email, subject: "Your Combay verification code", html, headers: { "X-Combay-Email-Type": "account-verification" } });

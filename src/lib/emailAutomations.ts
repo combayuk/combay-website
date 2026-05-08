@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { emailButton, escapeHtml, htmlShell, sendEmail, siteUrl, type EmailSendResult } from "@/lib/mailer";
+import { escapeHtml, htmlShell, sendEmail, siteUrl, type EmailSendResult } from "@/lib/mailer";
 import { automationConsentCategory, canSendAutomationToUser, ensureMarketingPrefs, isMarketingAutomation, unsubscribeUrl } from "@/lib/marketingConsent";
 
 export const AUTOMATION_TRIGGERS = [
@@ -70,10 +70,7 @@ export async function runEmailAutomations(trigger: AutomationTrigger, context: A
     if (await shouldSkipDuplicate(ruleId, trigger, recipient.email, context)) continue;
     const subject = renderTemplate(rule.subject, trigger, context);
     const renderedBody = renderTemplate(rule.body, trigger, context);
-    const ctaUrlRaw = renderTemplate(rule.ctaUrl || "", trigger, context).trim();
-    const ctaUrl = ctaUrlRaw ? (ctaUrlRaw.startsWith("http") ? ctaUrlRaw : `${siteUrl().replace(/\/$/, "")}${ctaUrlRaw.startsWith("/") ? "" : "/"}${ctaUrlRaw}`) : "";
-    const cta = ctaUrl ? emailButton(ctaUrl, rule.ctaLabel || "View details") : "";
-    const html = htmlShell(subject, `${bodyHtml(renderedBody)}${cta}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>${unsubscribeFooter(trigger, context)}`, subject);
+    const html = htmlShell(subject, `${bodyHtml(renderedBody)}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>${unsubscribeFooter(trigger, context)}`, subject);
     const headers: Record<string, string> = { "X-Combay-Automation": trigger, "X-Combay-Email-Category": automationConsentCategory(trigger) };
     const token = context.user?.marketingPrefs?.unsubscribeToken;
     if (token && isMarketingAutomation(trigger)) headers["List-Unsubscribe"] = `<${unsubscribeUrl(token, trigger)}>`;

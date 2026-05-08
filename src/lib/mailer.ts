@@ -113,10 +113,9 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
 }
 
 export function emailButton(url: string, label: string, variant: "primary" | "secondary" = "primary") {
-  const styles = variant === "primary"
-    ? "background:#f59e0b;color:#111827;border:1px solid #d97706;"
-    : "background:#111827;color:#ffffff;border:1px solid #111827;";
-  return `<p style="margin:24px 0 0;"><a href="${escapeHtml(url)}" style="display:inline-block;${styles}text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:700;font-size:14px;">${escapeHtml(label)}</a></p>`;
+  // Temporary production setting: customer emails must not contain CTA-style buttons.
+  // Keep this helper name for compatibility with document/payment emails, but render as a simple text link only.
+  return `<p style="margin:18px 0 0;color:#334155;font-size:14px;line-height:1.6;"><strong>${escapeHtml(label)}:</strong> <a href="${escapeHtml(url)}" style="color:#0f172a;text-decoration:underline;word-break:break-all;">${escapeHtml(url)}</a></p>`;
 }
 
 export function htmlShell(title: string, content: string, preheader?: string) {
@@ -163,7 +162,7 @@ export async function sendAdminNotification(args: { subject: string; title: stri
 }
 
 export async function sendCustomerAcknowledgement(args: { to: string; name?: string; subject: string; title: string; reference?: string; body: string; ctaUrl?: string; ctaLabel?: string; }) {
-  const cta = args.ctaUrl ? emailButton(args.ctaUrl, args.ctaLabel || "View details") : "";
+  const cta = ""; // Customer email action buttons are temporarily disabled.
   const ref = args.reference ? `<div style="margin:18px 0;padding:12px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Reference</div><strong style="font-size:16px;color:#111827;">${escapeHtml(args.reference)}</strong></div>` : "";
   const html = htmlShell(
     args.title,
