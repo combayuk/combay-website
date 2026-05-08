@@ -8,7 +8,7 @@ export default async function PublicPromotionStrip({ placement = "home" }: { pla
   if (promotions.length === 0) return null;
 
   return (
-    <section className={placement === "home" ? "bg-white border-y border-gray-200" : "bg-amber-50 border-b border-amber-200"}>
+    <section data-vcms-collection={placement === "home" ? "home.promotionStrip" : undefined} className={placement === "home" ? "bg-white border-y border-gray-200" : "bg-amber-50 border-b border-amber-200"}>
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="flex items-center gap-2 flex-shrink-0">

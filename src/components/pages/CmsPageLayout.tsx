@@ -9,9 +9,22 @@ function Paragraphs({ text, className }: { text: string; className: string }) {
 }
 
 function cardWidth(width?: string) {
-  if (width === "full") return "lg:col-span-4";
+  if (width === "full") return "lg:col-span-full";
   if (width === "half") return "lg:col-span-2";
-  if (width === "third") return "lg:col-span-2 xl:col-span-1";
+  if (width === "third") return "lg:col-span-1";
+  return "";
+}
+
+function adaptiveGridClass(count: number) {
+  if (count <= 1) return "grid-cols-1";
+  if (count === 2) return "sm:grid-cols-2";
+  if (count === 3) return "sm:grid-cols-2 lg:grid-cols-3";
+  return "sm:grid-cols-2 lg:grid-cols-4";
+}
+
+function adaptiveItemClass(count: number, index: number) {
+  if (count === 1) return "max-w-2xl";
+  if (count === 5 && index >= 3) return "lg:col-span-2";
   return "";
 }
 
@@ -29,13 +42,13 @@ function animationClass(animation?: string) {
   return "";
 }
 
-function CmsBlockCard({ block, index }: { block: CmsBlock; index: number }) {
+function CmsBlockCard({ block, index, count }: { block: CmsBlock; index: number; count: number }) {
   const align = block.align === "center" ? "text-center" : block.align === "right" ? "text-right" : "text-left";
   const isDark = block.background === "dark";
   const type = block.blockType || "icon";
   const isBanner = type === "promotion" || type === "slider" || type === "animation";
   return (
-    <div className={`${cardWidth(block.width)} ${blockBg(block.background)} ${align} ${animationClass(block.animation)} border rounded-xl p-6 transition-all hover:border-accent/40 hover:shadow-sm`}>
+    <div data-vcms-item="page.blocks" data-vcms-index={index} className={`${cardWidth(block.width)} ${adaptiveItemClass(count, index)} ${blockBg(block.background)} ${align} ${animationClass(block.animation)} border rounded-xl p-6 transition-all hover:border-accent/40 hover:shadow-sm`}>
       {block.imageUrl ? <img src={block.imageUrl} alt={block.title} className={`w-full ${isBanner ? "h-56" : "h-32"} object-cover rounded-lg mb-4`} /> : <div className="text-3xl mb-3">{block.icon}</div>}
       {type !== "text" ? <p className="font-mono text-[10px] uppercase tracking-widest text-accent mb-2">{type}</p> : null}
       <h3 className={`font-display font-800 mb-1 ${isDark ? "text-white" : "text-navy-900"}`}>{block.title}</h3>
@@ -70,12 +83,12 @@ function ContactBar({ contact }: { contact?: SiteContent["contact"] }) {
 
 function ContentSection({ page }: { page: CmsPage }) {
   if (!page.sectionHeading && !page.blocks.length) return null;
-  return <section className="py-14 bg-white"><div className="max-w-7xl mx-auto px-4"><p className="section-label">{page.sectionEyebrow}</p><h2 className="section-heading text-3xl mb-2">{page.sectionHeading}</h2><Paragraphs text={page.sectionBody} className="text-gray-500 mb-8 text-sm max-w-3xl leading-relaxed space-y-3" />{page.blocks.length > 0 && <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">{page.blocks.map((b,i)=><CmsBlockCard key={`${b.title}-${i}`} block={b} index={i}/>)}</div>}</div></section>;
+  return <section className="py-14 bg-white" data-vcms-collection="page.blocks"><div className="max-w-7xl mx-auto px-4"><p className="section-label">{page.sectionEyebrow}</p><h2 className="section-heading text-3xl mb-2">{page.sectionHeading}</h2><Paragraphs text={page.sectionBody} className="text-gray-500 mb-8 text-sm max-w-3xl leading-relaxed space-y-3" />{page.blocks.length > 0 && <div className={`grid ${adaptiveGridClass(page.blocks.length)} gap-5`}>{page.blocks.map((b,i)=><CmsBlockCard key={`${b.title}-${i}`} block={b} index={i} count={page.blocks.length}/>)}</div>}</div></section>;
 }
 
 function ProcessSection({ steps }: { steps: CmsStep[] }) {
   if (!steps.length) return null;
-  return <section className="py-14 bg-gray-50"><div className="max-w-7xl mx-auto px-4"><p className="section-label">Process</p><h2 className="section-heading text-3xl mb-8">How it works.</h2><div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">{steps.map((s,i)=><div key={`${s.number}-${i}`} className="bg-white border border-gray-200 rounded-lg p-5">{s.imageUrl && <img src={s.imageUrl} alt={s.title} className="w-full h-28 object-cover rounded mb-4"/>}<div className="font-mono text-accent text-xs mb-3">{s.number}</div><h3 className="font-display font-700 text-navy-900 mb-2">{s.title}</h3><p className="text-gray-500 text-xs leading-relaxed">{s.body}</p></div>)}</div></div></section>;
+  return <section className="py-14 bg-gray-50" data-vcms-collection="page.steps"><div className="max-w-7xl mx-auto px-4"><p className="section-label">Process</p><h2 className="section-heading text-3xl mb-8">How it works.</h2><div className={`grid ${adaptiveGridClass(steps.length)} gap-5`}>{steps.map((s,i)=><div key={`${s.number}-${i}`} data-vcms-item="page.steps" data-vcms-index={i} className={`bg-white border border-gray-200 rounded-lg p-5 ${adaptiveItemClass(steps.length, i)}`}>{s.imageUrl && <img src={s.imageUrl} alt={s.title} className="w-full h-28 object-cover rounded mb-4"/>}<div className="font-mono text-accent text-xs mb-3">{s.number}</div><h3 className="font-display font-700 text-navy-900 mb-2">{s.title}</h3><p className="text-gray-500 text-xs leading-relaxed">{s.body}</p></div>)}</div></div></section>;
 }
 
 type Contact = SiteContent["contact"];

@@ -1,0 +1,13 @@
+Phase 16R - Visual CMS collection editing and widget drop fix
+
+Fixes reported after Phase 16Q:
+- Existing cards/collection items can now be deleted through overlay controls on the live canvas and through the left Style panel.
+- Adding/deleting/duplicating collection items auto-adjusts card widths so remaining cards do not leave uneven desktop spacing.
+- Widget buttons now work on click and are draggable into live iframe collection zones.
+- Added explicit Card and Button widgets.
+- Existing sections that contain repeated items now expose + Add similar item controls on the live canvas.
+- FAQ preview and FAQ page items now expose + Add and delete/copy controls.
+- CMS collection actions auto-save and refresh the live canvas so clicked/dragged widgets visibly appear without waiting for a manual save.
+- Public CMS components now include data-vcms-collection/data-vcms-item markers for exact live-canvas editing.
+
+No Prisma migration required.

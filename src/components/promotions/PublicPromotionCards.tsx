@@ -18,9 +18,9 @@ function promotionOfferLabel(promotion: { type?: string; value?: number }) {
   return "Promotion";
 }
 
-function OfferCard({ promotion, compact = false }: { promotion: PromotionCardData; compact?: boolean }) {
+function OfferCard({ promotion, compact = false, index = 0 }: { promotion: PromotionCardData; compact?: boolean; index?: number }) {
   return (
-    <div className={`rounded-xl border px-4 py-3 ${compact ? "border-white/15 bg-white/10 text-white" : "border-amber-200 bg-amber-50"}`}>
+    <div data-vcms-item="home.promotionStrip" data-vcms-index={index} className={`rounded-xl border px-4 py-3 ${compact ? "border-white/15 bg-white/10 text-white" : "border-amber-200 bg-amber-50"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className={`font-display font-800 text-sm ${compact ? "text-white" : "text-navy-950"}`}>{promotionOfferLabel(promotion)}</p>
@@ -35,5 +35,5 @@ function OfferCard({ promotion, compact = false }: { promotion: PromotionCardDat
 
 export default function PublicPromotionCards({ promotions, compact = false }: { promotions: PromotionCardData[]; compact?: boolean }) {
   if (!promotions.length) return null;
-  return <>{promotions.map((promotion) => <OfferCard key={promotion.id} promotion={promotion} compact={compact} />)}</>;
+  return <>{promotions.map((promotion, index) => <OfferCard key={promotion.id} promotion={promotion} compact={compact} index={index} />)}</>;
 }
