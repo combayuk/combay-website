@@ -5,7 +5,7 @@ export type CmsBlock = { icon:string; title:string; subtitle:string; body:string
 export type CmsStep = { number:string; title:string; body:string; imageUrl:string };
 export type CmsPage = { eyebrow:string; heading:string; accent:string; body:string; backgroundImageUrl:string; heroImageUrl:string; primaryLabel:string; primaryHref:string; secondaryLabel:string; secondaryHref:string; sectionEyebrow:string; sectionHeading:string; sectionBody:string; blocks:CmsBlock[]; steps:CmsStep[]; ctaHeading:string; ctaBody:string; ctaPrimaryLabel:string; ctaPrimaryHref:string; ctaSecondaryLabel:string; ctaSecondaryHref:string; sectionOrder:string[] };
 export type FaqItem = { question:string; answer:string };
-export type VisualWidget = { id:string; type:string; title?:string; subtitle?:string; body?:string; text?:string; textKind?:"heading"|"subheading"|"paragraph"|"caption"; icon?:string; imageUrl?:string; videoUrl?:string; thumbnailUrl?:string; caption?:string; url?:string; linkLabel?:string; promoCode?:string; openInNewTab?:boolean; buttonStyle?:"primary"|"secondary"|"outline"; autoplay?:boolean; muted?:boolean; loop?:boolean; width?:string; align?:"left"|"center"|"right"; height?:number; visible?:boolean };
+export type VisualWidget = { id:string; type:string; title?:string; subtitle?:string; body?:string; text?:string; textKind?:"heading"|"subheading"|"paragraph"|"caption"; icon?:string; imageUrl?:string; videoUrl?:string; thumbnailUrl?:string; caption?:string; url?:string; linkLabel?:string; promoCode?:string; copyCodeEnabled?:boolean; openInNewTab?:boolean; buttonStyle?:"primary"|"secondary"|"outline"; autoplay?:boolean; muted?:boolean; loop?:boolean; width?:string; align?:"left"|"center"|"right"; height?:number; thickness?:number; colour?:string; background?:string; marginTop?:number; marginBottom?:number; columns?:number; sectionVariant?:"plain"|"soft"|"dark"|"accent"; visible?:boolean };
 export type FaqGroup = { key:string; label:string; items:FaqItem[] };
 export type PolicyPageContent = { eyebrow:string; heading:string; lastUpdated:string; body:string; footer:string };
 export type SiteContent = {
@@ -75,7 +75,7 @@ function mergeFaqGroup(i:any,f:FaqGroup):FaqGroup{return{key:text(i?.key,f.key).
 function mergePolicy(i:any,f:PolicyPageContent):PolicyPageContent{return{eyebrow:text(i?.eyebrow,f.eyebrow),heading:text(i?.heading,f.heading),lastUpdated:text(i?.lastUpdated,f.lastUpdated),body:text(i?.body,f.body),footer:text(i?.footer,f.footer)}}
 
 function mergeVisualWidget(i:any, fallbackIndex=0): VisualWidget {
-  const allowed = new Set(["video","card","button","text","promotion","spacer","divider"]);
+  const allowed = new Set(["section","video","card","button","text","image","promotion","spacer","divider"]);
   const rawType = String(i?.type || "card");
   const type = allowed.has(rawType) ? rawType : "card";
   return {
@@ -84,12 +84,18 @@ function mergeVisualWidget(i:any, fallbackIndex=0): VisualWidget {
     title: opt(i?.title), subtitle: opt(i?.subtitle), body: opt(i?.body), text: opt(i?.text),
     textKind: ["heading","subheading","paragraph","caption"].includes(String(i?.textKind)) ? i.textKind : "paragraph",
     icon: opt(i?.icon), imageUrl: opt(i?.imageUrl), videoUrl: opt(i?.videoUrl), thumbnailUrl: opt(i?.thumbnailUrl), caption: opt(i?.caption),
-    url: href(i?.url, i?.type === "button" ? "/contact" : "#"), linkLabel: opt(i?.linkLabel), promoCode: opt(i?.promoCode),
+    url: href(i?.url, i?.type === "button" ? "/contact" : "#"), linkLabel: opt(i?.linkLabel), promoCode: opt(i?.promoCode), copyCodeEnabled: Boolean(i?.copyCodeEnabled),
     openInNewTab: Boolean(i?.openInNewTab), buttonStyle: ["primary","secondary","outline"].includes(String(i?.buttonStyle)) ? i.buttonStyle : "primary",
     autoplay: Boolean(i?.autoplay), muted: Boolean(i?.muted), loop: Boolean(i?.loop),
     width: text(i?.width, type === "promotion" || type === "divider" || type === "spacer" ? "full" : "quarter"),
     align: ["left","center","right"].includes(String(i?.align)) ? i.align : "left",
     height: Number.isFinite(Number(i?.height)) ? Number(i.height) : (type === "spacer" ? 48 : undefined),
+    thickness: Number.isFinite(Number(i?.thickness)) ? Number(i.thickness) : (type === "divider" ? 1 : undefined),
+    colour: opt(i?.colour), background: opt(i?.background),
+    marginTop: Number.isFinite(Number(i?.marginTop)) ? Number(i.marginTop) : 0,
+    marginBottom: Number.isFinite(Number(i?.marginBottom)) ? Number(i.marginBottom) : 0,
+    columns: Number.isFinite(Number(i?.columns)) ? Math.max(1, Math.min(4, Number(i.columns))) : (type === "section" ? 1 : undefined),
+    sectionVariant: ["plain","soft","dark","accent"].includes(String(i?.sectionVariant)) ? i.sectionVariant : "plain",
     visible: i?.visible === false ? false : true,
   };
 }

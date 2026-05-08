@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { SiteContent, CmsBlock, CmsStep, FaqItem, VisualWidget } from "@/lib/siteContent";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CmsBlock, CmsStep, FaqItem, SiteContent, VisualWidget } from "@/lib/siteContent";
 
 type PageKey = "home" | "repair" | "assetRecovery" | "about" | "contact" | "faq" | "shop" | "cart" | "checkout" | "portal" | "manufacturers" | "terms" | "privacy" | "returns" | "warranty" | "payment";
 type DeviceMode = "desktop" | "tablet" | "mobile";
 type LeftTab = "pages" | "widgets" | "style";
 type PageConfig = { key: PageKey; label: string; path: string; editable: boolean; note?: string };
-type WidgetTemplate = { label: string; icon: string; blockType: string; title: string; subtitle: string; body: string; background: string; width: string; linkLabel?: string; linkHref?: string };
-
 type CollectionKey = "page.blocks" | "page.steps" | "faq.previewItems" | "home.promotionStrip" | `faq.groupItems:${string}`;
-type DropTarget = { kind: "zone"; zone: string } | { kind: "collection"; collection: CollectionKey };
+type WidgetKind = "section" | "card" | "button" | "text" | "image" | "video" | "promotion" | "spacer" | "divider" | "faq";
+type WidgetTemplate = { label: string; icon: string; blockType: WidgetKind; title: string; subtitle?: string; body?: string; width?: string; columns?: number; textKind?: VisualWidget["textKind"]; linkLabel?: string; linkHref?: string };
+type DropTarget = { kind: "zone"; zone: string; index?: number } | { kind: "collection"; collection: CollectionKey; index?: number };
 type DropPreview = { target: DropTarget; label: string; y: number; mode: "before" | "inside" | "after" };
 type SelectedLink = { text: string; href: string };
+type SelectedWidget = { zone: string; index: number; widget: VisualWidget };
 
 const HIDDEN = "__HIDDEN__";
 const PAGES: PageConfig[] = [
@@ -33,7 +34,7 @@ const PAGES: PageConfig[] = [
   { key: "portal", label: "Customer Portal", path: "/portal/login", editable: false, note: "Portal/auth logic is protected." },
   { key: "manufacturers", label: "Manufacturers", path: "/manufacturers", editable: false, note: "Manufacturer/catalogue data is managed elsewhere." },
 ];
-
+const DEVICE_WIDTH: Record<DeviceMode, number> = { desktop: 1180, tablet: 820, mobile: 390 };
 const HOME_SECTIONS = [
   ["hero", "Hero carousel"],
   ["promotionStrip", "Promotion banner strip"],
@@ -51,17 +52,19 @@ const PAGE_SECTIONS = [
   ["formOrCta", "Form or CTA section"],
 ] as const;
 
-const DEVICE_WIDTH: Record<DeviceMode, number> = { desktop: 1180, tablet: 820, mobile: 390 };
 const WIDGETS: WidgetTemplate[] = [
-  { label: "Card", icon: "▣", blockType: "card", title: "New card", subtitle: "Editable card", body: "Use this card for a service, benefit, process item or content block.", background: "white", width: "quarter", linkLabel: "Learn more", linkHref: "/contact" },
-  { label: "FAQ", icon: "?", blockType: "faq", title: "New FAQ question", subtitle: "FAQ", body: "Add the answer here. This answer is visible in Visual CMS and appears as a dropdown on the public page.", background: "white", width: "full" },
-  { label: "Button", icon: "⬚", blockType: "button", title: "Call to action", subtitle: "Button block", body: "Use the button link below for enquiries, quote requests or page navigation.", background: "accent", width: "half", linkLabel: "Button link", linkHref: "/contact" },
-  { label: "Text", icon: "T", blockType: "text", title: "New text block", subtitle: "Editable heading", body: "Click text on the canvas to edit it.", background: "white", width: "half" },
-  { label: "Image", icon: "🖼", blockType: "image", title: "Image block", subtitle: "Upload or paste image", body: "Use Replace background or widget image upload.", background: "white", width: "half" },
-  { label: "Video", icon: "▶", blockType: "video", title: "Video block", subtitle: "Video area", body: "Add a video URL from the styling tab.", background: "dark", width: "half" },
-  { label: "Promotion banner", icon: "🏷", blockType: "promotion", title: "Promotion banner", subtitle: "Offer / campaign", body: "Highlight an offer, stock arrival or customer campaign.", background: "accent", width: "full", linkLabel: "View offer", linkHref: "/shop" },
-  { label: "Spacer", icon: "↕", blockType: "spacer", title: "Spacer", subtitle: "Spacing block", body: "Use to add breathing room.", background: "soft", width: "full" },
-  { label: "Divider", icon: "─", blockType: "divider", title: "Divider", subtitle: "Separator", body: "Use to visually separate content.", background: "soft", width: "full" },
+  { label: "1-column section", icon: "+", blockType: "section", title: "New section", body: "Add text, images, buttons or cards into this section.", width: "full", columns: 1 },
+  { label: "2-column section", icon: "▦", blockType: "section", title: "Two-column section", body: "Use this for image next to text, CTA copy, or feature layouts.", width: "full", columns: 2 },
+  { label: "Card", icon: "▣", blockType: "card", title: "New card", subtitle: "Editable card", body: "Use this card for a service, benefit, process item or content block.", width: "third", linkLabel: "Learn more", linkHref: "/contact" },
+  { label: "Button", icon: "⬚", blockType: "button", title: "Button", body: "", width: "quarter", linkHref: "/contact" },
+  { label: "Heading", icon: "H", blockType: "text", title: "New heading", body: "", width: "full", textKind: "heading" },
+  { label: "Text", icon: "T", blockType: "text", title: "New paragraph text", body: "", width: "half", textKind: "paragraph" },
+  { label: "Image", icon: "🖼", blockType: "image", title: "Image", body: "", width: "half" },
+  { label: "Video", icon: "▶", blockType: "video", title: "Video block", body: "Add a video URL, thumbnail and caption from the Style panel.", width: "half" },
+  { label: "Promotion banner", icon: "🏷", blockType: "promotion", title: "Promotion banner", body: "Highlight an offer, stock arrival or customer campaign.", width: "full", linkLabel: "View offer", linkHref: "/shop" },
+  { label: "Spacer", icon: "↕", blockType: "spacer", title: "Spacer", width: "full" },
+  { label: "Divider", icon: "─", blockType: "divider", title: "Divider", width: "full" },
+  { label: "FAQ", icon: "?", blockType: "faq", title: "New FAQ question", body: "Add the answer here.", width: "full" },
 ];
 const GRADIENTS = [
   { label: "Combay navy", value: "linear-gradient(135deg,#030E21 0%,#0B2545 55%,#162D4F 100%)" },
@@ -77,26 +80,25 @@ function previewUrl(path: string, refreshKey: number) { return `${path}${path.in
 function cloneContent(content: SiteContent): SiteContent { return JSON.parse(JSON.stringify(content)); }
 function cmsPageKey(pageKey: PageKey): keyof SiteContent["pages"] | null { if (["home", "repair", "assetRecovery", "about", "contact"].includes(pageKey)) return pageKey as keyof SiteContent["pages"]; return null; }
 function policyKey(pageKey: PageKey): keyof SiteContent["policies"] | null { if (["terms", "privacy", "returns", "warranty", "payment"].includes(pageKey)) return pageKey as keyof SiteContent["policies"]; return null; }
-function blockFromWidget(widget: WidgetTemplate): CmsBlock { return { icon: widget.icon, title: widget.title, subtitle: widget.subtitle, body: widget.body, imageUrl: "", linkLabel: widget.linkLabel || "", linkHref: widget.linkHref || "#", blockType: widget.blockType === "faq" ? "card" : widget.blockType, width: widget.width, align: "left", background: widget.background, animation: "none" }; }
+function widgetByType(type: string) { return WIDGETS.find((widget) => widget.blockType === type) || WIDGETS[2]; }
+function uid(prefix = "vw") { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
+function safeHrefInput(value: string) { const clean = value.trim(); if (!clean) return "#"; if (clean.startsWith("/") || clean.startsWith("#") || clean.startsWith("mailto:") || clean.startsWith("tel:") || clean.startsWith("http://") || clean.startsWith("https://")) return clean; return `/${clean.replace(/^\/+/, "")}`; }
+function autoWidth(count: number) { if (count <= 1) return "full"; if (count === 2) return "half"; if (count === 3) return "third"; return "quarter"; }
+function normaliseBlockWidths(blocks: CmsBlock[]) { const width = autoWidth(blocks.length); return blocks.map((b) => (b.blockType === "promotion" ? { ...b, width: "full" } : { ...b, width })); }
+function faqFromWidget(widget?: WidgetTemplate): FaqItem { return { question: widget?.blockType === "faq" ? widget.title : "New FAQ question", answer: widget?.blockType === "faq" ? widget.body || "Add the answer here." : "Add the answer here." }; }
+function stepFromWidget(widget?: WidgetTemplate, index = 0): CmsStep { return { number: String(index + 1).padStart(2, "0"), title: widget?.title || "New step", body: widget?.body || "Describe this step.", imageUrl: "" }; }
+function blockFromWidget(widget: WidgetTemplate): CmsBlock { return { icon: widget.icon, title: widget.title, subtitle: widget.subtitle || "", body: widget.body || "", imageUrl: "", linkLabel: widget.linkLabel || "", linkHref: widget.linkHref || "#", blockType: widget.blockType === "faq" ? "card" : widget.blockType, width: widget.width || "third", align: "left", background: widget.blockType === "promotion" ? "accent" : "white", animation: "none" }; }
 function visualWidgetFromTemplate(widget: WidgetTemplate): VisualWidget {
-  const id = `vw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const base: VisualWidget = { id, type: widget.blockType, title: widget.title, subtitle: widget.subtitle, body: widget.body, text: widget.title, textKind: widget.blockType === "text" ? "heading" : "paragraph", icon: widget.icon, url: widget.linkHref || "/contact", linkLabel: widget.linkLabel || (widget.blockType === "button" ? widget.title : ""), buttonStyle: "primary", width: widget.width || "quarter", align: "left", visible: true };
-  if (widget.blockType === "video") return { ...base, type: "video", title: "Video block", caption: "Add a video URL, thumbnail and caption from the Style panel.", width: "half", muted: true };
-  if (widget.blockType === "promotion") return { ...base, type: "promotion", title: "Promotion banner", body: "Highlight an offer, new stock arrival or campaign.", promoCode: "", linkLabel: "View offer", url: "/shop", width: "full" };
+  const base: VisualWidget = { id: uid(), type: widget.blockType === "faq" ? "card" : widget.blockType, title: widget.title, subtitle: widget.subtitle || "", body: widget.body || "", text: widget.title, textKind: widget.textKind || (widget.blockType === "text" ? "paragraph" : "paragraph"), icon: widget.icon, url: widget.linkHref || "/contact", linkLabel: widget.linkLabel || "", buttonStyle: "primary", width: widget.width || "third", align: "left", visible: true, marginTop: 0, marginBottom: 0 };
+  if (widget.blockType === "section") return { ...base, type: "section", width: "full", columns: widget.columns || 1, sectionVariant: "plain", title: widget.title, body: widget.body || "" };
+  if (widget.blockType === "video") return { ...base, type: "video", caption: "Add a video URL, thumbnail and caption from the Style panel.", width: "half", muted: true };
+  if (widget.blockType === "promotion") return { ...base, type: "promotion", promoCode: "", linkLabel: "View offer", url: "/shop", width: "full", copyCodeEnabled: true };
   if (widget.blockType === "spacer") return { ...base, type: "spacer", height: 48, width: "full", title: "Spacer" };
-  if (widget.blockType === "divider") return { ...base, type: "divider", width: "full", title: "Divider" };
-  if (widget.blockType === "button") return { ...base, type: "button", text: "Button", title: "Button", linkLabel: "", url: "/contact", width: "full" };
+  if (widget.blockType === "divider") return { ...base, type: "divider", width: "full", title: "Divider", thickness: 1, colour: "#E5E7EB" };
+  if (widget.blockType === "button") return { ...base, type: "button", text: "Button", title: "Button", url: "/contact", width: "quarter" };
+  if (widget.blockType === "image") return { ...base, type: "image", width: "half", title: "Image" };
   return base;
 }
-function widgetByType(type: string): WidgetTemplate { return WIDGETS.find((widget) => widget.blockType === type) || WIDGETS[0]; }
-function faqFromWidget(widget?: WidgetTemplate): FaqItem {
-  const title = widget?.blockType === "faq" ? widget.title : "New FAQ question";
-  const body = widget?.blockType === "faq" ? widget.body : "Add the answer here. This answer is visible in Visual CMS so you can edit it before publishing.";
-  return { question: title, answer: body };
-}
-function stepFromWidget(widget?: WidgetTemplate, index = 0): CmsStep { return { number: String(index + 1).padStart(2, "0"), title: widget?.title || "New step", body: widget?.body || "Describe this step.", imageUrl: "" }; }
-function autoWidth(count: number) { if (count <= 1) return "full"; if (count === 2) return "half"; if (count === 3) return "third"; return "quarter"; }
-function normaliseBlockWidths(blocks: CmsBlock[]) { const width = autoWidth(blocks.length); return blocks.map((b) => b.blockType === "promotion" || b.width === "full" && blocks.length > 1 ? { ...b, width: blocks.length > 4 ? "half" : width } : { ...b, width }); }
 
 function updateFirstStringMatch(target: unknown, oldText: string, newText: string): boolean {
   if (!target || typeof target !== "object") return false;
@@ -108,31 +110,19 @@ function updateFirstStringMatch(target: unknown, oldText: string, newText: strin
   }
   return false;
 }
-
 function updateFirstHrefMatch(target: unknown, oldHref: string, newHref: string): boolean {
   if (!target || typeof target !== "object") return false;
   for (const key of Object.keys(target as Record<string, unknown>)) {
     const value = (target as Record<string, unknown>)[key];
     const lower = key.toLowerCase();
-    if (typeof value === "string" && (lower.includes("href") || lower === "url") && value.trim() === oldHref.trim()) {
-      (target as Record<string, unknown>)[key] = newHref;
-      return true;
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) if (updateFirstHrefMatch(item, oldHref, newHref)) return true;
-    } else if (value && typeof value === "object" && updateFirstHrefMatch(value, oldHref, newHref)) return true;
+    if (typeof value === "string" && (lower.includes("href") || lower === "url") && value.trim() === oldHref.trim()) { (target as Record<string, unknown>)[key] = newHref; return true; }
+    if (Array.isArray(value)) { for (const item of value) if (updateFirstHrefMatch(item, oldHref, newHref)) return true; }
+    else if (value && typeof value === "object" && updateFirstHrefMatch(value, oldHref, newHref)) return true;
   }
   return false;
 }
 
-function safeHrefInput(value: string) {
-  const clean = value.trim();
-  if (!clean) return "#";
-  if (clean.startsWith("/") || clean.startsWith("#") || clean.startsWith("mailto:") || clean.startsWith("tel:") || clean.startsWith("http://") || clean.startsWith("https://")) return clean;
-  return `/${clean.replace(/^\/+/, "")}`;
-}
-
-function ImageUploadButton({ onUploaded }: { onUploaded: (url: string) => void }) {
+function UploadButton({ accept, label, onUploaded }: { accept: string; label: string; onUploaded: (url: string) => void }) {
   const [uploading, setUploading] = useState(false);
   async function upload(file: File | null) {
     if (!file) return;
@@ -146,7 +136,7 @@ function ImageUploadButton({ onUploaded }: { onUploaded: (url: string) => void }
     } catch (err) { alert(err instanceof Error ? err.message : "Upload failed"); }
     finally { setUploading(false); }
   }
-  return <label className="inline-flex cursor-pointer items-center justify-center rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white hover:bg-accent hover:text-navy-950">{uploading ? "Uploading…" : "Upload image"}<input className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={uploading} onChange={(e) => upload(e.target.files?.[0] || null)} /></label>;
+  return <label className="inline-flex cursor-pointer items-center justify-center rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white hover:bg-accent hover:text-navy-950">{uploading ? "Uploading…" : label}<input className="hidden" type="file" accept={accept} disabled={uploading} onChange={(e) => upload(e.target.files?.[0] || null)} /></label>;
 }
 
 export default function VisualCmsBuilder() {
@@ -159,6 +149,7 @@ export default function VisualCmsBuilder() {
   const [refreshKey, setRefreshKey] = useState(Date.now());
   const [selectedText, setSelectedText] = useState("");
   const [selectedLink, setSelectedLink] = useState<SelectedLink | null>(null);
+  const [selectedWidget, setSelectedWidget] = useState<SelectedWidget | null>(null);
   const [selectedCollection, setSelectedCollection] = useState<CollectionKey | null>(null);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [draggingWidget, setDraggingWidget] = useState<WidgetTemplate | null>(null);
@@ -170,9 +161,13 @@ export default function VisualCmsBuilder() {
   const canvasWidth = DEVICE_WIDTH[device];
 
   useEffect(() => { let cancelled = false; fetch("/api/admin/content", { cache: "no-store" }).then((r) => r.json()).then((data) => { if (!cancelled && data?.content) setContent(data.content); }).catch(() => setMessage("Could not load CMS content.")); return () => { cancelled = true; }; }, []);
+  useEffect(() => { if (iframeRef.current?.contentDocument) injectEditorStable(); }, [selectedCollection, selectedZone, selectedWidget, pageKey, content]);
 
-
-  useEffect(() => { if (iframeRef.current?.contentDocument) injectEditorStable(); }, [selectedCollection, pageKey, content]);
+  const selectedWidgetLive = useMemo(() => {
+    if (!content || !selectedWidget) return null;
+    const live = content.visualWidgets?.[selectedWidget.zone]?.[selectedWidget.index];
+    return live ? { ...selectedWidget, widget: live } : null;
+  }, [content, selectedWidget]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -180,92 +175,64 @@ export default function VisualCmsBuilder() {
       const data = event.data || {};
       if (data.type === "VCMS_TEXT_SELECTED") {
         setSelectedText(String(data.text || ""));
+        setSelectedWidget(null);
         if (data.href) setSelectedLink({ text: String(data.text || "Button/link"), href: String(data.href || "#") });
       }
-      if (data.type === "VCMS_COLLECTION_SELECTED") { setSelectedCollection(String(data.collection || "page.blocks") as CollectionKey); setSelectedZone(null); setMessage(`Target selected: ${String(data.label || data.collection || "section")}. Click or drop a widget to add it here.`); }
-      if (data.type === "VCMS_ZONE_SELECTED") { setSelectedZone(String(data.zone || `${pageKey}:beforeFooter`)); setSelectedCollection(null); setMessage(`Placement selected: ${String(data.zone || "page area")}. Click or drop a widget to add it here.`); }
+      if (data.type === "VCMS_COLLECTION_SELECTED") { setSelectedCollection(String(data.collection || "page.blocks") as CollectionKey); setSelectedZone(null); setSelectedWidget(null); setMessage(`Target selected: ${String(data.label || data.collection || "section")}.`); }
+      if (data.type === "VCMS_ZONE_SELECTED") { setSelectedZone(String(data.zone || `${pageKey}:beforeFooter`)); setSelectedCollection(null); setSelectedWidget(null); setMessage(`Placement selected: ${String(data.zone || "page area")}.`); }
+      if (data.type === "VCMS_WIDGET_SELECTED") {
+        const zone = String(data.zone || "");
+        const index = Number(data.index);
+        const widget = content?.visualWidgets?.[zone]?.[index];
+        if (zone && Number.isFinite(index) && widget) { setSelectedWidget({ zone, index, widget }); setSelectedZone(zone); setSelectedCollection(null); setLeftTab("style"); setMessage(`Selected ${widget.type || "widget"}. Edit it in the Style panel.`); }
+      }
       if (data.type === "VCMS_TEXT_UPDATE" && content && data.oldText && data.newText && String(data.oldText).trim() !== String(data.newText).trim()) {
         const next = cloneContent(content);
         if (updateFirstStringMatch(next, String(data.oldText), String(data.newText))) { setContent(next); setMessage("Text changed on canvas. Click Save website to publish."); }
         else setMessage("This text is visible for exact preview but is not linked to CMS storage yet.");
       }
-      if (data.type === "VCMS_ADD_ITEM") {
-        const incomingCollection = String(data.collection || "page.blocks") as CollectionKey;
-        const incomingWidget = data.widget as WidgetTemplate | undefined;
-        addCollectionItem(collectionForWidget(incomingCollection, incomingWidget), incomingWidget);
-      }
+      if (data.type === "VCMS_ADD_ITEM") addCollectionItem(String(data.collection || "page.blocks") as CollectionKey, data.widget as WidgetTemplate | undefined);
       if (data.type === "VCMS_DELETE_ITEM") deleteCollectionItem(String(data.collection || "page.blocks") as CollectionKey, Number(data.index));
       if (data.type === "VCMS_DUPLICATE_ITEM") duplicateCollectionItem(String(data.collection || "page.blocks") as CollectionKey, Number(data.index));
+      if (data.type === "VCMS_ADD_SECTION") addVisualWidget(String(data.zone || `${pageKey}:beforeFooter`), { ...WIDGETS[0], columns: Number(data.columns || 1), title: Number(data.columns || 1) === 2 ? "Two-column section" : "New section" });
       if (data.type === "VCMS_DELETE_WIDGET") deleteVisualWidget(String(data.zone || ""), Number(data.index));
       if (data.type === "VCMS_DUPLICATE_WIDGET") duplicateVisualWidget(String(data.zone || ""), Number(data.index));
     }
     window.addEventListener("message", onMessage); return () => window.removeEventListener("message", onMessage);
   }, [content, pageKey]);
 
-  function updateSelectedLinkHref(hrefValue: string) {
-    if (!content || !selectedLink) return;
-    const nextHref = safeHrefInput(hrefValue);
+  function mutateContent(mutator: (draft: SiteContent) => void, auto = false) {
+    if (!content) return;
     const draft = cloneContent(content);
-    if (updateFirstHrefMatch(draft, selectedLink.href, nextHref)) {
-      setSelectedLink({ ...selectedLink, href: nextHref });
-      setContent(draft);
-      setMessage("Button/link URL updated in draft. Click Save website to publish.");
-      const doc = iframeRef.current?.contentDocument;
-      doc?.querySelectorAll<HTMLAnchorElement>(`a[href=\"${CSS.escape(selectedLink.href)}\"]`).forEach((a) => a.setAttribute("href", nextHref));
-    } else {
-      setMessage("This button/link is visible on the page but its URL is not linked to CMS storage yet.");
-    }
+    mutator(draft);
+    setContent(draft);
+    if (auto) void autoSaveDraft(draft);
   }
-
   async function autoSaveDraft(draft: SiteContent) {
     try {
       const response = await fetch("/api/admin/content", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: draft }) });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Save failed");
-      setContent(data.content);
-      setRefreshKey(Date.now());
-      setMessage("Canvas updated and saved. Live preview refreshed.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Save failed.");
-    }
+      setContent(data.content); setRefreshKey(Date.now()); setMessage("Canvas updated and saved. Live preview refreshed.");
+    } catch (err) { setMessage(err instanceof Error ? err.message : "Save failed."); }
+  }
+  async function save() {
+    if (!content) return;
+    setSaving(true); setMessage("");
+    try {
+      const response = await fetch("/api/admin/content", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Save failed");
+      setContent(data.content); setRefreshKey(Date.now()); setMessage("Saved. Live canvas refreshed.");
+    } catch (err) { setMessage(err instanceof Error ? err.message : "Save failed."); }
+    finally { setSaving(false); }
   }
 
-  function mutateContent(mutator: (draft: SiteContent) => void, refresh = false) {
-    if (!content) return;
-    const draft = cloneContent(content);
-    mutator(draft);
-    setContent(draft);
-    if (refresh) void autoSaveDraft(draft);
-  }
-  function currentBlocks(c = content): CmsBlock[] { const key = cmsPageKey(pageKey); return key && c ? c.pages[key].blocks : []; }
-  function setBlocks(blocks: CmsBlock[]) { const key = cmsPageKey(pageKey); if (!key) return; mutateContent((draft) => { draft.pages[key].blocks = normaliseBlockWidths(blocks); }, true); setMessage("Cards changed and layout was auto-adjusted. Save website to publish."); }
-  function defaultCollection(): CollectionKey {
-    if (selectedCollection) return selectedCollection;
-    if (pageKey === "faq") return "faq.groupItems:sales";
-    return "page.blocks";
-  }
+  function pageBlocks(c = content): CmsBlock[] { const key = cmsPageKey(pageKey); return key && c ? c.pages[key].blocks : []; }
   function defaultZone() { return selectedZone || `${pageKey}:beforeFooter`; }
-  function collectionForWidget(collection: CollectionKey, widget?: WidgetTemplate | null): CollectionKey {
-    if (!widget) return collection;
-    if (widget.blockType === "faq") return collection.includes("faq") ? collection : (pageKey === "faq" ? "faq.groupItems:sales" : "faq.previewItems");
-    if (collection.includes("faq")) return "page.blocks";
-    return collection;
-  }
-  function shouldUseNativeCollection(target: DropTarget, widget: WidgetTemplate) {
-    if (target.kind !== "collection") return false;
-    if (widget.blockType === "faq") return target.collection.includes("faq");
-    if (widget.blockType === "card") return target.collection === "page.blocks" || target.collection === "home.promotionStrip";
-    if (widget.blockType === "promotion") return target.collection === "home.promotionStrip";
-    return false;
-  }
-  function addWidget(widget: WidgetTemplate) {
-    if (selectedZone) addVisualWidget(selectedZone, widget);
-    else if (selectedCollection && shouldUseNativeCollection({ kind: "collection", collection: selectedCollection }, widget)) addCollectionItem(collectionForWidget(selectedCollection, widget), widget);
-    else addVisualWidget(defaultZone(), widget);
-  }
-  function duplicateBlock(index: number) { duplicateCollectionItem("page.blocks", index); }
-  function deleteBlock(index: number) { deleteCollectionItem("page.blocks", index); }
-  function addSameSizeCard() { addCollectionItem("page.blocks", WIDGETS[0]); }
+  function shouldUseNativeCollection(target: DropTarget, widget: WidgetTemplate) { if (target.kind !== "collection") return false; if (widget.blockType === "faq") return target.collection.includes("faq"); if (widget.blockType === "card") return target.collection === "page.blocks"; if (widget.blockType === "promotion") return target.collection === "home.promotionStrip"; return false; }
+  function collectionForWidget(collection: CollectionKey, widget?: WidgetTemplate | null): CollectionKey { if (!widget) return collection; if (widget.blockType === "faq") return collection.includes("faq") ? collection : (pageKey === "faq" ? "faq.groupItems:sales" : "faq.previewItems"); if (collection.includes("faq")) return "page.blocks"; return collection; }
+  function addWidget(widget: WidgetTemplate) { if (selectedCollection && shouldUseNativeCollection({ kind: "collection", collection: selectedCollection }, widget)) addCollectionItem(collectionForWidget(selectedCollection, widget), widget); else addVisualWidget(defaultZone(), widget); }
 
   function addVisualWidget(zone: string, widget: WidgetTemplate, index?: number) {
     if (!content || !config.editable) { setMessage("This page is visible for accuracy but protected from widget editing."); return; }
@@ -278,175 +245,61 @@ export default function VisualCmsBuilder() {
       existing.splice(insertAt, 0, item);
       draft.visualWidgets[fullZone] = existing;
     }, true);
-    setSelectedZone(fullZone);
-    setSelectedCollection(null);
-    setMessage(`${widget.label} added to ${fullZone}. It will persist after refresh and render on the live page.`);
+    setSelectedZone(fullZone); setSelectedCollection(null); setSelectedWidget({ zone: fullZone, index: typeof index === "number" ? index : (content.visualWidgets?.[fullZone]?.length || 0), widget: item });
   }
-
-  function deleteVisualWidget(zone: string, index: number) {
-    if (!zone || !Number.isFinite(index)) return;
+  function deleteVisualWidget(zone: string, index: number) { if (!zone || !Number.isFinite(index)) return; mutateContent((draft) => { draft.visualWidgets = draft.visualWidgets || {}; draft.visualWidgets[zone] = (draft.visualWidgets[zone] || []).filter((_, i) => i !== index); }, true); setSelectedWidget(null); setMessage("Widget deleted and saved."); }
+  function duplicateVisualWidget(zone: string, index: number) { if (!zone || !Number.isFinite(index)) return; mutateContent((draft) => { draft.visualWidgets = draft.visualWidgets || {}; const items = draft.visualWidgets[zone] || []; const source = items[index]; if (!source) return; const clone = { ...source, id: uid(), title: source.title ? `${source.title} copy` : source.title }; draft.visualWidgets[zone] = [...items.slice(0, index + 1), clone, ...items.slice(index + 1)]; }, true); setMessage("Widget duplicated and saved."); }
+  function updateSelectedWidget(changes: Partial<VisualWidget>) {
+    if (!selectedWidgetLive) return;
     mutateContent((draft) => {
-      draft.visualWidgets = draft.visualWidgets || {};
-      draft.visualWidgets[zone] = (draft.visualWidgets[zone] || []).filter((_, i) => i !== index);
-    }, true);
-    setMessage("Widget deleted and saved.");
-  }
-
-  function duplicateVisualWidget(zone: string, index: number) {
-    if (!zone || !Number.isFinite(index)) return;
-    mutateContent((draft) => {
-      draft.visualWidgets = draft.visualWidgets || {};
-      const items = draft.visualWidgets[zone] || [];
-      const source = items[index];
-      if (!source) return;
-      const clone = { ...source, id: `vw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title: source.title ? `${source.title} copy` : source.title };
-      draft.visualWidgets[zone] = [...items.slice(0, index + 1), clone, ...items.slice(index + 1)];
-    }, true);
-    setMessage("Widget duplicated and saved.");
+      const items = draft.visualWidgets?.[selectedWidgetLive.zone];
+      if (!items?.[selectedWidgetLive.index]) return;
+      items[selectedWidgetLive.index] = { ...items[selectedWidgetLive.index], ...changes };
+    }, false);
+    setSelectedWidget({ ...selectedWidgetLive, widget: { ...selectedWidgetLive.widget, ...changes } });
+    setMessage("Widget updated in draft. Click Save website to publish.");
   }
 
   function addCollectionItem(collection: CollectionKey, widget?: WidgetTemplate) {
     if (!content || !config.editable) { setMessage("This page is visible for accuracy but protected from widget editing."); return; }
     const key = cmsPageKey(pageKey);
     mutateContent((draft) => {
-      if (collection === "page.blocks") {
-        if (!key) return;
-        draft.pages[key].blocks = normaliseBlockWidths([...(draft.pages[key].blocks || []), blockFromWidget(widget || WIDGETS[0])]);
-      } else if (collection === "page.steps") {
-        if (!key) return;
-        const next = [...(draft.pages[key].steps || []), stepFromWidget(widget, draft.pages[key].steps?.length || 0)];
-        draft.pages[key].steps = next.map((step, index) => ({ ...step, number: String(index + 1).padStart(2, "0") }));
-      } else if (collection === "faq.previewItems") {
-        draft.faq.previewItems = [...(draft.faq.previewItems || []), faqFromWidget(widget)];
-      } else if (collection === "home.promotionStrip") {
-        const block = blockFromWidget(widget || widgetByType("promotion"));
-        block.blockType = "promotion";
-        block.background = "accent";
-        block.width = "full";
-        draft.pages.home.blocks = normaliseBlockWidths([...(draft.pages.home.blocks || []), block]);
-        draft.hiddenSections = draft.hiddenSections || {};
-        draft.hiddenSections.home = (draft.hiddenSections.home || []).filter((x) => x !== "promotionStrip");
-      } else if (collection.startsWith("faq.groupItems:")) {
-        const groupKey = collection.split(":")[1] || draft.faq.groups[0]?.key;
-        const group = draft.faq.groups.find((g) => g.key === groupKey) || draft.faq.groups[0];
-        if (group) group.items = [...(group.items || []), faqFromWidget(widget)];
-      }
+      if (collection === "page.blocks") { if (!key) return; draft.pages[key].blocks = normaliseBlockWidths([...(draft.pages[key].blocks || []), blockFromWidget(widget || widgetByType("card"))]); }
+      else if (collection === "page.steps") { if (!key) return; const next = [...(draft.pages[key].steps || []), stepFromWidget(widget, draft.pages[key].steps?.length || 0)]; draft.pages[key].steps = next.map((step, index) => ({ ...step, number: String(index + 1).padStart(2, "0") })); }
+      else if (collection === "faq.previewItems") draft.faq.previewItems = [...(draft.faq.previewItems || []), faqFromWidget(widget)];
+      else if (collection === "home.promotionStrip") { const block = blockFromWidget(widget || widgetByType("promotion")); block.blockType = "promotion"; block.background = "accent"; block.width = "full"; draft.pages.home.blocks = normaliseBlockWidths([...(draft.pages.home.blocks || []), block]); draft.hiddenSections = draft.hiddenSections || {}; draft.hiddenSections.home = (draft.hiddenSections.home || []).filter((x) => x !== "promotionStrip"); }
+      else if (collection.startsWith("faq.groupItems:")) { const groupKey = collection.split(":")[1] || draft.faq.groups[0]?.key; const group = draft.faq.groups.find((g) => g.key === groupKey) || draft.faq.groups[0]; if (group) group.items = [...(group.items || []), faqFromWidget(widget)]; }
     }, true);
-    setSelectedCollection(collection);
-    setSelectedZone(null);
-    setMessage("Item added. The layout auto-adjusted; save website to publish.");
+    setSelectedCollection(collection); setSelectedZone(null); setMessage("Item added. The layout auto-adjusted and saved.");
   }
+  function deleteCollectionItem(collection: CollectionKey, index: number) { if (!Number.isFinite(index) || index < 0) return; const key = cmsPageKey(pageKey); mutateContent((draft) => { if (collection === "page.blocks") { if (!key) return; draft.pages[key].blocks = normaliseBlockWidths((draft.pages[key].blocks || []).filter((_, i) => i !== index)); } else if (collection === "page.steps") { if (!key) return; draft.pages[key].steps = (draft.pages[key].steps || []).filter((_, i) => i !== index).map((step, i) => ({ ...step, number: String(i + 1).padStart(2, "0") })); } else if (collection === "faq.previewItems") draft.faq.previewItems = (draft.faq.previewItems || []).filter((_, i) => i !== index); else if (collection === "home.promotionStrip") { draft.hiddenSections = draft.hiddenSections || {}; const existing = new Set(draft.hiddenSections.home || []); existing.add("promotionStrip"); draft.hiddenSections.home = Array.from(existing); } else if (collection.startsWith("faq.groupItems:")) { const groupKey = collection.split(":")[1]; const group = draft.faq.groups.find((g) => g.key === groupKey) || draft.faq.groups[0]; if (group) group.items = (group.items || []).filter((_, i) => i !== index); } }, true); setMessage("Item deleted and saved."); }
+  function duplicateCollectionItem(collection: CollectionKey, index: number) { const key = cmsPageKey(pageKey); mutateContent((draft) => { if (collection === "page.blocks") { if (!key) return; const items = draft.pages[key].blocks || []; const source = items[index]; if (!source) return; draft.pages[key].blocks = normaliseBlockWidths([...items.slice(0, index + 1), { ...source, title: `${source.title} copy` }, ...items.slice(index + 1)]); } else if (collection === "page.steps") { if (!key) return; const items = draft.pages[key].steps || []; const source = items[index]; if (!source) return; draft.pages[key].steps = [...items.slice(0, index + 1), { ...source, title: `${source.title} copy` }, ...items.slice(index + 1)].map((step, i) => ({ ...step, number: String(i + 1).padStart(2, "0") })); } else if (collection === "faq.previewItems") { const items = draft.faq.previewItems || []; const source = items[index]; if (!source) return; draft.faq.previewItems = [...items.slice(0, index + 1), { ...source, question: `${source.question} copy` }, ...items.slice(index + 1)]; } else if (collection.startsWith("faq.groupItems:")) { const groupKey = collection.split(":")[1]; const group = draft.faq.groups.find((g) => g.key === groupKey) || draft.faq.groups[0]; if (!group) return; const source = group.items[index]; if (!source) return; group.items = [...group.items.slice(0, index + 1), { ...source, question: `${source.question} copy` }, ...group.items.slice(index + 1)]; } }, true); setMessage("Item duplicated and saved."); }
 
-  function deleteCollectionItem(collection: CollectionKey, index: number) {
-    if (!Number.isFinite(index) || index < 0) return;
-    const key = cmsPageKey(pageKey);
-    mutateContent((draft) => {
-      if (collection === "page.blocks") {
-        if (!key) return;
-        draft.pages[key].blocks = normaliseBlockWidths((draft.pages[key].blocks || []).filter((_, i) => i !== index));
-      } else if (collection === "page.steps") {
-        if (!key) return;
-        draft.pages[key].steps = (draft.pages[key].steps || []).filter((_, i) => i !== index).map((step, i) => ({ ...step, number: String(i + 1).padStart(2, "0") }));
-      } else if (collection === "faq.previewItems") {
-        draft.faq.previewItems = (draft.faq.previewItems || []).filter((_, i) => i !== index);
-      } else if (collection === "home.promotionStrip") {
-        draft.hiddenSections = draft.hiddenSections || {};
-        const existing = new Set(draft.hiddenSections.home || []);
-        existing.add("promotionStrip");
-        draft.hiddenSections.home = Array.from(existing);
-      } else if (collection.startsWith("faq.groupItems:")) {
-        const groupKey = collection.split(":")[1];
-        const group = draft.faq.groups.find((g) => g.key === groupKey) || draft.faq.groups[0];
-        if (group) group.items = (group.items || []).filter((_, i) => i !== index);
-      }
-    }, true);
-    setMessage("Item deleted. Remaining items were auto-adjusted; save website to publish.");
+  function updateSelectedLinkHref(hrefValue: string) {
+    if (!content || !selectedLink) return;
+    const nextHref = safeHrefInput(hrefValue);
+    const draft = cloneContent(content);
+    if (updateFirstHrefMatch(draft, selectedLink.href, nextHref)) { setSelectedLink({ ...selectedLink, href: nextHref }); setContent(draft); setMessage("Button/link URL updated in draft. Click Save website to publish."); }
+    else setMessage("This button/link is visible but its URL is not linked to CMS storage yet.");
   }
-
-  function duplicateCollectionItem(collection: CollectionKey, index: number) {
-    const key = cmsPageKey(pageKey);
-    mutateContent((draft) => {
-      if (collection === "page.blocks") {
-        if (!key) return;
-        const items = draft.pages[key].blocks || [];
-        const source = items[index];
-        if (!source) return;
-        const clone = { ...source, title: `${source.title} copy` };
-        draft.pages[key].blocks = normaliseBlockWidths([...items.slice(0, index + 1), clone, ...items.slice(index + 1)]);
-      } else if (collection === "page.steps") {
-        if (!key) return;
-        const items = draft.pages[key].steps || [];
-        const source = items[index];
-        if (!source) return;
-        draft.pages[key].steps = [...items.slice(0, index + 1), { ...source, title: `${source.title} copy` }, ...items.slice(index + 1)].map((step, i) => ({ ...step, number: String(i + 1).padStart(2, "0") }));
-      } else if (collection === "faq.previewItems") {
-        const items = draft.faq.previewItems || [];
-        const source = items[index];
-        if (!source) return;
-        draft.faq.previewItems = [...items.slice(0, index + 1), { ...source, question: `${source.question} copy` }, ...items.slice(index + 1)];
-      } else if (collection === "home.promotionStrip") {
-        const block = blockFromWidget(widgetByType("promotion"));
-        block.title = "Promotion banner copy";
-        block.width = "full";
-        draft.pages.home.blocks = normaliseBlockWidths([...(draft.pages.home.blocks || []), block]);
-      } else if (collection.startsWith("faq.groupItems:")) {
-        const groupKey = collection.split(":")[1];
-        const group = draft.faq.groups.find((g) => g.key === groupKey) || draft.faq.groups[0];
-        if (!group) return;
-        const source = group.items[index];
-        if (!source) return;
-        group.items = [...group.items.slice(0, index + 1), { ...source, question: `${source.question} copy` }, ...group.items.slice(index + 1)];
-      }
-    }, true);
-    setMessage("Item duplicated. Layout auto-adjusted; save website to publish.");
-  }
-
   function isHomeHidden(section: string) { return Boolean(content?.hiddenSections?.home?.includes(section)); }
-  function toggleHomeSection(section: string) { mutateContent((draft) => { draft.hiddenSections = draft.hiddenSections || {}; const current = new Set(draft.hiddenSections.home || []); current.has(section) ? current.delete(section) : current.add(section); draft.hiddenSections.home = Array.from(current); }, true); setMessage("Section visibility changed. Save website to publish."); }
-  function togglePageSection(section: string) { const key = cmsPageKey(pageKey); if (!key) return; mutateContent((draft) => { const page = draft.pages[key]; const current = Array.isArray(page.sectionOrder) && page.sectionOrder.length ? [...page.sectionOrder] : PAGE_SECTIONS.map(([s]) => s); page.sectionOrder = current.includes(section) ? current.filter((s) => s !== section) : [...current, section]; }, true); setMessage("Section changed. Save website to publish."); }
+  function toggleHomeSection(section: string) { mutateContent((draft) => { draft.hiddenSections = draft.hiddenSections || {}; const current = new Set(draft.hiddenSections.home || []); current.has(section) ? current.delete(section) : current.add(section); draft.hiddenSections.home = Array.from(current); }, true); }
+  function togglePageSection(section: string) { const key = cmsPageKey(pageKey); if (!key) return; mutateContent((draft) => { const page = draft.pages[key]; const current = Array.isArray(page.sectionOrder) && page.sectionOrder.length ? [...page.sectionOrder] : PAGE_SECTIONS.map(([s]) => s); page.sectionOrder = current.includes(section) ? current.filter((s) => s !== section) : [...current, section]; }, true); }
   function pageSectionVisible(section: string) { const key = cmsPageKey(pageKey); if (!key || !content) return false; const order = content.pages[key].sectionOrder || PAGE_SECTIONS.map(([s]) => s); return order.includes(section); }
-  function deleteHeroButton(slot: "primary" | "secondary") { mutateContent((draft) => { const key = cmsPageKey(pageKey); if (pageKey === "home") { if (slot === "primary") draft.heroSlides[0].cta1Label = HIDDEN; else draft.heroSlides[0].cta2Label = HIDDEN; } else if (key) { if (slot === "primary") draft.pages[key].primaryLabel = HIDDEN; else draft.pages[key].secondaryLabel = HIDDEN; } }, true); setMessage("Button removed. Save website to publish."); }
+  function deleteHeroButton(slot: "primary" | "secondary") { mutateContent((draft) => { const key = cmsPageKey(pageKey); if (pageKey === "home") { if (slot === "primary") draft.heroSlides[0].cta1Label = HIDDEN; else draft.heroSlides[0].cta2Label = HIDDEN; } else if (key) { if (slot === "primary") draft.pages[key].primaryLabel = HIDDEN; else draft.pages[key].secondaryLabel = HIDDEN; } }, true); }
 
-  function applyBackgroundToPreview(value: string) {
-    const doc = iframeRef.current?.contentDocument; if (!doc) return;
-    const section = doc.querySelector<HTMLElement>("main section"); if (!section) return;
-    section.style.backgroundSize = "cover"; section.style.backgroundPosition = "center";
-    if (value.startsWith("linear-gradient") || value.startsWith("radial-gradient")) { section.style.setProperty("background-image", value, "important"); section.style.backgroundColor = ""; return; }
-    if (value.startsWith("#") || value.startsWith("rgb") || value.startsWith("hsl")) { section.style.setProperty("background-image", "none", "important"); section.style.setProperty("background-color", value, "important"); return; }
-    section.style.setProperty("background-image", `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${value})`, "important");
-  }
-  function setHeroBackground(value: string) { if (!content) return; const clean = value.trim(); if (!clean) return; mutateContent((draft) => { if (pageKey === "home") draft.heroSlides[0].backgroundImageUrl = clean; if (pageKey === "faq") draft.faq.backgroundImageUrl = clean; const key = cmsPageKey(pageKey); if (key && key !== "home") draft.pages[key].backgroundImageUrl = clean; }); applyBackgroundToPreview(clean); setMessage("Background changed on screen and in CMS draft. Save website to publish."); }
-  async function save() { if (!content) return; setSaving(true); setMessage(""); try { const response = await fetch("/api/admin/content", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) }); const data = await response.json().catch(() => null); if (!response.ok || !data?.ok) throw new Error(data?.error || "Save failed"); setContent(data.content); setRefreshKey(Date.now()); setMessage("Saved. Live canvas refreshed."); } catch (err) { setMessage(err instanceof Error ? err.message : "Save failed."); } finally { setSaving(false); } }
+  function applyBackgroundToPreview(value: string) { const doc = iframeRef.current?.contentDocument; const section = doc?.querySelector<HTMLElement>("main section"); if (!section) return; section.style.backgroundSize = "cover"; section.style.backgroundPosition = "center"; if (value.startsWith("linear-gradient")) { section.style.backgroundImage = value; section.style.backgroundColor = ""; } else if (value.startsWith("#") || value.startsWith("rgb")) { section.style.backgroundImage = "none"; section.style.backgroundColor = value; } else { section.style.backgroundImage = `url(${value})`; section.style.backgroundColor = ""; } }
+  function setHeroBackground(value: string) { if (!content) return; const clean = value.trim(); if (!clean) return; mutateContent((draft) => { if (pageKey === "home") draft.heroSlides[0].backgroundImageUrl = clean; if (pageKey === "faq") draft.faq.backgroundImageUrl = clean; const key = cmsPageKey(pageKey); if (key && key !== "home") draft.pages[key].backgroundImageUrl = clean; }); applyBackgroundToPreview(clean); }
 
-  function postCanvasMessage(message: Record<string, unknown>) {
-    window.postMessage(message, window.location.origin);
-  }
-
+  function postCanvasMessage(payload: Record<string, unknown>) { window.postMessage(payload, window.location.origin); }
   function injectEditor() {
-    const iframe = iframeRef.current;
-    const doc = iframe?.contentDocument;
-    if (!doc) return;
-    const targetWindow = doc.defaultView;
-    const send = (payload: Record<string, unknown>) => {
-      try { targetWindow?.parent?.postMessage(payload, window.location.origin); }
-      catch { postCanvasMessage(payload); }
-    };
-
+    const iframe = iframeRef.current; const doc = iframe?.contentDocument; const win = iframe?.contentWindow; if (!doc || !win) return;
+    const send = (payload: Record<string, unknown>) => { try { win.parent?.postMessage(payload, window.location.origin); } catch { postCanvasMessage(payload); } };
     let style = doc.getElementById("vcms-live-editor-style") as HTMLStyleElement | null;
-    if (!style) {
-      style = doc.createElement("style");
-      style.id = "vcms-live-editor-style";
-      doc.head.appendChild(style);
-    }
-    style.textContent = `[data-vcms-text="1"]{outline:1px dashed transparent;cursor:text}[data-vcms-text="1"]:hover{outline-color:#EEB32C;outline-offset:3px}[data-vcms-text="1"]:focus{outline:2px solid #EEB32C!important;outline-offset:3px;box-shadow:0 0 0 3px rgba(238,179,44,.18)}[data-vcms-protected="1"]{position:relative;cursor:not-allowed!important}[data-vcms-protected="1"]:hover:after{content:"🚫 protected system area";position:absolute;z-index:2147483647;top:8px;right:8px;background:#111827;color:#fff;border-radius:999px;padding:6px 10px;font:700 11px Arial;pointer-events:none}[data-vcms-collection]{position:relative!important;outline:2px dashed transparent;outline-offset:6px;min-height:44px}[data-vcms-collection]:hover{outline-color:rgba(238,179,44,.75)}[data-vcms-collection].vcms-target-selected{outline-color:#EEB32C!important;box-shadow:0 0 0 5px rgba(238,179,44,.15)}.vcms-add{position:absolute;right:12px;top:12px;z-index:2147483647;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 12px Arial;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.22);cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}.vcms-item-tools{position:absolute;right:8px;top:8px;z-index:2147483646;display:flex;gap:4px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}.vcms-item-wrap{position:relative!important}.vcms-item-wrap:hover>.vcms-item-tools,[data-vcms-collection]:hover>.vcms-add,[data-vcms-collection].vcms-target-selected>.vcms-add{opacity:1;pointer-events:auto;transform:translateY(0)}.vcms-mini-btn{border:0;border-radius:999px;background:#030E21;color:#fff;font:800 10px Arial;padding:6px 8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)}.vcms-mini-btn-danger{background:#991B1B}.vcms-drop-hint{position:absolute;left:12px;top:12px;z-index:2147483645;border-radius:999px;background:#030E21;color:#fff;font:800 11px Arial;padding:7px 10px;box-shadow:0 4px 14px rgba(0,0,0,.16);pointer-events:none;opacity:0;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}[data-vcms-collection]:hover>.vcms-drop-hint,[data-vcms-collection].vcms-target-selected>.vcms-drop-hint{opacity:1;transform:translateY(0)}.vcms-placement-zone{position:absolute;left:0;right:0;height:3px;background:#EEB32C;box-shadow:0 0 0 3px rgba(238,179,44,.18);z-index:2147483647;pointer-events:none}.vcms-edit-link{outline:1px dotted rgba(238,179,44,.75);outline-offset:2px}[data-vcms-dropzone]{position:relative!important;min-height:12px;outline:1px dashed transparent;outline-offset:-1px}[data-vcms-dropzone]:hover{outline-color:rgba(238,179,44,.65);background:rgba(238,179,44,.035)}[data-vcms-dropzone].vcms-zone-selected{outline:2px solid #EEB32C;background:rgba(238,179,44,.08)}[data-vcms-widget-item]{position:relative!important;outline:1px dashed transparent;outline-offset:5px}[data-vcms-widget-item]:hover{outline-color:#EEB32C}.vcms-section-plus{position:absolute;left:50%;top:0;transform:translate(-50%,-50%);z-index:2147483644;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 11px Arial;padding:6px 10px;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;pointer-events:none;cursor:pointer}[data-vcms-dropzone]:hover>.vcms-section-plus,[data-vcms-dropzone].vcms-zone-selected>.vcms-section-plus{opacity:1;pointer-events:auto}`;
+    if (!style) { style = doc.createElement("style"); style.id = "vcms-live-editor-style"; doc.head.appendChild(style); }
+    style.textContent = `[data-vcms-text="1"]{outline:1px dashed transparent;cursor:text}[data-vcms-text="1"]:hover{outline-color:#EEB32C;outline-offset:3px}[data-vcms-text="1"]:focus{outline:2px solid #EEB32C!important;outline-offset:3px;box-shadow:0 0 0 3px rgba(238,179,44,.18)}[data-vcms-protected="1"]{position:relative;cursor:not-allowed!important}[data-vcms-protected="1"]:hover:after{content:"🚫 protected system area";position:absolute;z-index:2147483647;top:8px;right:8px;background:#111827;color:#fff;border-radius:999px;padding:6px 10px;font:700 11px Arial;pointer-events:none}[data-vcms-dropzone]{position:relative!important;min-height:18px;outline:1px dashed transparent;outline-offset:-1px}[data-vcms-dropzone]:hover{outline-color:rgba(238,179,44,.65);background:rgba(238,179,44,.035)}[data-vcms-dropzone].vcms-zone-selected{outline:2px solid #EEB32C;background:rgba(238,179,44,.08)}[data-vcms-collection]{position:relative!important;outline:2px dashed transparent;outline-offset:6px;min-height:44px}[data-vcms-collection]:hover{outline-color:rgba(238,179,44,.75)}[data-vcms-collection].vcms-target-selected{outline-color:#EEB32C!important;box-shadow:0 0 0 5px rgba(238,179,44,.15)}[data-vcms-widget-item],[data-vcms-item]{position:relative!important;outline:1px dashed transparent;outline-offset:5px}[data-vcms-widget-item]:hover,[data-vcms-item]:hover{outline-color:#EEB32C}.vcms-item-tools{position:absolute;right:8px;top:8px;z-index:2147483646;display:flex;gap:4px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}.vcms-widget-selected>.vcms-item-tools,[data-vcms-widget-item]:hover>.vcms-item-tools,[data-vcms-item]:hover>.vcms-item-tools{opacity:1;pointer-events:auto;transform:translateY(0)}.vcms-mini-btn{border:0;border-radius:999px;background:#030E21;color:#fff;font:800 10px Arial;padding:6px 8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)}.vcms-mini-btn-danger{background:#991B1B}.vcms-add{position:absolute;right:12px;top:12px;z-index:2147483647;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 12px Arial;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.22);cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease}[data-vcms-collection]:hover>.vcms-add,[data-vcms-collection].vcms-target-selected>.vcms-add{opacity:1;pointer-events:auto;transform:translateY(0)}.vcms-section-plus{position:absolute;left:50%;top:0;transform:translate(-50%,-50%);z-index:2147483644;border:0;border-radius:999px;background:#EEB32C;color:#030E21;font:900 11px Arial;padding:6px 10px;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;pointer-events:none;cursor:pointer}.vcms-section-menu{position:absolute;left:50%;top:0;transform:translate(-50%,20px);z-index:2147483647;display:none;gap:4px;border-radius:999px;background:#030E21;padding:5px;box-shadow:0 10px 24px rgba(0,0,0,.24)}.vcms-section-menu button{border:0;border-radius:999px;background:#fff;color:#030E21;font:800 10px Arial;padding:6px 8px;cursor:pointer}[data-vcms-dropzone]:hover>.vcms-section-plus,[data-vcms-dropzone].vcms-zone-selected>.vcms-section-plus{opacity:1;pointer-events:auto}[data-vcms-dropzone]:hover>.vcms-section-menu{display:flex}.vcms-drop-hint{position:absolute;left:12px;top:12px;z-index:2147483645;border-radius:999px;background:#030E21;color:#fff;font:800 11px Arial;padding:7px 10px;box-shadow:0 4px 14px rgba(0,0,0,.16);pointer-events:none;opacity:0}[data-vcms-collection]:hover>.vcms-drop-hint,[data-vcms-collection].vcms-target-selected>.vcms-drop-hint{opacity:1}.vcms-edit-link{outline:1px dotted rgba(238,179,44,.75);outline-offset:2px}`;
+    if (!config.editable) { doc.querySelectorAll<HTMLElement>("main section, main form, main a, main button").forEach((el) => { el.dataset.vcmsProtected = "1"; }); return; }
 
-    if (!config.editable) {
-      doc.querySelectorAll<HTMLElement>("main section, main form, main a, main button").forEach((el) => { el.dataset.vcmsProtected = "1"; });
-      return;
-    }
-
-    // Defensive fallback: older/public components may not yet have explicit markers after deployment.
-    // Mark obvious live sections so Visual CMS controls are not silently missing.
     doc.querySelectorAll<HTMLElement>("main section").forEach((section) => {
       const text = (section.textContent || "").toLowerCase();
       if (!section.dataset.vcmsCollection) {
@@ -460,27 +313,23 @@ export default function VisualCmsBuilder() {
     doc.querySelectorAll<HTMLElement>("[data-vcms-dropzone]").forEach((zoneEl) => {
       const zone = zoneEl.dataset.vcmsDropzone || `${pageKey}:beforeFooter`;
       zoneEl.classList.toggle("vcms-zone-selected", selectedZone === zone);
-      zoneEl.addEventListener("click", (event) => {
-        if ((event.target as HTMLElement).closest(".vcms-section-plus,.vcms-item-tools")) return;
-        send({ type: "VCMS_ZONE_SELECTED", zone });
-      });
+      zoneEl.addEventListener("click", (event) => { if ((event.target as HTMLElement).closest(".vcms-section-plus,.vcms-section-menu,.vcms-item-tools")) return; send({ type: "VCMS_ZONE_SELECTED", zone }); });
       if (!zoneEl.querySelector(":scope > .vcms-section-plus")) {
-        const plus = doc.createElement("button");
-        plus.type = "button";
-        plus.className = "vcms-section-plus";
-        plus.textContent = "+ Section / widget";
-        plus.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ZONE_SELECTED", zone }); });
-        zoneEl.appendChild(plus);
+        const plus = doc.createElement("button"); plus.type = "button"; plus.className = "vcms-section-plus"; plus.textContent = "+"; plus.title = "Add a new section or choose this drop area"; plus.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ZONE_SELECTED", zone }); }); zoneEl.appendChild(plus);
+      }
+      if (!zoneEl.querySelector(":scope > .vcms-section-menu")) {
+        const menu = doc.createElement("div"); menu.className = "vcms-section-menu";
+        [["1 col",1],["2 col",2],["3 col",3]].forEach(([label, columns]) => { const btn = doc.createElement("button"); btn.type = "button"; btn.textContent = String(label); btn.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ADD_SECTION", zone, columns }); }); menu.appendChild(btn); });
+        zoneEl.appendChild(menu);
       }
     });
 
     doc.querySelectorAll<HTMLElement>("[data-vcms-widget-item]").forEach((item) => {
-      const zone = item.dataset.vcmsWidgetItem || "";
-      const index = Number(item.dataset.vcmsIndex || "0");
-      item.classList.add("vcms-item-wrap");
+      const zone = item.dataset.vcmsWidgetItem || ""; const index = Number(item.dataset.vcmsIndex || "0");
+      item.classList.toggle("vcms-widget-selected", selectedWidget?.zone === zone && selectedWidget?.index === index);
+      item.addEventListener("click", (event) => { if ((event.target as HTMLElement).closest(".vcms-item-tools")) return; event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_WIDGET_SELECTED", zone, index }); });
       if (!item.querySelector(":scope > .vcms-item-tools")) {
-        const tools = doc.createElement("div");
-        tools.className = "vcms-item-tools";
+        const tools = doc.createElement("div"); tools.className = "vcms-item-tools";
         const duplicate = doc.createElement("button"); duplicate.type = "button"; duplicate.className = "vcms-mini-btn"; duplicate.textContent = "Copy"; duplicate.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DUPLICATE_WIDGET", zone, index }); });
         const del = doc.createElement("button"); del.type = "button"; del.className = "vcms-mini-btn vcms-mini-btn-danger"; del.textContent = "Delete"; del.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DELETE_WIDGET", zone, index }); });
         tools.appendChild(duplicate); tools.appendChild(del); item.appendChild(tools);
@@ -490,252 +339,116 @@ export default function VisualCmsBuilder() {
     doc.querySelectorAll<HTMLElement>("[data-vcms-collection]").forEach((section) => {
       const collection = (section.dataset.vcmsCollection || "page.blocks") as CollectionKey;
       section.classList.toggle("vcms-target-selected", selectedCollection === collection);
-      section.addEventListener("click", (event) => {
-        if ((event.target as HTMLElement).closest(".vcms-add,.vcms-item-tools")) return;
-        send({ type: "VCMS_COLLECTION_SELECTED", collection, label: collection });
-      });
-      if (!section.querySelector(":scope > .vcms-add")) {
-        const add = doc.createElement("button");
-        add.type = "button";
-        add.className = "vcms-add";
-        add.textContent = collection.includes("faq") ? "+ Add FAQ" : "+ Add similar item";
-        add.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          send({ type: "VCMS_ADD_ITEM", collection });
-        });
-        section.appendChild(add);
+      section.addEventListener("click", (event) => { if ((event.target as HTMLElement).closest(".vcms-add,.vcms-item-tools")) return; send({ type: "VCMS_COLLECTION_SELECTED", collection, label: collection }); });
+      if (!section.querySelector(":scope > .vcms-add")) { const add = doc.createElement("button"); add.type = "button"; add.className = "vcms-add"; add.textContent = collection.includes("faq") ? "+ Add FAQ" : "+ Add similar item"; add.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ADD_ITEM", collection }); }); section.appendChild(add); }
+      if (!section.querySelector(":scope > .vcms-drop-hint")) { const hint = doc.createElement("div"); hint.className = "vcms-drop-hint"; hint.textContent = collection.includes("faq") ? "FAQ group" : "Editable collection"; section.appendChild(hint); }
+      if (!section.querySelector("[data-vcms-item]")) {
+        const candidates = Array.from(section.querySelectorAll<HTMLElement>(".rounded-xl,.rounded-lg,details,article")).filter((el) => !el.closest(".vcms-add,.vcms-drop-hint") && (el.textContent || "").trim().length > 8);
+        candidates.slice(0, 12).forEach((el, index) => { el.dataset.vcmsItem = collection; el.dataset.vcmsIndex = String(index); });
       }
-      if (!section.querySelector(":scope > .vcms-drop-hint")) {
-        const hint = doc.createElement("div");
-        hint.className = "vcms-drop-hint";
-        hint.textContent = collection.includes("faq") ? "FAQ group" : "Editable section";
-        section.appendChild(hint);
-      }
-      section.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        section.style.outlineColor = "#EEB32C";
-      });
-      section.addEventListener("dragleave", () => { section.style.outlineColor = ""; });
-      section.addEventListener("drop", (event) => {
-        event.preventDefault();
-        section.style.outlineColor = "";
-        const raw = event.dataTransfer?.getData("application/x-combay-widget");
-        let widget: WidgetTemplate | null = null;
-        try { widget = raw ? JSON.parse(raw) : null; } catch { widget = null; }
-        send({ type: "VCMS_ADD_ITEM", collection, widget });
-      });
-    });
-
-    // If public cards have not been marked individually, mark common direct children as editable items.
-    doc.querySelectorAll<HTMLElement>("[data-vcms-dropzone]").forEach((zoneEl) => {
-      const zone = zoneEl.dataset.vcmsDropzone || `${pageKey}:beforeFooter`;
-      zoneEl.classList.toggle("vcms-zone-selected", selectedZone === zone);
-      zoneEl.addEventListener("click", (event) => {
-        if ((event.target as HTMLElement).closest(".vcms-section-plus,.vcms-item-tools")) return;
-        send({ type: "VCMS_ZONE_SELECTED", zone });
-      });
-      if (!zoneEl.querySelector(":scope > .vcms-section-plus")) {
-        const plus = doc.createElement("button");
-        plus.type = "button";
-        plus.className = "vcms-section-plus";
-        plus.textContent = "+ Section / widget";
-        plus.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ZONE_SELECTED", zone }); });
-        zoneEl.appendChild(plus);
-      }
-    });
-
-    doc.querySelectorAll<HTMLElement>("[data-vcms-widget-item]").forEach((item) => {
-      const zone = item.dataset.vcmsWidgetItem || "";
-      const index = Number(item.dataset.vcmsIndex || "0");
-      item.classList.add("vcms-item-wrap");
-      if (!item.querySelector(":scope > .vcms-item-tools")) {
-        const tools = doc.createElement("div");
-        tools.className = "vcms-item-tools";
-        const duplicate = doc.createElement("button"); duplicate.type = "button"; duplicate.className = "vcms-mini-btn"; duplicate.textContent = "Copy"; duplicate.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DUPLICATE_WIDGET", zone, index }); });
-        const del = doc.createElement("button"); del.type = "button"; del.className = "vcms-mini-btn vcms-mini-btn-danger"; del.textContent = "Delete"; del.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DELETE_WIDGET", zone, index }); });
-        tools.appendChild(duplicate); tools.appendChild(del); item.appendChild(tools);
-      }
-    });
-
-    doc.querySelectorAll<HTMLElement>("[data-vcms-collection]").forEach((section) => {
-      const collection = section.dataset.vcmsCollection || "page.blocks";
-      if (section.querySelector("[data-vcms-item]")) return;
-      const candidates = Array.from(section.querySelectorAll<HTMLElement>(".rounded-xl,.rounded-lg,details,article,button")).filter((el) => !el.closest(".vcms-add,.vcms-drop-hint") && (el.textContent || "").trim().length > 8);
-      candidates.slice(0, 12).forEach((el, index) => {
-        el.dataset.vcmsItem = collection;
-        el.dataset.vcmsIndex = String(index);
-      });
     });
 
     doc.querySelectorAll<HTMLElement>("[data-vcms-item]").forEach((item) => {
-      const collection = item.dataset.vcmsItem || "page.blocks";
-      const index = Number(item.dataset.vcmsIndex || "0");
-      item.classList.add("vcms-item-wrap");
-      if (!item.querySelector(":scope > .vcms-item-tools")) {
-        const tools = doc.createElement("div");
-        tools.className = "vcms-item-tools";
-        const add = doc.createElement("button");
-        add.type = "button";
-        add.className = "vcms-mini-btn";
-        add.textContent = "+";
-        add.title = "Add another item in this same style";
-        add.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ADD_ITEM", collection }); });
-        const duplicate = doc.createElement("button");
-        duplicate.type = "button";
-        duplicate.className = "vcms-mini-btn";
-        duplicate.textContent = "Copy";
-        duplicate.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DUPLICATE_ITEM", collection, index }); });
-        const del = doc.createElement("button");
-        del.type = "button";
-        del.className = "vcms-mini-btn vcms-mini-btn-danger";
-        del.textContent = "Delete";
-        del.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DELETE_ITEM", collection, index }); });
-        tools.appendChild(add); tools.appendChild(duplicate); tools.appendChild(del); item.appendChild(tools);
-      }
+      const collection = item.dataset.vcmsItem || "page.blocks"; const index = Number(item.dataset.vcmsIndex || "0");
+      if (!item.querySelector(":scope > .vcms-item-tools")) { const tools = doc.createElement("div"); tools.className = "vcms-item-tools"; const add = doc.createElement("button"); add.type = "button"; add.className = "vcms-mini-btn"; add.textContent = "+"; add.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_ADD_ITEM", collection }); }); const duplicate = doc.createElement("button"); duplicate.type = "button"; duplicate.className = "vcms-mini-btn"; duplicate.textContent = "Copy"; duplicate.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DUPLICATE_ITEM", collection, index }); }); const del = doc.createElement("button"); del.type = "button"; del.className = "vcms-mini-btn vcms-mini-btn-danger"; del.textContent = "Delete"; del.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_DELETE_ITEM", collection, index }); }); tools.appendChild(add); tools.appendChild(duplicate); tools.appendChild(del); item.appendChild(tools); }
     });
 
     const textSelector = "main h1,main h2,main h3,main h4,main p,main li,main label,main a,main button,footer p,footer a,footer span,footer h4";
     doc.querySelectorAll<HTMLElement>(textSelector).forEach((el) => {
-      if (!el.textContent?.trim() || el.closest("script,style,svg,.vcms-item-tools,.vcms-add,.vcms-drop-hint")) return;
+      if (!el.textContent?.trim() || el.closest("script,style,svg,.vcms-item-tools,.vcms-add,.vcms-drop-hint,.vcms-section-menu")) return;
       el.dataset.vcmsText = "1";
       const linkEl = (el.closest("a") || (el.tagName.toLowerCase() === "a" ? el : null)) as HTMLAnchorElement | null;
       if (linkEl?.href) el.classList.add("vcms-edit-link");
       const initial = el.textContent.trim();
       el.setAttribute("contenteditable", "true");
-      el.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "" });
-      });
+      el.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "" }); });
       el.addEventListener("focus", () => send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "" }));
-      el.addEventListener("blur", () => {
-        const next = el.textContent?.trim() || "";
-        if (next && next !== initial) send({ type: "VCMS_TEXT_UPDATE", oldText: initial, newText: next });
-      });
+      el.addEventListener("blur", () => { const next = el.textContent?.trim() || ""; if (next && next !== initial) send({ type: "VCMS_TEXT_UPDATE", oldText: initial, newText: next }); });
     });
     doc.querySelectorAll<HTMLElement>("[data-system-protected], [data-admin-only], .stripe, .checkout, [href*='/checkout'], [href*='/cart']").forEach((el) => { el.dataset.vcmsProtected = "1"; });
   }
+  function injectEditorStable() { injectEditor(); window.setTimeout(injectEditor, 250); window.setTimeout(injectEditor, 800); window.setTimeout(injectEditor, 1600); }
 
-  function injectEditorStable() {
-    injectEditor();
-    window.setTimeout(injectEditor, 250);
-    window.setTimeout(injectEditor, 800);
-    window.setTimeout(injectEditor, 1600);
-  }
-
-  function pageDefaultCollection(): CollectionKey {
-    if (pageKey === "faq") return "faq.groupItems:sales";
-    return "page.blocks";
-  }
-
-  function collectionLabel(collection: CollectionKey) {
-    if (collection.includes("faq")) return "FAQ items";
-    if (collection === "page.steps") return "Process/steps";
-    if (collection === "home.promotionStrip") return "Promotion banner";
-    return "Cards/content";
-  }
-  function targetLabel(target: DropTarget) { return target.kind === "zone" ? `page area ${target.zone}` : collectionLabel(target.collection); }
-
+  function targetLabel(target: DropTarget) { return target.kind === "zone" ? target.zone : target.collection.includes("faq") ? "FAQ items" : target.collection === "page.steps" ? "Process/steps" : target.collection === "home.promotionStrip" ? "Promotion banner" : "Cards/content"; }
   function dropPreviewAtCanvasPoint(clientX: number, clientY: number): DropPreview {
-    const iframe = iframeRef.current;
-    const doc = iframe?.contentDocument;
-    const fallbackTarget: DropTarget = { kind: "zone", zone: defaultZone() };
-    if (!iframe || !doc) return { target: fallbackTarget, label: `Drop into ${targetLabel(fallbackTarget)}`, y: 120, mode: "inside" };
-    const rect = iframe.getBoundingClientRect();
-    if (!rect.width || !rect.height) return { target: fallbackTarget, label: `Drop into ${targetLabel(fallbackTarget)}`, y: 120, mode: "inside" };
-    const scaleX = iframe.offsetWidth / rect.width;
-    const scaleY = iframe.offsetHeight / rect.height;
-    const x = Math.max(0, Math.min(iframe.offsetWidth, (clientX - rect.left) * scaleX));
-    const y = Math.max(0, Math.min(iframe.offsetHeight, (clientY - rect.top) * scaleY));
+    const iframe = iframeRef.current; const doc = iframe?.contentDocument; const fallback: DropTarget = { kind: "zone", zone: defaultZone() };
+    if (!iframe || !doc) return { target: fallback, label: `Drop into ${targetLabel(fallback)}`, y: 120, mode: "inside" };
+    const rect = iframe.getBoundingClientRect(); const scale = rect.width / Math.max(iframe.offsetWidth, 1);
+    const x = Math.max(0, Math.min(iframe.offsetWidth, (clientX - rect.left) / Math.max(scale, 0.01)));
+    const y = Math.max(0, Math.min(iframe.offsetHeight, (clientY - rect.top) / Math.max(scale, 0.01)));
     const elements = doc.elementsFromPoint(x, y) as HTMLElement[];
-    const collectionElement = elements.map((el) => el.closest?.("[data-vcms-item],[data-vcms-collection]") as HTMLElement | null).find(Boolean) || null;
-    const zoneElement = elements.map((el) => el.closest?.("[data-vcms-dropzone]") as HTMLElement | null).find(Boolean) || null;
-
-    let target: DropTarget | null = null;
-    let host: HTMLElement | null = null;
-    if (collectionElement) {
-      const itemCollection = collectionElement.dataset?.vcmsItem;
-      const sectionCollection = collectionElement.dataset?.vcmsCollection;
-      const collection = (itemCollection || sectionCollection) as CollectionKey | undefined;
-      if (collection) { target = { kind: "collection", collection }; host = (collectionElement.closest("[data-vcms-collection]") as HTMLElement | null) || collectionElement; }
+    const item = elements.map((el) => el.closest?.("[data-vcms-widget-item],[data-vcms-item]") as HTMLElement | null).find(Boolean) || null;
+    const collectionEl = elements.map((el) => el.closest?.("[data-vcms-collection]") as HTMLElement | null).find(Boolean) || null;
+    const zoneEl = elements.map((el) => el.closest?.("[data-vcms-dropzone]") as HTMLElement | null).find(Boolean) || null;
+    let target: DropTarget = fallback; let host: HTMLElement | null = null;
+    if (zoneEl?.dataset.vcmsDropzone) { target = { kind: "zone", zone: zoneEl.dataset.vcmsDropzone }; host = zoneEl; }
+    if (item?.dataset.vcmsWidgetItem) { const idx = Number(item.dataset.vcmsIndex || "0"); target = { kind: "zone", zone: item.dataset.vcmsWidgetItem, index: Number.isFinite(idx) ? idx : undefined }; host = item; }
+    else if (item?.dataset.vcmsItem) { const idx = Number(item.dataset.vcmsIndex || "0"); target = { kind: "collection", collection: item.dataset.vcmsItem as CollectionKey, index: Number.isFinite(idx) ? idx : undefined }; host = item; }
+    else if (!zoneEl && collectionEl?.dataset.vcmsCollection) { target = { kind: "collection", collection: collectionEl.dataset.vcmsCollection as CollectionKey }; host = collectionEl; }
+    if (!host) {
+      const hosts = Array.from(doc.querySelectorAll<HTMLElement>("[data-vcms-dropzone],[data-vcms-collection]")).map((el) => { const r = el.getBoundingClientRect(); return { el, center: r.top + (r.height || 1) / 2, height: r.height || 1 }; }).filter((entry) => entry.height > 4).sort((a, b) => Math.abs(a.center - y) - Math.abs(b.center - y));
+      if (hosts[0]) { host = hosts[0].el; const z = host.dataset.vcmsDropzone; const c = host.dataset.vcmsCollection; target = z ? { kind: "zone", zone: z } : c ? { kind: "collection", collection: c as CollectionKey } : fallback; }
     }
-    if (!target && zoneElement?.dataset.vcmsDropzone) { target = { kind: "zone", zone: zoneElement.dataset.vcmsDropzone }; host = zoneElement; }
-
-    if (!target) {
-      const allHosts = Array.from(doc.querySelectorAll<HTMLElement>("[data-vcms-dropzone],[data-vcms-collection]")).map((el) => {
-        const r = el.getBoundingClientRect();
-        return { el, top: r.top, bottom: r.bottom, height: r.height || 1, center: r.top + (r.height || 1) / 2 };
-      }).filter((entry) => entry.height > 6);
-      const nearest = allHosts.sort((a, b) => Math.abs(a.center - y) - Math.abs(b.center - y))[0];
-      if (nearest) {
-        host = nearest.el;
-        const zone = nearest.el.dataset.vcmsDropzone;
-        const collection = nearest.el.dataset.vcmsCollection as CollectionKey | undefined;
-        target = zone ? { kind: "zone", zone } : collection ? { kind: "collection", collection } : fallbackTarget;
-      }
-    }
-
-    target = target || fallbackTarget;
-    const hostRect = host?.getBoundingClientRect();
-    const rel = hostRect ? (y - hostRect.top) / Math.max(hostRect.height, 1) : 0.5;
-    const mode: DropPreview["mode"] = rel < 0.2 ? "before" : rel > 0.8 ? "after" : "inside";
-    const lineY = hostRect ? (mode === "before" ? hostRect.top : mode === "after" ? hostRect.bottom : Math.max(hostRect.top + 8, Math.min(y, hostRect.bottom - 8))) : y;
-    return { target, label: `${mode === "inside" ? "Add inside" : mode === "before" ? "Add above" : "Add below"} ${targetLabel(target)}`, y: lineY, mode };
+    const r = host?.getBoundingClientRect(); const rel = r ? (y - r.top) / Math.max(r.height, 1) : 0.5; const mode: DropPreview["mode"] = rel < 0.25 ? "before" : rel > 0.75 ? "after" : "inside";
+    const lineY = r ? (mode === "before" ? r.top : mode === "after" ? r.bottom : Math.max(r.top + 8, Math.min(y, r.bottom - 8))) : y;
+    return { target, label: `${mode === "before" ? "Add above" : mode === "after" ? "Add below" : "Add inside"} ${targetLabel(target)}`, y: lineY, mode };
   }
-
-
-  function nearestZoneAtCanvasPoint(clientX?: number, clientY?: number) {
-    const iframe = iframeRef.current;
-    const doc = iframe?.contentDocument;
-    if (!iframe || !doc || typeof clientY !== "number") return defaultZone();
-    const rect = iframe.getBoundingClientRect();
-    const scaleY = iframe.offsetHeight / Math.max(rect.height, 1);
-    const y = Math.max(0, Math.min(iframe.offsetHeight, (clientY - rect.top) * scaleY));
-    const zones = Array.from(doc.querySelectorAll<HTMLElement>("[data-vcms-dropzone]")).map((el) => { const r = el.getBoundingClientRect(); return { zone: el.dataset.vcmsDropzone || defaultZone(), center: r.top + (r.height || 1) / 2 }; });
-    return zones.sort((a,b)=>Math.abs(a.center-y)-Math.abs(b.center-y))[0]?.zone || defaultZone();
-  }
-
+  function nearestZone(clientX?: number, clientY?: number) { const p = typeof clientX === "number" && typeof clientY === "number" ? dropPreviewAtCanvasPoint(clientX, clientY) : null; return p?.target.kind === "zone" ? p.target.zone : defaultZone(); }
   function dropWidgetOnCanvas(widget: WidgetTemplate | null, clientX?: number, clientY?: number) {
     if (!widget) return;
     const preview = typeof clientX === "number" && typeof clientY === "number" ? dropPreviewAtCanvasPoint(clientX, clientY) : null;
-    const target = preview?.target || (selectedZone ? { kind: "zone", zone: selectedZone } as DropTarget : selectedCollection ? { kind: "collection", collection: selectedCollection } as DropTarget : { kind: "zone", zone: defaultZone() } as DropTarget);
-    if (shouldUseNativeCollection(target, widget)) {
-      const collection = collectionForWidget((target as {kind:"collection";collection:CollectionKey}).collection, widget);
-      setSelectedCollection(collection); setSelectedZone(null); addCollectionItem(collection, widget);
-    } else {
-      const zone = target.kind === "zone" ? target.zone : nearestZoneAtCanvasPoint(clientX, clientY);
-      addVisualWidget(zone, widget);
-    }
-    setDraggingWidget(null);
-    setDropPreview(null);
+    const target = preview?.target || { kind: "zone", zone: defaultZone() } as DropTarget;
+    if (preview?.mode === "inside" && shouldUseNativeCollection(target, widget)) addCollectionItem(collectionForWidget((target as { kind: "collection"; collection: CollectionKey }).collection, widget), widget);
+    else if (target.kind === "zone") addVisualWidget(target.zone, widget, target.index !== undefined && preview?.mode === "before" ? target.index : target.index !== undefined && preview?.mode === "after" ? target.index + 1 : undefined);
+    else addVisualWidget(nearestZone(clientX, clientY), widget);
+    setDraggingWidget(null); setDropPreview(null);
   }
 
   if (!content) return <div className="p-8 text-sm text-slate-600">Loading Visual CMS…</div>;
-  const pageBlocks = currentBlocks();
+  const pageBlockItems = pageBlocks();
   return <div className="fixed inset-0 z-40 flex bg-slate-200 text-navy-950">
-    <aside className="flex w-[350px] shrink-0 flex-col border-r border-slate-200 bg-white shadow-xl">
-      <div className="border-b border-slate-200 p-4"><p className="font-mono text-[10px] uppercase tracking-widest text-accent">Combay Visual CMS</p><h1 className="font-display text-xl font-900">Live Website Editor</h1><p className="mt-1 text-xs leading-5 text-slate-500">Click or drag widgets into a matching section. Use the + signs on the live canvas to add more items of the same style.</p></div>
+    <aside className="flex w-[370px] shrink-0 flex-col border-r border-slate-200 bg-white shadow-xl">
+      <div className="border-b border-slate-200 p-4"><p className="font-mono text-[10px] uppercase tracking-widest text-accent">Combay Visual CMS</p><h1 className="font-display text-xl font-900">Live Website Editor</h1><p className="mt-1 text-xs leading-5 text-slate-500">Real widget zones, hover controls, section creation, and widget inspector. Drag to the yellow line; click a widget to edit.</p></div>
       <div className="grid grid-cols-3 gap-1 border-b border-slate-200 p-2">{(["pages", "widgets", "style"] as LeftTab[]).map((tab) => <button key={tab} type="button" onClick={() => setLeftTab(tab)} className={`rounded py-2 text-xs font-display font-900 capitalize ${leftTab === tab ? "bg-navy-950 text-white" : "bg-slate-50 text-navy-950"}`}>{tab}</button>)}</div>
       <div className="flex-1 overflow-auto p-3">
-        {leftTab === "pages" ? <div className="space-y-2">{PAGES.map((page) => <button key={page.key} type="button" onClick={() => { setPageKey(page.key); setRefreshKey(Date.now()); }} className={`w-full rounded px-3 py-2 text-left text-sm font-display font-800 ${pageKey === page.key ? "bg-navy-950 text-white" : "bg-gray-50 text-navy-900 hover:bg-gray-100"}`}><span>{page.label}</span>{!page.editable ? <span className="ml-2 text-xs">🚫</span> : null}<span className="block text-[10px] font-normal opacity-70">{page.editable ? "Editable page" : page.note || "Visible but protected"}</span></button>)}</div> : null}
-        {leftTab === "widgets" ? <div className="space-y-3"><p className="text-xs text-slate-500">Click a widget to add to the selected section, or drag it onto the page. A yellow placement line shows where it will land. Current target: <strong>{selectedZone || selectedCollection || defaultZone()}</strong>.</p><div className="grid grid-cols-2 gap-2">{WIDGETS.map((widget) => <button key={widget.label} type="button" draggable onDragStart={(event) => { setDraggingWidget(widget); event.dataTransfer.setData("application/x-combay-widget", JSON.stringify(widget)); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => { setDraggingWidget(null); setDropPreview(null); }} onClick={() => addWidget(widget)} className="rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-accent hover:bg-accent/5"><span className="text-xl">{widget.icon}</span><span className="mt-2 block text-xs font-display font-900 text-navy-950">{widget.label}</span><span className="mt-1 block text-[10px] text-slate-500">Click or drag</span></button>)}</div><div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-5 text-navy-950">Card and button widgets now adapt to the target section. If 3 cards become 4, the layout changes to a consistent four-column row on desktop; larger sets wrap cleanly into rows.</div></div> : null}
+        {leftTab === "pages" ? <div className="space-y-2">{PAGES.map((page) => <button key={page.key} type="button" onClick={() => { setPageKey(page.key); setRefreshKey(Date.now()); setSelectedWidget(null); }} className={`w-full rounded px-3 py-2 text-left text-sm font-display font-800 ${pageKey === page.key ? "bg-navy-950 text-white" : "bg-gray-50 text-navy-900 hover:bg-gray-100"}`}><span>{page.label}</span>{!page.editable ? <span className="ml-2 text-xs">🚫</span> : null}<span className="block text-[10px] font-normal opacity-70">{page.editable ? "Editable page" : page.note || "Visible but protected"}</span></button>)}</div> : null}
+        {leftTab === "widgets" ? <div className="space-y-3"><p className="text-xs text-slate-500">Drag a widget onto the live page. Use the yellow placement line to add between sections, inside sections, or into section columns. Current target: <strong>{selectedZone || selectedCollection || defaultZone()}</strong>.</p><div className="grid grid-cols-2 gap-2">{WIDGETS.map((widget) => <button key={widget.label} type="button" draggable onDragStart={(event) => { setDraggingWidget(widget); event.dataTransfer.setData("application/x-combay-widget", JSON.stringify(widget)); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => { setDraggingWidget(null); setDropPreview(null); }} onClick={() => addWidget(widget)} className="rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-accent hover:bg-accent/5"><span className="text-xl">{widget.icon}</span><span className="mt-2 block text-xs font-display font-900 text-navy-950">{widget.label}</span><span className="mt-1 block text-[10px] text-slate-500">Click or drag</span></button>)}</div><div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-5 text-navy-950">To place image next to text: add a 2-column section, then drag Image into one column and Text/Button into the other. This is saved in CMS JSON and rendered on the live site.</div></div> : null}
         {leftTab === "style" ? <div className="space-y-5">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-display font-900">Selected text</p><p className="mt-1 break-words text-xs text-slate-600">{selectedText || "Click text on the website screen."}</p>{selectedLink ? <div className="mt-3 rounded-lg border border-accent/30 bg-white p-2"><label className="block text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Button/link URL</label><input className="input mt-1 h-9 w-full text-xs" value={selectedLink.href} onChange={(e) => updateSelectedLinkHref(e.target.value)} placeholder="/contact, /shop, mailto:, tel:, https://..." /><p className="mt-1 text-[10px] text-slate-500">Works for all CMS-linked buttons and text links.</p></div> : null}</div>
-          <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs font-display font-900">Replace background</p><span className="rounded-full bg-accent/20 px-2 py-1 text-[10px] font-800">Hero</span></div><div className="flex gap-2"><input className="input h-9 flex-1 text-xs" placeholder="Paste image URL" value={backgroundUrl} onChange={(e) => setBackgroundUrl(e.target.value)} /><button type="button" className="rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white" onClick={() => setHeroBackground(backgroundUrl)}>Use</button></div><div className="mt-3"><ImageUploadButton onUploaded={(url) => { setBackgroundUrl(url); setHeroBackground(url); }} /></div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Colours</p><div className="mt-2 flex flex-wrap gap-2">{COLOURS.map((colour) => <button key={colour} type="button" title={colour} onClick={() => setHeroBackground(colour)} className="h-8 w-8 rounded-full border border-slate-300" style={{ background: colour }} />)}</div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Gradients</p><div className="mt-2 space-y-2">{GRADIENTS.map((g) => <button key={g.label} type="button" onClick={() => setHeroBackground(g.value)} className="h-10 w-full rounded border border-slate-200 px-3 text-left text-xs font-display font-800 text-white" style={{ backgroundImage: g.value }}>{g.label}</button>)}</div></div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-display font-900">Selected</p><p className="mt-1 break-words text-xs text-slate-600">{selectedWidgetLive ? `${selectedWidgetLive.widget.type} widget in ${selectedWidgetLive.zone}` : selectedText || "Click text, a link, or a widget on the website screen."}</p>{selectedLink ? <div className="mt-3 rounded-lg border border-accent/30 bg-white p-2"><label className="block text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Button/link URL</label><input className="input mt-1 h-9 w-full text-xs" value={selectedLink.href} onChange={(e) => updateSelectedLinkHref(e.target.value)} placeholder="/contact, /shop, mailto:, tel:, https://..." /></div> : null}</div>
+          {selectedWidgetLive ? <WidgetInspector selected={selectedWidgetLive} update={updateSelectedWidget} deleteWidget={() => deleteVisualWidget(selectedWidgetLive.zone, selectedWidgetLive.index)} duplicateWidget={() => duplicateVisualWidget(selectedWidgetLive.zone, selectedWidgetLive.index)} /> : null}
+          <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs font-display font-900">Replace background</p><span className="rounded-full bg-accent/20 px-2 py-1 text-[10px] font-800">Hero</span></div><div className="flex gap-2"><input className="input h-9 flex-1 text-xs" placeholder="Paste image URL" value={backgroundUrl} onChange={(e) => setBackgroundUrl(e.target.value)} /><button type="button" className="rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white" onClick={() => setHeroBackground(backgroundUrl)}>Use</button></div><div className="mt-3"><UploadButton accept="image/png,image/jpeg,image/webp,image/gif" label="Upload image" onUploaded={(url) => { setBackgroundUrl(url); setHeroBackground(url); }} /></div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Colours</p><div className="mt-2 flex flex-wrap gap-2">{COLOURS.map((colour) => <button key={colour} type="button" title={colour} onClick={() => setHeroBackground(colour)} className="h-8 w-8 rounded-full border border-slate-300" style={{ background: colour }} />)}</div><p className="mt-4 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Gradients</p><div className="mt-2 space-y-2">{GRADIENTS.map((g) => <button key={g.label} type="button" onClick={() => setHeroBackground(g.value)} className="h-10 w-full rounded border border-slate-200 px-3 text-left text-xs font-display font-800 text-white" style={{ backgroundImage: g.value }}>{g.label}</button>)}</div></div>
           <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">Delete / restore whole sections</p>{pageKey === "home" ? <div className="space-y-2">{HOME_SECTIONS.map(([key,label]) => <div key={key} className="flex items-center justify-between gap-2 rounded bg-slate-50 p-2"><span className="text-xs">{label}</span><button type="button" onClick={() => toggleHomeSection(key)} className={`rounded px-2 py-1 text-[11px] font-800 ${isHomeHidden(key) ? "bg-accent text-navy-950" : "bg-red-50 text-red-700"}`}>{isHomeHidden(key) ? "Restore" : "Delete"}</button></div>)}</div> : cmsPageKey(pageKey) ? <div className="space-y-2">{PAGE_SECTIONS.map(([key,label]) => <div key={key} className="flex items-center justify-between gap-2 rounded bg-slate-50 p-2"><span className="text-xs">{label}</span><button type="button" onClick={() => togglePageSection(key)} className={`rounded px-2 py-1 text-[11px] font-800 ${pageSectionVisible(key) ? "bg-red-50 text-red-700" : "bg-accent text-navy-950"}`}>{pageSectionVisible(key) ? "Delete" : "Restore"}</button></div>)}</div> : <p className="text-xs text-slate-500">This page has policy text editing only.</p>}</div>
-          {cmsPageKey(pageKey) ? <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between"><p className="text-xs font-display font-900">Cards / section items</p><button type="button" onClick={addSameSizeCard} className="rounded bg-navy-950 px-2 py-1 text-[11px] font-800 text-white">+ Add card</button></div><div className="space-y-2">{pageBlocks.map((block, index) => <div key={`${block.title}-${index}`} className="rounded bg-slate-50 p-2"><p className="text-xs font-800">{block.title}</p><p className="text-[10px] text-slate-500">Auto width: {block.width || "quarter"}</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => duplicateBlock(index)} className="rounded bg-white px-2 py-1 text-[11px] font-800 text-navy-950 ring-1 ring-slate-200">Duplicate</button><button type="button" onClick={() => deleteBlock(index)} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete</button></div></div>)}</div></div> : null}
-          {pageKey === "faq" ? <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">FAQ items</p><div className="flex flex-wrap gap-2"><button type="button" onClick={() => addCollectionItem("faq.groupItems:sales")} className="rounded bg-navy-950 px-2 py-1 text-[11px] font-800 text-white">+ Add FAQ</button><button type="button" onClick={() => addCollectionItem("faq.previewItems")} className="rounded bg-white px-2 py-1 text-[11px] font-800 text-navy-950 ring-1 ring-slate-200">+ Add homepage FAQ preview</button></div></div> : null}
-          {cmsPageKey(pageKey) || pageKey === "home" ? <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">Buttons</p><div className="flex gap-2"><button type="button" onClick={() => deleteHeroButton("primary")} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete primary button</button><button type="button" onClick={() => deleteHeroButton("secondary")} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete secondary button</button></div></div> : null}
+          {cmsPageKey(pageKey) ? <div className="rounded-xl border border-slate-200 p-3"><div className="mb-3 flex items-center justify-between"><p className="text-xs font-display font-900">Native cards / section items</p><button type="button" onClick={() => addCollectionItem("page.blocks", widgetByType("card"))} className="rounded bg-navy-950 px-2 py-1 text-[11px] font-800 text-white">+ Add card</button></div><div className="space-y-2">{pageBlockItems.map((block, index) => <div key={`${block.title}-${index}`} className="rounded bg-slate-50 p-2"><p className="text-xs font-800">{block.title}</p><p className="text-[10px] text-slate-500">Auto width: {block.width || "quarter"}</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => duplicateCollectionItem("page.blocks", index)} className="rounded bg-white px-2 py-1 text-[11px] font-800 text-navy-950 ring-1 ring-slate-200">Duplicate</button><button type="button" onClick={() => deleteCollectionItem("page.blocks", index)} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete</button></div></div>)}</div></div> : null}
+          {cmsPageKey(pageKey) || pageKey === "home" ? <div className="rounded-xl border border-slate-200 p-3"><p className="mb-3 text-xs font-display font-900">Hero buttons</p><div className="flex gap-2"><button type="button" onClick={() => deleteHeroButton("primary")} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete primary</button><button type="button" onClick={() => deleteHeroButton("secondary")} className="rounded bg-red-50 px-2 py-1 text-[11px] font-800 text-red-700">Delete secondary</button></div></div> : null}
           {policyKey(pageKey) ? <div className="rounded-xl border border-slate-200 bg-accent/10 p-3 text-xs leading-5 text-navy-950">This policy page is CMS-backed. Edit heading, date and paragraphs directly on the page, then save.</div> : null}
         </div> : null}
       </div>
       <div className="border-t border-slate-200 p-3"><button type="button" onClick={save} disabled={saving} className="w-full rounded bg-accent px-4 py-3 text-sm font-display font-900 text-navy-950 hover:bg-accent-dark disabled:opacity-60">{saving ? "Saving…" : "Save website"}</button>{message ? <p className="mt-2 text-xs text-slate-600">{message}</p> : null}</div>
     </aside>
     <main className="flex min-w-0 flex-1 flex-col"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3"><div><p className="text-xs text-slate-500">Editing</p><h2 className="font-display text-lg font-900 text-navy-950">{config.label} {config.editable ? "" : "— protected"}</h2></div><div className="flex flex-wrap items-center gap-2"><select className="input h-9 w-36 text-xs" value={device} onChange={(e) => setDevice(e.target.value as DeviceMode)}><option value="desktop">PC desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select><select className="input h-9 w-28 text-xs" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}><option value="0.65">65%</option><option value="0.78">78%</option><option value="0.9">90%</option><option value="1">100%</option></select><a href={config.path} target="_blank" rel="noreferrer" className="rounded border border-slate-300 bg-white px-3 py-2 text-xs font-display font-900 text-navy-950 hover:border-accent">Open live page</a></div></div><div className="flex-1 overflow-auto bg-slate-300 p-6"><div className="mx-auto origin-top rounded-xl bg-white shadow-2xl ring-1 ring-slate-400/40" style={{ width: canvasWidth, minHeight: 760, transform: `scale(${zoom})`, transformOrigin: "top center", marginBottom: -(760 * (1 - zoom)) }}><div className="relative h-[760px] overflow-hidden rounded-xl bg-white" onDragOver={(event) => { if (draggingWidget) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropPreview(dropPreviewAtCanvasPoint(event.clientX, event.clientY)); } }} onDragLeave={() => setDropPreview(null)} onDrop={(event) => { if (!draggingWidget) return; event.preventDefault(); dropWidgetOnCanvas(draggingWidget, event.clientX, event.clientY); }}>
-            {!config.editable ? <div className="pointer-events-none absolute right-4 top-4 z-20 rounded-full bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white shadow-lg">🚫 Visible only — managed elsewhere</div> : null}
-            {draggingWidget && config.editable ? <div className="pointer-events-none absolute inset-0 z-30 bg-navy-950/5"><div className="absolute left-0 right-0 h-[3px] bg-accent shadow-[0_0_0_4px_rgba(238,179,44,.22)]" style={{ top: dropPreview?.y ?? 120 }} /><div className="absolute left-1/2 -translate-x-1/2 rounded-full bg-navy-950 px-4 py-2 text-xs font-display font-900 text-white shadow-2xl" style={{ top: Math.max(16, (dropPreview?.y ?? 120) - 42) }}>{dropPreview?.label || `Drop to add ${draggingWidget.label}`}</div></div> : null}
-            <iframe ref={iframeRef} key={`${pageKey}-${refreshKey}-${device}`} src={previewUrl(config.path, refreshKey)} title={`${config.label} visual CMS`} className={`h-full w-full border-0 bg-white ${draggingWidget ? "pointer-events-none" : ""}`} onLoad={injectEditorStable} />
-          </div></div></div></main>
+      {!config.editable ? <div className="pointer-events-none absolute right-4 top-4 z-20 rounded-full bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white shadow-lg">🚫 Visible only — managed elsewhere</div> : null}
+      {draggingWidget && config.editable ? <div className="pointer-events-none absolute inset-0 z-30 bg-navy-950/5"><div className="absolute left-0 right-0 h-[3px] bg-accent shadow-[0_0_0_4px_rgba(238,179,44,.22)]" style={{ top: dropPreview?.y ?? 120 }} /><div className="absolute left-1/2 -translate-x-1/2 rounded-full bg-navy-950 px-4 py-2 text-xs font-display font-900 text-white shadow-2xl" style={{ top: Math.max(16, (dropPreview?.y ?? 120) - 42) }}>{dropPreview?.label || `Drop to add ${draggingWidget.label}`}</div></div> : null}
+      <iframe ref={iframeRef} key={`${pageKey}-${refreshKey}-${device}`} src={previewUrl(config.path, refreshKey)} title={`${config.label} visual CMS`} className={`h-full w-full border-0 bg-white ${draggingWidget ? "pointer-events-none" : ""}`} onLoad={injectEditorStable} />
+    </div></div></div></main>
   </div>;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1 block text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">{label}</span>{children}</label>; }
+function WidgetInspector({ selected, update, deleteWidget, duplicateWidget }: { selected: SelectedWidget; update: (changes: Partial<VisualWidget>) => void; deleteWidget: () => void; duplicateWidget: () => void }) {
+  const w = selected.widget;
+  const input = "input h-9 w-full text-xs";
+  return <div className="rounded-xl border border-accent/30 bg-white p-3"><div className="mb-3 flex items-center justify-between gap-2"><div><p className="text-xs font-display font-900 capitalize">{w.type} widget</p><p className="text-[10px] text-slate-500">{selected.zone}</p></div><div className="flex gap-1"><button type="button" onClick={duplicateWidget} className="rounded bg-slate-100 px-2 py-1 text-[10px] font-800">Copy</button><button type="button" onClick={deleteWidget} className="rounded bg-red-50 px-2 py-1 text-[10px] font-800 text-red-700">Delete</button></div></div><div className="space-y-3">
+    {w.type !== "spacer" && w.type !== "divider" ? <Field label="Title / button text"><input className={input} value={w.type === "button" ? (w.text || "") : (w.title || "")} onChange={(e) => update(w.type === "button" ? { text: e.target.value, title: e.target.value } : { title: e.target.value })} /></Field> : null}
+    {["card","promotion","section","video","image"].includes(w.type) ? <Field label="Body / caption"><textarea className="input min-h-20 w-full text-xs" value={w.type === "video" || w.type === "image" ? (w.caption || "") : (w.body || "")} onChange={(e) => update(w.type === "video" || w.type === "image" ? { caption: e.target.value } : { body: e.target.value })} /></Field> : null}
+    {w.type === "text" ? <><Field label="Text content"><textarea className="input min-h-20 w-full text-xs" value={w.text || ""} onChange={(e) => update({ text: e.target.value })} /></Field><Field label="Text type"><select className={input} value={w.textKind || "paragraph"} onChange={(e) => update({ textKind: e.target.value as VisualWidget["textKind"] })}><option value="heading">Heading</option><option value="subheading">Subheading</option><option value="paragraph">Paragraph/body</option><option value="caption">Small caption</option></select></Field></> : null}
+    {["button","card","promotion"].includes(w.type) ? <><Field label="Button / CTA label"><input className={input} value={w.type === "button" ? (w.text || "") : (w.linkLabel || "")} onChange={(e) => update(w.type === "button" ? { text: e.target.value, title: e.target.value } : { linkLabel: e.target.value })} /></Field><Field label="Button / URL"><input className={input} value={w.url || ""} onChange={(e) => update({ url: safeHrefInput(e.target.value) })} /></Field><div className="grid grid-cols-2 gap-2"><Field label="Style"><select className={input} value={w.buttonStyle || "primary"} onChange={(e) => update({ buttonStyle: e.target.value as VisualWidget["buttonStyle"] })}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="outline">Outline</option></select></Field><Field label="New tab"><select className={input} value={w.openInNewTab ? "yes" : "no"} onChange={(e) => update({ openInNewTab: e.target.value === "yes" })}><option value="no">Same tab</option><option value="yes">New tab</option></select></Field></div></> : null}
+    {w.type === "promotion" ? <Field label="Promo code"><input className={input} value={w.promoCode || ""} onChange={(e) => update({ promoCode: e.target.value })} /></Field> : null}
+    {w.type === "video" ? <><Field label="Video URL"><input className={input} value={w.videoUrl || ""} onChange={(e) => update({ videoUrl: e.target.value })} /></Field><div className="flex gap-2"><UploadButton accept="video/mp4,video/webm,video/quicktime" label="Upload video" onUploaded={(url) => update({ videoUrl: url })} /><UploadButton accept="image/png,image/jpeg,image/webp" label="Upload thumbnail" onUploaded={(url) => update({ thumbnailUrl: url })} /></div><div className="grid grid-cols-3 gap-2 text-xs"><label><input type="checkbox" checked={!!w.autoplay} onChange={(e) => update({ autoplay: e.target.checked })} /> Autoplay</label><label><input type="checkbox" checked={!!w.muted} onChange={(e) => update({ muted: e.target.checked })} /> Muted</label><label><input type="checkbox" checked={!!w.loop} onChange={(e) => update({ loop: e.target.checked })} /> Loop</label></div></> : null}
+    {w.type === "image" || w.type === "card" ? <><Field label="Image URL"><input className={input} value={w.imageUrl || ""} onChange={(e) => update({ imageUrl: e.target.value })} /></Field><UploadButton accept="image/png,image/jpeg,image/webp,image/gif" label="Upload image" onUploaded={(url) => update({ imageUrl: url })} /></> : null}
+    {w.type === "section" ? <div className="grid grid-cols-2 gap-2"><Field label="Columns"><select className={input} value={String(w.columns || 1)} onChange={(e) => update({ columns: Number(e.target.value) })}><option value="1">1 column</option><option value="2">2 columns</option><option value="3">3 columns</option><option value="4">4 columns</option></select></Field><Field label="Background"><select className={input} value={w.sectionVariant || "plain"} onChange={(e) => update({ sectionVariant: e.target.value as VisualWidget["sectionVariant"] })}><option value="plain">Plain</option><option value="soft">Soft grey</option><option value="accent">Accent tint</option><option value="dark">Dark</option></select></Field></div> : null}
+    {w.type === "spacer" ? <Field label="Height"><input className={input} type="number" min={8} max={260} value={w.height || 48} onChange={(e) => update({ height: Number(e.target.value) })} /></Field> : null}
+    {w.type === "divider" ? <div className="grid grid-cols-2 gap-2"><Field label="Thickness"><input className={input} type="number" min={1} max={8} value={w.thickness || 1} onChange={(e) => update({ thickness: Number(e.target.value) })} /></Field><Field label="Colour"><input className={input} value={w.colour || "#E5E7EB"} onChange={(e) => update({ colour: e.target.value })} /></Field></div> : null}
+    <div className="grid grid-cols-2 gap-2"><Field label="Width"><select className={input} value={w.width || "third"} onChange={(e) => update({ width: e.target.value })}><option value="full">Full</option><option value="threeQuarter">3/4</option><option value="twoThird">2/3</option><option value="half">1/2</option><option value="third">1/3</option><option value="quarter">1/4</option></select></Field><Field label="Align"><select className={input} value={w.align || "left"} onChange={(e) => update({ align: e.target.value as VisualWidget["align"] })}><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></Field></div>
+    <div className="grid grid-cols-2 gap-2"><Field label="Top spacing"><input className={input} type="number" value={w.marginTop || 0} onChange={(e) => update({ marginTop: Number(e.target.value) })} /></Field><Field label="Bottom spacing"><input className={input} type="number" value={w.marginBottom || 0} onChange={(e) => update({ marginBottom: Number(e.target.value) })} /></Field></div>
+  </div></div>;
 }

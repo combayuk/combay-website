@@ -1,0 +1,25 @@
+Phase 16W — Visual CMS root-cause rebuild / usability hardening
+
+Audit findings:
+- Previous Visual CMS depended on iframe-injected markers, fallback text scanning and one-off collection targets.
+- Generic widgets could still be routed into native card/FAQ collections, causing dead card-like layers.
+- There was no persistent section/column model, so image-next-to-text and CTA-inside-content layouts could not be created reliably.
+- The sidebar had widgets but no robust inspector for real widget fields such as video URL, thumbnail, button URL, target tab, promo code, spacer height, divider thickness, or section columns.
+
+Implemented:
+- Rebuilt Visual CMS around persistent visualWidgets zones in SiteSetting JSON.
+- Added true section widget with 1/2/3/4 columns and nested drop zones.
+- Added real widget inspector for section, card, button, text, image, video, promotion, spacer and divider widgets.
+- Added section hover + menu between zones: 1 col / 2 col / 3 col.
+- Added placement line and target calculation from actual mouse position.
+- Generic widgets now drop into widget zones, not hardcoded What We Do.
+- Native card/FAQ collections are only used when the dropped widget type is appropriate for that collection.
+- Video widget supports video URL/upload, thumbnail upload, caption, autoplay, muted and loop flags.
+- Button widget supports text, URL, same/new tab and primary/secondary/outline styles.
+- Text widget supports heading/subheading/paragraph/caption modes.
+- Image widget supports image URL/upload.
+- Promotion widget supports promo code, body and CTA URL/label.
+- Spacer and divider widgets support height/thickness/colour controls.
+- Live rendering is handled through src/components/visual-cms/VisualWidgetZone.tsx, so saved widgets display on the public site.
+
+No Prisma migration required.

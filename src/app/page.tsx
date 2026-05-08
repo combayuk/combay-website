@@ -25,21 +25,21 @@ export default async function HomePage() {
     <main>
       <TopBar />
       <Navigation />
-      <VisualWidgetZone pageKey="home" zone="top" widgets={content.visualWidgets?.["home:top"] || []} />
+      <VisualWidgetZone pageKey="home" zone="top" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "hero") && <HeroCarousel slides={content.heroSlides} />}
-      <VisualWidgetZone pageKey="home" zone="afterHero" widgets={content.visualWidgets?.["home:afterHero"] || []} />
+      <VisualWidgetZone pageKey="home" zone="afterHero" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "promotionStrip") && <PublicPromotionStrip placement="home" />}
-      <VisualWidgetZone pageKey="home" zone="afterPromotion" widgets={content.visualWidgets?.["home:afterPromotion"] || []} />
+      <VisualWidgetZone pageKey="home" zone="afterPromotion" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "industryStrip") && <IndustryStrip />}
-      <VisualWidgetZone pageKey="home" zone="afterIndustry" widgets={content.visualWidgets?.["home:afterIndustry"] || []} />
+      <VisualWidgetZone pageKey="home" zone="afterIndustry" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "serviceCards") && <ServiceTabs content={content.pages.home} />}
-      <VisualWidgetZone pageKey="home" zone="afterServices" widgets={content.visualWidgets?.["home:afterServices"] || []} />
+      <VisualWidgetZone pageKey="home" zone="afterServices" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "trust") && <TrustSection content={content.trust} />}
-      <VisualWidgetZone pageKey="home" zone="afterTrust" widgets={content.visualWidgets?.["home:afterTrust"] || []} />
+      <VisualWidgetZone pageKey="home" zone="afterTrust" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "faqPreview") && <FaqPreview items={content.faq.previewItems} />}
-      <VisualWidgetZone pageKey="home" zone="afterFaq" widgets={content.visualWidgets?.["home:afterFaq"] || []} />
+      <VisualWidgetZone pageKey="home" zone="afterFaq" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "finalCta") && <FinalCta content={content.finalCta} />}
-      <VisualWidgetZone pageKey="home" zone="beforeFooter" widgets={content.visualWidgets?.["home:beforeFooter"] || []} />
+      <VisualWidgetZone pageKey="home" zone="beforeFooter" allWidgets={content.visualWidgets} />
       <Footer content={{ description: content.footer.description, backgroundImageUrl: content.footer.backgroundImageUrl, contact: content.contact }} />
     </main>
   );
