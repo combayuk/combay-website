@@ -113,9 +113,13 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
 }
 
 export function emailButton(url: string, label: string, variant: "primary" | "secondary" = "primary") {
-  // Temporary production setting: customer emails must not contain CTA-style buttons.
-  // Keep this helper name for compatibility with document/payment emails, but render as a simple text link only.
-  return `<p style="margin:18px 0 0;color:#334155;font-size:14px;line-height:1.6;"><strong>${escapeHtml(label)}:</strong> <a href="${escapeHtml(url)}" style="color:#0f172a;text-decoration:underline;word-break:break-all;">${escapeHtml(url)}</a></p>`;
+  // Essential payment/document links should remain as professional buttons.
+  // General customer-portal / marketing CTA buttons remain disabled in their callers.
+  const isPrimary = variant === "primary";
+  const bg = isPrimary ? "#f2a900" : "#ffffff";
+  const color = isPrimary ? "#0f172a" : "#0f172a";
+  const border = isPrimary ? "#f2a900" : "#0f172a";
+  return `<table role="presentation" border="0" cellPadding="0" cellSpacing="0" style="margin:18px 0 0;"><tr><td align="left"><a href="${escapeHtml(url)}" style="display:inline-block;background:${bg};border:1px solid ${border};border-radius:8px;color:${color};font-size:14px;font-weight:800;line-height:1;text-decoration:none;padding:13px 18px;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
 export function htmlShell(title: string, content: string, preheader?: string) {
