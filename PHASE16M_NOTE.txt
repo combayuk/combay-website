@@ -1,0 +1,10 @@
+Phase 16M — Visual CMS single editable canvas
+
+Changes:
+- Removed separate Exact live preview / Edit canvas workflow from /admin/content.
+- The Visual CMS now opens directly into one editable website canvas.
+- Removed the preview-mode dropdown entirely.
+- Admin can click text directly in the canvas to edit, drag widgets/sections, upload images, adjust blocks, and save.
+- Retained desktop/tablet/mobile preview selector and zoom controls.
+- Retained Open live page button for checking the published page in a new tab.
+- No Prisma schema change required.

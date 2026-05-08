@@ -8,7 +8,6 @@ import type { CmsBlock, CmsPage, CmsStep, SiteContent } from "@/lib/siteContent"
 type PageKey = keyof SiteContent["pages"];
 type DeviceMode = "desktop" | "tablet" | "mobile";
 type EditScope = "all" | "device";
-type PreviewMode = "exact" | "edit";
 type SelectTarget =
   | { kind: "hero" }
   | { kind: "section"; section: string }
@@ -289,7 +288,6 @@ export default function VisualCmsBuilder() {
   const [zoom, setZoom] = useState(0.78);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
   const [editScope, setEditScope] = useState<EditScope>("all");
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("exact");
   const [previewNonce, setPreviewNonce] = useState(() => Date.now());
   const [homeHeroIndex, setHomeHeroIndex] = useState(0);
 
@@ -401,7 +399,7 @@ export default function VisualCmsBuilder() {
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not save website layout.");
       setContent(data.content);
       setPreviewNonce(Date.now());
-      setMessage("Saved. Exact live preview refreshed using the public page design.");
+      setMessage("Saved. Public website content updated.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not save website layout.");
     } finally {
@@ -549,7 +547,7 @@ export default function VisualCmsBuilder() {
         <div className="border-b border-gray-200 p-4">
           <p className="font-mono text-[10px] uppercase tracking-widest text-accent">Combay CMS</p>
           <h1 className="font-display text-xl font-900">Visual Builder</h1>
-          <p className="mt-1 text-xs text-gray-500">Default view is the exact live website inside a desktop canvas. Switch to Edit canvas only when you need inline drag/drop editing.</p>
+          <p className="mt-1 text-xs text-gray-500">Edit the website directly on the desktop/tablet/mobile canvas. Click text to type, drag widgets/sections, then save.</p>
         </div>
         <div className="border-b border-gray-200 p-3">
           <label className="text-[10px] font-display font-800 uppercase tracking-wide text-gray-500">Page</label>
@@ -576,7 +574,7 @@ export default function VisualCmsBuilder() {
           </div>
           <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
             <strong className="text-navy-950">Exact visual match</strong>
-            <p className="mt-1">The right side defaults to the real public page, so colours, spacing, backgrounds, menus, promotions and missing/extra sections match the live website 100%.</p><p className="mt-2 text-[11px] text-gray-500">Use Edit canvas for drag/drop changes, then save. The exact preview refreshes from the live page after saving.</p>
+            <p className="mt-1">The right side is the editable website canvas. Click text directly, drag content, add widgets and save the public page.</p><p className="mt-2 text-[11px] text-gray-500">Use the Open live page button to compare the published page in a new tab.</p>
           </div>
         </div>
       </aside>
@@ -585,13 +583,9 @@ export default function VisualCmsBuilder() {
         <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="rounded bg-navy-950 px-3 py-1 text-xs font-display font-900 text-white">{DEVICE_CANVAS[deviceMode].label} mode</span>
-            <span className="text-xs text-gray-500">Exact preview uses the live public page. Edit canvas is for inline content/widget changes.</span>
+            <span className="text-xs text-gray-500">Click text directly to edit. Drag widgets and sections on the canvas. No separate read-only preview mode.</span>
           </div>
           <div className="flex items-center gap-2">
-            <select className="input h-9 w-36 text-xs" value={previewMode} onChange={(event) => setPreviewMode(event.target.value as PreviewMode)}>
-              <option value="exact">Exact live preview</option>
-              <option value="edit">Edit canvas</option>
-            </select>
             <select className="input h-9 w-32 text-xs" value={deviceMode} onChange={(event) => { const next = event.target.value as DeviceMode; setDeviceMode(next); setZoom(next === "desktop" ? 0.78 : next === "tablet" ? 0.9 : 1); }}>
               <option value="desktop">PC desktop</option>
               <option value="tablet">Tablet</option>
@@ -613,17 +607,6 @@ export default function VisualCmsBuilder() {
         </div>
 
         <div className="min-h-0 flex-1">
-          {previewMode === "exact" ? (
-            <DesktopShell zoom={zoom} device={deviceMode}>
-              <iframe
-                key={`${publicPath}-${previewNonce}-${deviceMode}`}
-                title={`${PAGES.find((item) => item.key === pageKey)?.label || "Page"} exact live preview`}
-                src={`${publicPath}?cmsPreview=${previewNonce}`}
-                className="block w-full border-0 bg-white"
-                style={{ height: deviceMode === "mobile" ? 1800 : deviceMode === "tablet" ? 2100 : 2400 }}
-              />
-            </DesktopShell>
-          ) : (
           <DesktopShell zoom={zoom} device={deviceMode}>
             {pageKey === "home" && selectedHomeSlide ? (
               <section className="border-b border-gray-200 bg-navy-950 px-12 py-10 text-white" style={{ backgroundImage: selectedHomeSlide.backgroundImageUrl ? `linear-gradient(rgba(3,14,33,.88),rgba(3,14,33,.88)), url(${selectedHomeSlide.backgroundImageUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
@@ -639,13 +622,12 @@ export default function VisualCmsBuilder() {
               <EditableText as="p" multiline value={content.footer.description} onChange={(v) => updateContent({ ...content, footer: { ...content.footer, description: v } })} className="max-w-2xl whitespace-pre-line text-sm text-white/70" />
             </footer>
           </DesktopShell>
-          )}
         </div>
       </main>
 
       <div className="pointer-events-none fixed bottom-4 left-[310px] right-6 z-50 flex justify-center">
         <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur">
-          {previewMode === "exact" ? <span className="mr-2 text-xs font-display font-900 text-navy-950">Exact live preview: switch to Edit canvas to move or change widgets.</span> : <span className="mr-2 text-xs font-display font-900 text-navy-950">Selected: {selectedLabel}</span>}
+          <span className="mr-2 text-xs font-display font-900 text-navy-950">Selected: {selectedLabel}</span>
           <QuickButton onClick={() => moveSelected("left")}>Move left/up</QuickButton>
           <QuickButton onClick={() => moveSelected("right")}>Move right/down</QuickButton>
           <QuickButton onClick={duplicateSelected}>Duplicate</QuickButton>
