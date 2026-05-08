@@ -9,13 +9,21 @@ export async function GET() {
   return NextResponse.json({ ok: true, content, defaults: defaultSiteContent });
 }
 
-export async function PUT(request: Request) {
+async function saveContentRequest(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body?.content) return NextResponse.json({ ok: false, error: "Missing site content." }, { status: 400 });
   const content = normaliseSiteContent(body.content);
   const dbResult = await withDatabase(async () => saveSiteContent(content));
   if (!dbResult.ok) return NextResponse.json({ ok: false, error: dbResult.reason }, { status: 500 });
   return NextResponse.json({ ok: true, content: dbResult.data });
+}
+
+export async function PUT(request: Request) {
+  return saveContentRequest(request);
+}
+
+export async function POST(request: Request) {
+  return saveContentRequest(request);
 }
 
 export async function DELETE() {

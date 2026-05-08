@@ -1,0 +1,12 @@
+Phase 16Q — Visual CMS delete/save/background/policy fixes
+
+Fixes included:
+- Visual CMS save now uses PUT and API also accepts POST, resolving Save failed caused by method mismatch.
+- Left-only Style panel now has Delete/Restore controls for whole homepage sections including promotion banner strip, hero, industry strip, service cards, trust, FAQ preview and final CTA.
+- Editable service/content cards can be deleted, duplicated at the same width, or added as same-size cards.
+- Buttons can be removed from editable hero sections by Visual CMS controls.
+- Background colour/gradient/image changes are applied immediately inside the visible canvas and saved into CMS state.
+- Policy pages are no longer hardcoded only: Terms, Privacy, Returns, Warranty and Payment Policy now read from CMS site content and are editable through the Visual CMS canvas.
+- Existing protected pages remain visible but locked/no-entry marked.
+
+Prisma: not required. Uses existing SiteSetting JSON storage.

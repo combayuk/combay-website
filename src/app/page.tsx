@@ -9,7 +9,7 @@ import TrustSection from "@/components/home/TrustSection";
 import FaqPreview from "@/components/home/FaqPreview";
 import FinalCta from "@/components/home/FinalCta";
 import PublicPromotionStrip from "@/components/promotions/PublicPromotionStrip";
-import { getSiteContent } from "@/lib/siteContent";
+import { getSiteContent, isSectionHidden } from "@/lib/siteContent";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +24,13 @@ export default async function HomePage() {
     <main>
       <TopBar />
       <Navigation />
-      <HeroCarousel slides={content.heroSlides} />
-      <PublicPromotionStrip placement="home" />
-      <IndustryStrip />
-      <ServiceTabs content={content.pages.home} />
-      <TrustSection content={content.trust} />
-      <FaqPreview items={content.faq.previewItems} />
-      <FinalCta content={content.finalCta} />
+      {!isSectionHidden(content, "home", "hero") && <HeroCarousel slides={content.heroSlides} />}
+      {!isSectionHidden(content, "home", "promotionStrip") && <PublicPromotionStrip placement="home" />}
+      {!isSectionHidden(content, "home", "industryStrip") && <IndustryStrip />}
+      {!isSectionHidden(content, "home", "serviceCards") && <ServiceTabs content={content.pages.home} />}
+      {!isSectionHidden(content, "home", "trust") && <TrustSection content={content.trust} />}
+      {!isSectionHidden(content, "home", "faqPreview") && <FaqPreview items={content.faq.previewItems} />}
+      {!isSectionHidden(content, "home", "finalCta") && <FinalCta content={content.finalCta} />}
       <Footer content={{ description: content.footer.description, backgroundImageUrl: content.footer.backgroundImageUrl, contact: content.contact }} />
     </main>
   );

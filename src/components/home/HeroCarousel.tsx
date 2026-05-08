@@ -81,8 +81,8 @@ function buildSlides(contentSlides?: HeroSlideInput[]): HeroSlide[] {
       heading: input.heading || fallback.heading,
       accent: input.accent || fallback.accent,
       body: input.body || fallback.body,
-      cta1: { label: input.cta1Label || fallback.cta1.label, href: input.cta1Href || fallback.cta1.href },
-      cta2: { label: input.cta2Label || fallback.cta2.label, href: input.cta2Href || fallback.cta2.href },
+      cta1: { label: input.cta1Label === "__HIDDEN__" ? "" : (input.cta1Label || fallback.cta1.label), href: input.cta1Href || fallback.cta1.href },
+      cta2: { label: input.cta2Label === "__HIDDEN__" ? "" : (input.cta2Label || fallback.cta2.label), href: input.cta2Href || fallback.cta2.href },
       stats: [
         { v: input.stat1Value || fallback.stats[0].v, l: input.stat1Label || fallback.stats[0].l },
         { v: input.stat2Value || fallback.stats[1].v, l: input.stat2Label || fallback.stats[1].l },
@@ -157,8 +157,8 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
             </form>
 
             <div className="flex flex-wrap gap-3">
-              <Link href={s.cta1.href} className="btn-primary">{s.cta1.label} →</Link>
-              <Link href={s.cta2.href} className="btn-outline-white">{s.cta2.label}</Link>
+              {s.cta1.label ? <Link href={s.cta1.href} className="btn-primary">{s.cta1.label} →</Link> : null}
+              {s.cta2.label ? <Link href={s.cta2.href} className="btn-outline-white">{s.cta2.label}</Link> : null}
             </div>
           </div>
 
