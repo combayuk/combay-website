@@ -4,6 +4,7 @@ import { prisma, withDatabase } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 import { createStripeCheckoutSession, isStripeConfigured } from "@/lib/stripe";
 import { calculatePromotionTotals, checkPromotionProductTargets, findPromotionByCode } from "@/lib/promotions";
+import { customerPaymentCancelUrl, customerPaymentSuccessUrl } from "@/lib/paymentReturn";
 
 type CheckoutLine = {
   sku: string;
@@ -184,8 +185,8 @@ export async function POST(request: Request) {
     customerEmail: order.customerEmail,
     orderNumber: order.orderNumber,
     orderId: order.id,
-    successUrl: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${origin}/checkout/cancel?order=${encodeURIComponent(order.orderNumber)}`,
+    successUrl: customerPaymentSuccessUrl(order.orderNumber, "order"),
+    cancelUrl: customerPaymentCancelUrl(order.orderNumber, "order"),
     lines: Number(order.discount) > 0
       ? [
           { name: `Combay order ${order.orderNumber}${order.promotionCode ? ` after promotion ${order.promotionCode}` : ""}`, quantity: 1, unitAmountPence: Math.round((Number(order.subtotal) - Number(order.discount)) * 100) },

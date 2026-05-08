@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
+import { customerPaymentCancelUrl, customerPaymentSuccessUrl } from "@/lib/paymentReturn";
 
 const ALLOWED_TYPES = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "PAID_INVOICE", "PACKING_LIST", "INVOICE"] as const;
 type InvoiceType = (typeof ALLOWED_TYPES)[number];
@@ -128,8 +129,8 @@ async function createStripeCheckoutLink(args: { documentId: string; documentNumb
   if (!key || args.total <= 0) return null;
   const body = new URLSearchParams();
   body.set("mode", "payment");
-  body.set("success_url", `${args.baseUrl}/checkout/success?invoice=${encodeURIComponent(args.documentId)}&session_id={CHECKOUT_SESSION_ID}`);
-  body.set("cancel_url", `${args.baseUrl}/admin/invoices`);
+  body.set("success_url", customerPaymentSuccessUrl(args.documentNumber, "proforma"));
+  body.set("cancel_url", customerPaymentCancelUrl(args.documentNumber, "proforma"));
   body.set("customer_email", args.customerEmail);
   body.set("metadata[invoiceId]", args.documentId);
   body.set("metadata[documentNumber]", args.documentNumber);
