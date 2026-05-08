@@ -19,6 +19,7 @@ type Doc = {
   shippingCountry?: string | null;
   shippingCost?: number;
   amountPaid?: number;
+  tax?: number;
   paymentLink?: string | null;
   bankDetails?: string | null;
   paymentTerms?: string | null;
@@ -57,6 +58,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
   const [discountMode, setDiscountMode] = useState<DiscountMode>("NONE");
   const [discountType, setDiscountType] = useState<DiscountType>("PERCENTAGE");
   const [discountValue, setDiscountValue] = useState(0);
+  const [chargeVat, setChargeVat] = useState(true);
 
   useEffect(() => {
     fetch(`/api/invoices/${params.id}`, { cache: "no-store" })
@@ -70,6 +72,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
             quantity: Number(line.quantity || 1),
             unitPrice: Number(line.unitPrice || 0),
           })));
+          setChargeVat(Number(data.document.tax || 0) > 0);
         }
       })
       .finally(() => setLoading(false));
@@ -81,7 +84,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
   const grossSubtotal = useMemo(() => isPackingList ? 0 : lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines, isPackingList]);
   const discount = discountAllowed && discountMode !== "NONE" ? discountFor(grossSubtotal, discountType, discountValue) : 0;
   const subtotal = Math.max(money(grossSubtotal - discount), 0);
-  const tax = isPackingList ? 0 : Number(doc?.type === "QUOTE" ? 0 : doc ? 0 : 0); // preserve existing tax rules unless manually expanded later
+  const tax = isPackingList || !chargeVat ? 0 : money(subtotal * 0.2);
   const shippingCost = isPackingList ? 0 : Number(doc?.shippingCost || 0);
   const total = isPackingList ? 0 : subtotal + tax + shippingCost;
   const amountPaid = isPackingList ? 0 : Number(doc?.amountPaid || 0);
@@ -133,6 +136,9 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
         notes: doc.notes,
         lines: linesForSave(),
         regeneratePaymentLink,
+        taxRate: chargeVat ? 0.2 : 0,
+        chargeVat,
+        tax,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -207,13 +213,17 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
           </div>}
 
           {!isPackingList && <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h2 className="font-display font-700 text-navy-950 mb-4">Shipping / payment</h2>
+            <h2 className="font-display font-700 text-navy-950 mb-4">Shipping / payment / VAT</h2>
             <div className="grid sm:grid-cols-2 gap-3">
               <div><label className="label">Shipping to country</label><input className="input text-sm" value={doc.shippingCountry || ""} onChange={(e) => setField("shippingCountry", e.target.value)} /></div>
               <div><label className="label">Shipping cost</label><input type="number" step="0.01" min="0" className="input text-sm" value={shippingCost || ""} onChange={(e) => setField("shippingCost", Number(e.target.value))} /></div>
               <div><label className="label">Amount paid / credit</label><input type="number" step="0.01" min="0" className="input text-sm" value={amountPaid || ""} onChange={(e) => setField("amountPaid", Number(e.target.value))} /></div>
               <div><label className="label">Payment link</label><input className="input text-sm" value={doc.paymentLink || ""} onChange={(e) => setField("paymentLink", e.target.value)} /></div>
             </div>
+            <label className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+              <input type="checkbox" checked={chargeVat} onChange={(e) => setChargeVat(e.target.checked)} className="mt-1" />
+              <span><strong className="block text-navy-950">Charge VAT</strong>Ticked = add 20% VAT. Unticked = no VAT charged on this Quote/Proforma.</span>
+            </label>
             {isProforma && <label className="flex items-start gap-2 text-sm text-gray-600 mt-4"><input type="checkbox" checked={regeneratePaymentLink} onChange={(e) => setRegeneratePaymentLink(e.target.checked)} className="mt-1"/> Regenerate Stripe payment link for updated balance due</label>}
             {isProforma && <div className="mt-3"><label className="label">Bank transfer details</label><textarea className="textarea text-sm" rows={7} value={doc.bankDetails || ""} onChange={(e) => setField("bankDetails", e.target.value)} /></div>}
           </div>}
@@ -232,6 +242,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
                 <div className="flex justify-between text-gray-600"><span>Subtotal before discount</span><span>{fmt(grossSubtotal)}</span></div>
                 {discount > 0 && <div className="flex justify-between text-green-700"><span>Discount</span><span>-{fmt(discount)}</span></div>}
                 <div className="flex justify-between text-gray-600"><span>Discounted subtotal</span><span>{fmt(subtotal)}</span></div>
+                <div className="flex justify-between text-gray-600"><span>{chargeVat ? "VAT 20%" : "VAT not charged"}</span><span>{fmt(tax)}</span></div>
                 <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{fmt(shippingCost)}</span></div>
                 {amountPaid > 0 && <div className="flex justify-between text-green-700"><span>Paid / credit</span><span>-{fmt(amountPaid)}</span></div>}
                 <div className="flex justify-between font-display font-800 text-navy-950 text-lg border-t border-gray-200 pt-2"><span>Balance due</span><span>{fmt(balanceDue)}</span></div>

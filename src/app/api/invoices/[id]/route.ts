@@ -140,7 +140,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     if (nextLines) {
       const subtotal = isPackingList ? 0 : money(nextLines.reduce((sum, line) => sum + line.lineTotal, 0));
-      const tax = isPackingList ? 0 : money(body.tax ?? existing.tax ?? 0);
+      const taxRate = body.taxRate === undefined ? (money(existing.tax) > 0 && subtotal > 0 ? 0.2 : 0) : money(body.taxRate);
+      const tax = isPackingList ? 0 : money(subtotal * taxRate);
       const shippingCost = isPackingList ? 0 : money(body.shippingCost ?? existing.shippingCost ?? 0);
       const total = isPackingList ? 0 : money(subtotal + tax + shippingCost);
       const amountPaid = isPackingList ? 0 : money(body.amountPaid ?? existing.amountPaid ?? 0);

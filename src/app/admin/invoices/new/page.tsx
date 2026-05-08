@@ -72,13 +72,14 @@ export default function InvoiceGenerator() {
   const [discountMode, setDiscountMode] = useState<DiscountMode>("NONE");
   const [discountType, setDiscountType] = useState<DiscountType>("PERCENTAGE");
   const [discountValue, setDiscountValue] = useState(0);
+  const [chargeVat, setChargeVat] = useState(true);
 
   const isPackingList = type === "PACKING_LIST";
   const discountAllowed = type === "QUOTE" || type === "PROFORMA_INVOICE";
   const grossSubtotal = useMemo(() => isPackingList ? 0 : lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines, isPackingList]);
   const discount = discountAllowed && discountMode !== "NONE" ? discountFor(grossSubtotal, discountType, discountValue) : 0;
   const subtotal = Math.max(money(grossSubtotal - discount), 0);
-  const tax = isPackingList ? 0 : subtotal * 0.2;
+  const tax = isPackingList || !chargeVat ? 0 : money(subtotal * 0.2);
   const total = isPackingList ? 0 : subtotal + tax + Number(shippingCost || 0);
   const amountPaid = 0;
   const balanceDue = isPackingList ? 0 : Math.max(total - amountPaid, 0);
@@ -129,7 +130,8 @@ export default function InvoiceGenerator() {
         shippingCost,
         amountPaid,
         autoGeneratePaymentLink: isPayable && autoGeneratePaymentLink,
-        taxRate: 0.2,
+        taxRate: chargeVat ? 0.2 : 0,
+        chargeVat,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -208,11 +210,15 @@ export default function InvoiceGenerator() {
           </div>}
 
           {!isPackingList && <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h2 className="font-display font-700 text-navy-950 mb-4">Shipping</h2>
+            <h2 className="font-display font-700 text-navy-950 mb-4">Shipping and VAT</h2>
             <div className="grid sm:grid-cols-2 gap-3">
               <div><label className="label">Shipping to country</label><input className="input text-sm" value={shippingCountry} onChange={(e) => setShippingCountry(e.target.value)} placeholder="e.g. United Kingdom / China / UAE" /></div>
               <div><label className="label">Shipping cost</label><input type="number" min="0" step="0.01" className="input text-sm" value={shippingCost || ""} onChange={(e) => setShippingCost(Number(e.target.value))} placeholder="0.00" /></div>
             </div>
+            <label className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+              <input type="checkbox" checked={chargeVat} onChange={(e) => setChargeVat(e.target.checked)} className="mt-1" />
+              <span><strong className="block text-navy-950">Charge VAT</strong>Ticked = add 20% VAT. Unticked = no VAT charged on this Quote/Proforma.</span>
+            </label>
           </div>}
 
           {isPayable && <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
@@ -237,7 +243,7 @@ export default function InvoiceGenerator() {
               {discount > 0 && <div className="flex justify-between text-green-700"><span>Discount</span><span className="font-600">-{fmt(discount)}</span></div>}
               <div className="flex justify-between text-gray-600"><span>Discounted subtotal</span><span className="font-600">{fmt(subtotal)}</span></div>
               {amountPaid > 0 && <div className="flex justify-between text-green-700"><span>Paid / credit</span><span className="font-600">-{fmt(amountPaid)}</span></div>}
-              <div className="flex justify-between text-gray-600"><span>VAT 20%</span><span className="font-600">{fmt(tax)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>{chargeVat ? "VAT 20%" : "VAT not charged"}</span><span className="font-600">{fmt(tax)}</span></div>
               <div className="flex justify-between text-gray-600"><span>Shipping</span><span className="font-600">{fmt(Number(shippingCost || 0))}</span></div>
               <div className="flex justify-between font-display font-800 text-navy-950 text-lg border-t border-gray-200 pt-2"><span>Balance due</span><span>{fmt(balanceDue)}</span></div>
               </>}
