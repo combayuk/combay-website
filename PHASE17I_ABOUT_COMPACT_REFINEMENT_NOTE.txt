@@ -1,0 +1,13 @@
+Phase 17I — About compact editorial refinement
+
+- Reduced the About "Built to solve a real problem" section vertical footprint.
+- Changed desktop grid from near 50/50 to a narrower image/staff card and wider text column.
+- Controlled the image card width to max 460px and desktop image height to 280px.
+- Reduced image/staff/quote padding and quote font/line-height.
+- Converted proof point cards into compact proof chips.
+- Reduced section padding to a more compact credibility block.
+- Mobile keeps text first, then proof chips, then image/staff quote.
+- Removed visible placeholder ICON text from service cards by suppressing literal ICON placeholders.
+- Slightly enlarged footer logo again.
+
+No Prisma changes required.
