@@ -1,0 +1,14 @@
+Phase 17F — Google reviews and About page industrial refinement
+
+Includes:
+- Adds compact Google Reviews component inside the homepage hero section.
+- Removes all public placeholder/developer text such as "Connect Google Places API for live count".
+- Keeps Google review rating/count linked to the requested Google review/search URL.
+- Keeps "Write us a review" link.
+- Replaces footer logo with the newly supplied SVG at /images/combay-footer-logo.svg.
+- Redesigns About page quote/image section into a restrained industrial buyer/procurement style.
+- Adds CMS-controlled About quote section fields: quote image, name, designation, quote text.
+- Adds admin Visual CMS controls for replacing/editing the About quote image and quote text.
+- Redesigns About trust/value cards into a cleaner industrial capability table/list style.
+
+No Prisma schema change required.

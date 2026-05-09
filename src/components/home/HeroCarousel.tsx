@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, Gauge, PackageCheck, Search, ShieldCheck, Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cmsBackgroundStyle } from "@/lib/cmsBackground";
+import GoogleReviewsBadge from "@/components/reviews/GoogleReviewsBadge";
 
 type HeroSlide = {
   eyebrow: string;
@@ -139,9 +140,10 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
             <button type="submit" className="h-full bg-[#E8A44A] px-5 py-3 text-sm font-900 text-[#2D4F7A] transition-colors hover:bg-[#C9872F] hover:text-white">Search</button>
           </form>
 
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             {s.cta1.label ? <Link href={s.cta1.href} className="btn-primary">{s.cta1.label} <ArrowRight size={16} /></Link> : null}
             {s.cta2.label ? <Link href={s.cta2.href} className="btn-outline-white">{s.cta2.label}</Link> : null}
+            <GoogleReviewsBadge compact />
           </div>
 
           <div className="mt-4 grid max-w-4xl gap-2 sm:grid-cols-2 lg:grid-cols-4">

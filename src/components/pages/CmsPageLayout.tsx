@@ -37,27 +37,29 @@ function AssetStocklistDownload() {
   );
 }
 
-function AboutFounderSection() {
+function AboutFounderSection({ page }: { page: CmsPage }) {
   return (
-    <section className="section-pad bg-white">
-      <div className="site-shell grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[#F8FAFC] p-4 shadow-sm">
-          <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-gradient-to-br from-[#2D4F7A] via-[#355F8E] to-[#E8A44A] text-white">
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full border border-white/20 bg-white/10 font-display text-3xl font-900">C</div>
-              <p className="font-mono text-xs font-800 uppercase tracking-[0.2em] text-white/70">Founder / supply desk</p>
+    <section className="border-y border-slate-200 bg-white py-14 lg:py-18">
+      <div className="site-shell">
+        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
+          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-[#F8FAFC]">
+            <img
+              src={page.quoteImageUrl || "/images/about/industrial-supply-desk.svg"}
+              alt="Combay industrial supply desk"
+              className="h-full min-h-[320px] w-full object-cover"
+            />
+            <div className="absolute inset-x-0 bottom-0 border-t border-white/15 bg-[#2D4F7A]/92 p-5 text-white backdrop-blur-sm">
+              <p className="font-display text-lg font-900">{page.quoteName || "Combay Team"}</p>
+              <p className="mt-1 text-xs font-800 uppercase tracking-[0.16em] text-[#E8A44A]">{page.quoteDesignation || "Industrial equipment supply, repair and asset recovery"}</p>
             </div>
           </div>
-        </div>
-        <div className="rounded-3xl border border-slate-200 bg-[#F8FAFC] p-7 shadow-sm">
-          <p className="section-label">Built to solve a real problem</p>
-          <h2 className="mt-2 font-display text-3xl font-900 tracking-[-0.04em] text-[#2D4F7A]">Industrial stock, repair and recovery — handled by people who understand downtime.</h2>
-          <blockquote className="mt-5 border-l-4 border-[#E8A44A] pl-5 text-base leading-8 text-slate-700">
-            “Combay was built for maintenance and procurement teams who need practical answers: is the item available, what condition is it in, can it be repaired, and how quickly can it move?”
-          </blockquote>
-          <div className="mt-5">
-            <p className="font-display text-lg font-900 text-[#2D4F7A]">Combay Team</p>
-            <p className="text-sm font-700 text-[#C9872F]">Industrial equipment supply, repair and asset recovery</p>
+          <div className="flex flex-col justify-center border-l-4 border-[#E8A44A] bg-[#F8FAFC] p-6 lg:p-9">
+            <p className="section-label">Built to solve a real problem</p>
+            <h2 className="mt-2 font-display text-3xl font-900 tracking-[-0.04em] text-[#2D4F7A] lg:text-4xl">Industrial equipment decisions need practical proof, not sales theatre.</h2>
+            <Paragraphs text={page.sectionBody} className="mt-5 space-y-4 text-sm leading-8 text-slate-600" />
+            <blockquote className="mt-7 border-t border-slate-200 pt-6 text-base font-800 leading-8 text-[#2D4F7A]">
+              “{page.quoteText || "Combay was built for maintenance and procurement teams who need practical answers: is the item available, what condition is it in, can it be repaired, and how quickly can it move?"}”
+            </blockquote>
           </div>
         </div>
       </div>
@@ -72,21 +74,22 @@ function AboutTrustAndServices({ blocks }: { blocks: CmsBlock[] }) {
   return (
     <>
       {trustCards.length ? (
-        <section className="section-pad border-y border-slate-200 bg-[#F8FAFC]" data-vcms-collection="page.blocks">
+        <section className="border-b border-slate-200 bg-[#F8FAFC] py-14" data-vcms-collection="page.blocks">
           <div className="site-shell">
-            <div className="mb-8 max-w-3xl">
-              <p className="section-label">Trust and capability</p>
-              <h2 className="section-heading mt-2 text-3xl lg:text-5xl">Built around stock, warranty and repair value.</h2>
+            <div className="mb-8 grid gap-5 lg:grid-cols-[0.8fr_1fr] lg:items-end">
+              <div>
+                <p className="section-label">Trust and capability</p>
+                <h2 className="section-heading mt-2 text-3xl lg:text-5xl">Built around stock, warranty and repair value.</h2>
+              </div>
+              <p className="max-w-2xl text-sm leading-7 text-slate-600">A restrained view of the reasons buyers use Combay: available stock, clear warranty terms, practical repair routes and lower replacement pressure.</p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm lg:grid lg:grid-cols-4 lg:divide-x lg:divide-y-0">
               {trustCards.map((block, index) => (
-                <article key={`${block.title}-${index}`} data-vcms-item="page.blocks" data-vcms-index={index} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="mb-4 flex min-h-24 items-center justify-center rounded-2xl bg-[#2D4F7A] px-3 text-center">
-                    <span className="break-words font-display text-2xl font-900 leading-tight text-[#E8A44A] lg:text-3xl">{block.icon || block.title}</span>
-                  </div>
-                  <h3 className="font-display text-lg font-900 text-[#2D4F7A]">{block.title}</h3>
-                  <p className="mt-1 text-sm font-900 text-[#C9872F]">{block.subtitle}</p>
-                  <Paragraphs text={block.body} className="mt-3 space-y-2 text-sm leading-7 text-slate-600" />
+                <article key={`${block.title}-${index}`} data-vcms-item="page.blocks" data-vcms-index={index} className="p-5 lg:p-6">
+                  <p className="font-mono text-[11px] font-900 uppercase tracking-[0.18em] text-[#E8A44A]">{block.icon || block.title}</p>
+                  <h3 className="mt-3 font-display text-xl font-900 tracking-[-0.02em] text-[#2D4F7A]">{block.title}</h3>
+                  <p className="mt-1 text-sm font-800 text-slate-500">{block.subtitle}</p>
+                  <Paragraphs text={block.body} className="mt-4 space-y-2 text-sm leading-7 text-slate-600" />
                 </article>
               ))}
             </div>
@@ -196,7 +199,7 @@ export default function CmsPageLayout({ page, pageKey = "page", visualWidgets = 
         let body: React.ReactNode = null;
         if (section === "hero") body = <HeroSection page={page} />;
         if (section === "contactBar") body = <ContactBar contact={contact} />;
-        if (section === "content") body = pageKey === "about" ? <><AboutFounderSection /><AboutTrustAndServices blocks={page.blocks} /></> : <ContentSection page={page} />;
+        if (section === "content") body = pageKey === "about" ? <><AboutFounderSection page={page} /><AboutTrustAndServices blocks={page.blocks} /></> : <ContentSection page={page} />;
         if (section === "process") body = <ProcessSection steps={page.steps} pageKey={pageKey} />;
         if (section === "formOrCta") body = children ? <section id="request" className="section-pad bg-white"><div className="site-shell"><div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8"><p className="section-label">Get Started</p><h2 className="section-heading mt-2 text-3xl">{formTitle || page.ctaHeading}</h2><Paragraphs text={page.ctaBody} className="mt-3 space-y-2 text-sm leading-7 text-slate-600" /> {pageKey === "assetRecovery" ? <AssetStocklistDownload /> : null}<div className="mt-7">{children}</div></div></div></section> : <section className="bg-[#E8A44A] py-14"><div className="site-shell text-center"><h2 className="font-display text-3xl font-900 text-[#2D4F7A]">{page.ctaHeading}</h2><Paragraphs text={page.ctaBody} className="mx-auto mt-3 max-w-2xl space-y-2 text-sm leading-7 text-[#2D4F7A]/75" /><div className="mt-6 flex flex-wrap justify-center gap-3">{page.ctaPrimaryLabel !== "__HIDDEN__" && page.ctaPrimaryLabel ? <Link href={page.ctaPrimaryHref} className="rounded-md bg-[#2D4F7A] px-6 py-3 text-sm font-900 text-white">{page.ctaPrimaryLabel}</Link> : null}{page.ctaSecondaryLabel !== "__HIDDEN__" && page.ctaSecondaryLabel ? <Link href={page.ctaSecondaryHref} className="rounded-md border border-[#2D4F7A]/20 bg-white/40 px-6 py-3 text-sm font-900 text-[#2D4F7A]">{page.ctaSecondaryLabel}</Link> : null}</div></div></section>;
         return <div key={`${section}-${index}`}>{before}{body}{after}</div>;
