@@ -32,7 +32,7 @@ export default function EbayAdminPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | null>(null);
+  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | "backgrounds" | null>(null);
 
   async function load() {
     const [configRes, runsRes] = await Promise.all([fetch("/api/ebay/config", { cache: "no-store" }), fetch("/api/ebay/runs", { cache: "no-store" })]);
@@ -137,6 +137,22 @@ export default function EbayAdminPage() {
     }
   }
 
+  async function processImageBackgrounds() {
+    setSyncing("backgrounds");
+    setMessage("Processing imported eBay product images onto the Combay branded background. This requires REMOVE_BG_API_KEY and VPS upload settings.");
+    try {
+      const response = await fetch("/api/admin/product-images/process-backgrounds", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 25, perProduct: 1 }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.reason || result.error || "Image background processing failed.");
+      setMessage(result.message || `Processed ${result.processed || 0} image(s).`);
+    } catch (error: any) {
+      setMessage(error.message || "Could not process image backgrounds.");
+    } finally {
+      setSyncing(null);
+      await load();
+    }
+  }
+
   async function resetSync() {
     setMessage("Resetting stuck sync state...");
     const response = await fetch("/api/ebay/sync", { method: "DELETE" });
@@ -177,6 +193,9 @@ export default function EbayAdminPage() {
           </button>
           <button onClick={refreshCategoriesAndOverviews} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
             <RefreshCw size={14} className={syncing === "refresh" ? "animate-spin" : ""} /> Refresh categories/overviews
+          </button>
+          <button onClick={processImageBackgrounds} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "backgrounds" ? "animate-spin" : ""} /> Process image backgrounds
           </button>
         </div>
       </div>
@@ -278,7 +297,7 @@ export default function EbayAdminPage() {
             <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
             <p><strong>Repair missing details</strong> scans all imported eBay products, then repairs shallow records that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories. It repairs a safe batch at a time; run again if the message says products remain queued.</p><p><strong>Refresh categories/overviews</strong> remaps eBay imports into the closest website category and rebuilds shorter, more precise overview text. It processes a safe batch at a time.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
-            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p>
+            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p><p><strong>Process image backgrounds</strong> removes the background from imported eBay images and places them onto the Combay branded image background. It requires <span className="font-mono">REMOVE_BG_API_KEY</span> and the existing VPS upload receiver env vars. It runs a safe batch at a time.</p>
           </div>
           <div className="border-t border-gray-100 mt-4 pt-4 text-xs text-gray-400 space-y-1">
             <p>Last sync: {config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"}</p>

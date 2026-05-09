@@ -41,7 +41,7 @@ export type CatalogProduct = {
   image: string | null;
   videoUrl?: string | null;
   itemLocation?: string | null;
-  images?: { url: string; alt?: string | null; isPrimary?: boolean; sortOrder?: number }[];
+  images?: { url: string; originalUrl?: string | null; alt?: string | null; isPrimary?: boolean; sortOrder?: number; backgroundProcessedAt?: string | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
   variants?: ProductVariantOption[];
   description: string;
   productOverview: string;

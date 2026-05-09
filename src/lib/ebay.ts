@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { saveProductToRepository } from "@/lib/productRepository";
 import { CATEGORIES } from "@/lib/catalog";
 import { canonicalCategoryForText } from "@/lib/categoryTaxonomy";
+import { prepareImportedProductImages } from "@/lib/productImageProcessing";
 
 type EbayConfig = {
   id?: string;
@@ -563,9 +564,19 @@ async function saveEbayListing(listing: NormalizedEbayListing, options: { forceR
 
   if (existing?.syncExcluded) return "skipped" as const;
 
-  const existingImages = existing?.images?.map((image) => ({ url: image.url, alt: image.alt ?? listing.title, isPrimary: image.isPrimary, sortOrder: image.sortOrder })) ?? [];
+  const existingImages = existing?.images?.map((image: any) => ({
+    url: image.url,
+    originalUrl: image.originalUrl ?? image.url,
+    alt: image.alt ?? listing.title,
+    isPrimary: image.isPrimary,
+    sortOrder: image.sortOrder,
+    backgroundProcessedAt: image.backgroundProcessedAt ?? null,
+    backgroundProcessingStatus: image.backgroundProcessingStatus ?? null,
+    backgroundProcessingError: image.backgroundProcessingError ?? null,
+  })) ?? [];
   const existingSpecs = existing?.specs?.map((spec) => ({ label: spec.label, value: spec.value })) ?? [];
-  const importedImages = dedupeByLower(listing.images.filter(Boolean)).slice(0, 15).map((url, index) => ({ url, alt: listing.title, isPrimary: index === 0, sortOrder: index }));
+  const rawImportedImages = dedupeByLower(listing.images.filter(Boolean)).slice(0, 15).map((url, index) => ({ url, alt: listing.title, isPrimary: index === 0, sortOrder: index }));
+  const importedImages = await prepareImportedProductImages(rawImportedImages, listing.title);
   const importedVariants = listing.variants ?? [];
   const variantStockTotal = importedVariants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stockQty || 0)), 0);
   const cleanDescription = listing.cleanDescription || cleanEbayDescription(listing.rawDescription || "");
@@ -604,6 +615,7 @@ async function saveEbayListing(listing: NormalizedEbayListing, options: { forceR
     productOverview: existing?.descriptionLocked && !forceRichUpdate ? existing.productOverview ?? existing.description ?? "" : generatedOverview,
     images: existing?.imagesLocked && !forceRichUpdate ? existingImages : importedImages,
     specs: existing?.specsLocked && !forceRichUpdate ? existingSpecs : listing.specs,
+    rawEbayDescription: listing.rawDescription || null,
     itemLocation: (existing as any)?.itemLocation || "United Kingdom",
     ebayItemId: listing.ebayItemId,
     syncExcluded: existing?.syncExcluded ?? false,

@@ -22,7 +22,7 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   adminNotes?: string;
   image?: string | null;
   videoUrl?: string | null;
-  images?: { url: string; alt?: string; isPrimary?: boolean; sortOrder?: number }[];
+  images?: { url: string; originalUrl?: string | null; alt?: string; isPrimary?: boolean; sortOrder?: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
   specs?: { label: string; value: string }[];
   variants?: { id?: string; sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any }[];
   documents?: { name: string; url: string; fileType?: string }[];
@@ -30,7 +30,7 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
 
 type DbProduct = Awaited<ReturnType<typeof prisma.product.findMany>>[number] & {
   category?: { name: string; slug: string } | null;
-  images?: { url: string; alt: string | null; isPrimary: boolean; sortOrder: number }[];
+  images?: { url: string; originalUrl?: string | null; alt: string | null; isPrimary: boolean; sortOrder: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
   documents?: { name: string; url: string; fileType: string | null }[];
   specs?: { label: string; value: string; sortOrder: number }[];
   variants?: { id: string; sku: string | null; label: string; optionName: string | null; optionValue: string | null; price: any; stockQty: number; sortOrder: number }[];
@@ -55,7 +55,7 @@ function stockStatus(stockQty: number, priceOnRequest: boolean): StockStatus {
 
 export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string, unknown> {
   const price = product.price === null || product.price === undefined ? null : Number(product.price);
-  const productImages = (product.images ?? []) as Array<{ url: string; alt: string | null; isPrimary: boolean; sortOrder: number }>;
+  const productImages = (product.images ?? []) as Array<{ url: string; originalUrl?: string | null; alt: string | null; isPrimary: boolean; sortOrder: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }>;
   const productSpecs = (product.specs ?? []) as Array<{ label: string; value: string; sortOrder: number }>;
   const productDocs = (product.documents ?? []) as Array<{ name: string; url: string; fileType: string | null }>;
   const productTags = (product.tags ?? []) as Array<{ name: string }>;
@@ -95,7 +95,16 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     dispatchNote: product.dispatchNote ?? "Packed for courier dispatch with serial number recorded before shipment.",
     image: primaryImage,
     videoUrl: (product as any).videoUrl ?? null,
-    images: productImages.map((image) => ({ url: image.url, alt: image.alt, isPrimary: image.isPrimary, sortOrder: image.sortOrder })),
+    images: productImages.map((image) => ({
+      url: image.url,
+      originalUrl: image.originalUrl ?? null,
+      alt: image.alt,
+      isPrimary: image.isPrimary,
+      sortOrder: image.sortOrder,
+      backgroundProcessedAt: image.backgroundProcessedAt?.toISOString?.() ?? null,
+      backgroundProcessingStatus: image.backgroundProcessingStatus ?? null,
+      backgroundProcessingError: image.backgroundProcessingError ?? null,
+    })),
     variants: productVariants
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((variant) => ({
@@ -186,9 +195,13 @@ function relationPayload(input: ProductWriteInput) {
   return {
     images: images.map((image, index) => ({
       url: image.url,
+      originalUrl: image.originalUrl ?? null,
       alt: image.alt ?? input.title ?? null,
       isPrimary: image.isPrimary ?? index === 0,
       sortOrder: image.sortOrder ?? index,
+      backgroundProcessedAt: image.backgroundProcessedAt ?? null,
+      backgroundProcessingStatus: image.backgroundProcessingStatus ?? null,
+      backgroundProcessingError: image.backgroundProcessingError ?? null,
     })),
     specs: (input.specs ?? []).filter((spec) => spec.label && spec.value).map((spec, index) => ({
       label: spec.label,

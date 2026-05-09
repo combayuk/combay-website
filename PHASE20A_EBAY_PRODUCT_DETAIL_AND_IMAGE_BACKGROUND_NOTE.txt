@@ -1,0 +1,27 @@
+Phase 20A — eBay product detail hardening and Combay product image background processing
+
+Implemented:
+- Adds Combay branded product image background asset at /images/product-backgrounds/combay-background.jpg.
+- Adds ProductImage metadata fields so original eBay URLs can be preserved while processed Combay-background images are used publicly.
+- eBay sync now prepares imported images with originalUrl metadata and can automatically process images when enabled.
+- Adds optional remove.bg-based background removal + Combay background replacement pipeline.
+- Adds /api/admin/product-images/process-backgrounds to batch-process existing eBay-imported product images.
+- Adds Admin > eBay button: Process image backgrounds.
+- Keeps product image processing disabled by default unless env vars are configured.
+- Adds .env.example entries for EBAY_IMAGE_BACKGROUND_PROCESSING_ENABLED, EBAY_IMAGE_BACKGROUND_MAX_PER_PRODUCT, REMOVE_BG_API_KEY and PRODUCT_IMAGE_BACKGROUND_URL.
+- No Canva integration is required for this first implementation; remove.bg is the first supported provider.
+
+Required Prisma push:
+- ProductImage adds originalUrl, backgroundProcessedAt, backgroundProcessingStatus and backgroundProcessingError.
+
+Required env vars to activate image processing:
+EBAY_IMAGE_BACKGROUND_PROCESSING_ENABLED=true
+EBAY_IMAGE_BACKGROUND_MAX_PER_PRODUCT=1
+REMOVE_BG_API_KEY=...
+UPLOAD_PROVIDER=vps
+UPLOAD_RECEIVER_URL=...
+UPLOAD_RECEIVER_SECRET=...
+NEXTAUTH_URL=https://combay-website-lt8v.vercel.app
+
+Optional:
+PRODUCT_IMAGE_BACKGROUND_URL=https://your-domain/images/product-backgrounds/combay-background.jpg
