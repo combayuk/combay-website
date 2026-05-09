@@ -1,0 +1,23 @@
+Phase 17E — Brand/content/functionality fixes
+
+Includes:
+- Admin-editable Companies Supplied collection via Visual CMS item controls.
+- Built for Engineers section redesigned as lighter brand-colour section and background editable from Visual CMS style panel.
+- FAQ tabs added/restored: General, Buying from Combay, Repairing with Combay, Selling to Combay, with appropriate FAQs.
+- Homepage FAQ preview now shows the same tab categories.
+- Category/mega-menu item imagery replaced with transparent-background equipment illustrations.
+- Google reviews component added with live Google Places API integration endpoint and fallback display.
+- Google reviews click goes to supplied Google reviews URL; Write us a review goes to supplied review URL.
+- Mega-menu Search Stock now validates empty input, highlights search red, shows “Please type something.” and submits to /shop?q=... when populated.
+- Real WhatsApp SVG icon added to navbar WhatsApp button.
+- Asset disposal stocklist Excel template added under /downloads/combay-asset-disposal-stocklist-template.xlsx.
+- Asset Recovery request section now shows downloadable stocklist card.
+- Asset Recovery How It Works mobile layout is vertical timeline.
+- Footer uses white SVG logo with no white background container.
+- About page now separates trust cards from service redirect cards and adds founder/team quote section beside “Built to solve a real problem” narrative.
+- About trust stat card counters resized/repositioned to fit cleanly.
+
+Google reviews live setup:
+Set GOOGLE_PLACES_API_KEY and GOOGLE_PLACE_ID in Vercel. Without these, the component displays a safe fallback and still links to Google/review pages.
+
+No Prisma schema changes.

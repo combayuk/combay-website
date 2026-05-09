@@ -52,9 +52,7 @@ export default function Footer({ content }: { content?: FooterContent }) {
         <div className="grid gap-10 lg:grid-cols-[1.2fr_2fr]">
           <div>
             <Link href="/" className="inline-flex items-center">
-              <span className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                <img src="/images/combay-logo.svg" alt="Combay" className="h-11 w-auto max-w-[210px] object-contain" />
-              </span>
+              <img src="/images/combay-logo-white.svg" alt="Combay" className="h-12 w-auto max-w-[220px] object-contain" />
             </Link>
             <p className="mt-5 max-w-sm text-sm leading-7 text-white/58">{content?.description || "UK-based industrial and commercial equipment specialists. Buy, repair, or sell surplus stock — backed by engineers."}</p>
             <div className="mt-6 space-y-3 text-sm text-white/65">

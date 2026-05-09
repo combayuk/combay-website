@@ -8,6 +8,7 @@ import ServiceTabs from "@/components/home/ServiceTabs";
 import TrustSection from "@/components/home/TrustSection";
 import FaqPreview from "@/components/home/FaqPreview";
 import FinalCta from "@/components/home/FinalCta";
+import GoogleReviewsBadge from "@/components/reviews/GoogleReviewsBadge";
 import PublicPromotionStrip from "@/components/promotions/PublicPromotionStrip";
 import { getSiteContent, isSectionHidden } from "@/lib/siteContent";
 import VisualWidgetZone from "@/components/visual-cms/VisualWidgetZone";
@@ -35,6 +36,7 @@ export default async function HomePage() {
       {!isSectionHidden(content, "home", "serviceCards") && <ServiceTabs content={content.pages.home} />}
       <VisualWidgetZone pageKey="home" zone="afterServices" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "trust") && <TrustSection content={content.trust} />}
+      <GoogleReviewsBadge />
       <VisualWidgetZone pageKey="home" zone="afterTrust" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "faqPreview") && <FaqPreview items={content.faq.previewItems} />}
       <VisualWidgetZone pageKey="home" zone="afterFaq" allWidgets={content.visualWidgets} />
