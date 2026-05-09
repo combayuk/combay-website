@@ -41,15 +41,15 @@ function AboutFounderSection({ page }: { page: CmsPage }) {
   return (
     <section className="border-y border-slate-200 bg-white py-14 lg:py-18">
       <div className="site-shell">
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
+        <div className="grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-center">
           <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-[#F8FAFC]">
             <img
               src={page.quoteImageUrl || "/images/about/industrial-supply-desk.svg"}
               alt="Combay industrial supply desk"
-              className="h-full min-h-[320px] w-full object-cover"
+              className="h-[240px] w-full object-cover sm:h-[280px] lg:h-[360px]"
             />
-            <div className="absolute inset-x-0 bottom-0 border-t border-white/15 bg-[#2D4F7A]/92 p-5 text-white backdrop-blur-sm">
-              <p className="font-display text-lg font-900">{page.quoteName || "Combay Team"}</p>
+            <div className="absolute inset-x-0 bottom-0 border-t border-white/15 bg-[#2D4F7A]/92 p-4 text-white backdrop-blur-sm">
+              <p className="font-display text-base font-900">{page.quoteName || "Combay Team"}</p>
               <p className="mt-1 text-xs font-800 uppercase tracking-[0.16em] text-[#E8A44A]">{page.quoteDesignation || "Industrial equipment supply, repair and asset recovery"}</p>
             </div>
           </div>
@@ -87,7 +87,7 @@ function AboutTrustAndServices({ blocks }: { blocks: CmsBlock[] }) {
               {trustCards.map((block, index) => (
                 <article key={`${block.title}-${index}`} data-vcms-item="page.blocks" data-vcms-index={index} className="p-5 lg:p-6">
                   <p className="font-mono text-[11px] font-900 uppercase tracking-[0.18em] text-[#E8A44A]">{block.icon || block.title}</p>
-                  <h3 className="mt-3 font-display text-xl font-900 tracking-[-0.02em] text-[#2D4F7A]">{block.title}</h3>
+                  <h3 className="mt-3 font-display text-2xl font-900 tracking-[-0.03em] text-[#2D4F7A]">{block.title}</h3>
                   <p className="mt-1 text-sm font-800 text-slate-500">{block.subtitle}</p>
                   <Paragraphs text={block.body} className="mt-4 space-y-2 text-sm leading-7 text-slate-600" />
                 </article>

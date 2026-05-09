@@ -1,0 +1,8 @@
+Phase 17G small design refinements
+
+- Reduced About quote/image block visual size by narrowing the image column and lowering image height.
+- Increased About trust/capability counter/title size slightly.
+- Replaced menu WhatsApp icon with a cleaner WhatsApp SVG path and tightened vertical alignment.
+- Increased footer logo size and refreshed footer SVG from the latest uploaded logo.
+
+No Prisma/database changes required.
