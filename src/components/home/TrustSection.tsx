@@ -23,17 +23,17 @@ export default function TrustSection({ content }: { content?: { eyebrow?: string
   return (
     <>
       <section
-        className="relative overflow-hidden bg-[#06101F] text-white"
+        className="relative overflow-hidden bg-[#2D4F7A] text-white"
         style={cmsBackgroundStyle(content?.backgroundImageUrl || "/images/hero/industrial-automation-bg.svg", "rgba(6,16,31,.92)")}
       >
         <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px)", backgroundSize: "64px 64px" }} />
-        <div className="absolute -right-24 top-16 hidden h-80 w-80 rounded-full border border-[#D99611]/20 lg:block" />
+        <div className="absolute -right-24 top-16 hidden h-80 w-80 rounded-full border border-[#E8A44A]/20 lg:block" />
         <div className="site-shell relative py-16 lg:py-20">
           <div className="grid gap-10 lg:grid-cols-[0.85fr_1fr] lg:items-start">
             <div>
               <p className="section-label">{content?.eyebrow || "Why businesses use Combay"}</p>
               <h2 className="mt-2 font-display text-3xl font-900 leading-[1.06] tracking-[-0.04em] text-white lg:text-5xl">
-                {content?.heading || "Built by engineers,"} <span className="text-[#F4B83A]">{content?.accent || "for engineers."}</span>
+                {content?.heading || "Built by engineers,"} <span className="text-[#E8A44A]">{content?.accent || "for engineers."}</span>
               </h2>
               <p className="mt-5 max-w-xl text-sm leading-7 text-white/64">
                 Combay is designed as a specialist supply desk for maintenance, procurement and engineering teams — stockholding, repair route and asset recovery in one place.
@@ -46,16 +46,16 @@ export default function TrustSection({ content }: { content?: { eyebrow?: string
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {reasons.map(({ Icon, ...reason }) => (
-                <article key={reason.title} className="group border border-white/10 bg-white/[0.055] p-5 transition-colors hover:border-[#D99611]/45 hover:bg-white/[0.08]">
+                <article key={reason.title} className="group border border-white/10 bg-white/[0.055] p-5 transition-colors hover:border-[#E8A44A]/45 hover:bg-white/[0.08]">
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center border border-[#D99611]/25 bg-[#D99611]/12 text-[#F4B83A]"><Icon size={19} /></div>
+                    <div className="flex h-10 w-10 items-center justify-center border border-[#E8A44A]/25 bg-[#E8A44A]/12 text-[#E8A44A]"><Icon size={19} /></div>
                     <div className="text-right">
-                      <div className="font-display text-2xl font-900 text-[#F4B83A]">{reason.stat}</div>
+                      <div className="font-display text-2xl font-900 text-[#E8A44A]">{reason.stat}</div>
                       <p className="text-[10px] uppercase tracking-[0.16em] text-white/38">{reason.sl}</p>
                     </div>
                   </div>
                   <h3 className="font-display text-base font-900 text-white">{reason.title}</h3>
-                  <p className="mt-1 text-xs font-900 uppercase tracking-wide text-[#F4B83A]">{reason.sub}</p>
+                  <p className="mt-1 text-xs font-900 uppercase tracking-wide text-[#E8A44A]">{reason.sub}</p>
                   <p className="mt-3 text-sm leading-6 text-white/60">{reason.desc}</p>
                 </article>
               ))}
@@ -68,7 +68,7 @@ export default function TrustSection({ content }: { content?: { eyebrow?: string
         <div className="site-shell text-center">
           <p className="font-mono text-[11px] font-800 uppercase tracking-[0.18em] text-slate-400">Companies supplied</p>
           <div className="mt-5 flex flex-wrap justify-center gap-2.5">
-            {visibleClients.map((client) => <div key={client} className="rounded-md border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm font-900 text-[#06101F]">{client}</div>)}
+            {visibleClients.map((client) => <div key={client} className="rounded-md border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm font-900 text-[#2D4F7A]">{client}</div>)}
           </div>
         </div>
       </section>

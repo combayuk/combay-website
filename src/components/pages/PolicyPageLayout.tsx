@@ -30,7 +30,7 @@ export default async function PolicyPageLayout({ policyKey }: { policyKey: "term
           <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
             <aside className="hidden lg:block">
               <div className="sticky top-28 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                <p className="font-display font-900 text-[#06101F]">Combay policy document</p>
+                <p className="font-display font-900 text-[#2D4F7A]">Combay policy document</p>
                 <p className="mt-2 leading-6">For order, warranty, payment and returns questions, contact sales@combay.co.uk.</p>
               </div>
             </aside>

@@ -13,9 +13,9 @@ export default async function PublicPromotionStrip({ placement = "home" }: { pla
       <div className="site-shell py-5">
         <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_auto] lg:items-center">
           <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#D99611] text-[#06101F]"><Tag size={18} /></span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#E8A44A] text-[#2D4F7A]"><Tag size={18} /></span>
             <div>
-              <p className="font-display text-sm font-900 text-[#06101F]">Current Combay offers</p>
+              <p className="font-display text-sm font-900 text-[#2D4F7A]">Current Combay offers</p>
               <p className="text-xs leading-5 text-slate-600">Copy eligible codes and apply at checkout.</p>
             </div>
           </div>

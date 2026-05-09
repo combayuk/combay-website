@@ -19,7 +19,7 @@ export default function FaqPreview({ items = [] }: { items?: FaqItem[] }) {
               <p className="section-label">Support</p>
               <h2 className="section-heading mt-2 text-3xl lg:text-4xl">Frequently asked questions.</h2>
             </div>
-            <Link href="/faq" className="hidden text-sm font-900 text-[#B87908] transition-colors hover:text-[#06101F] sm:block">View all FAQs →</Link>
+            <Link href="/faq" className="hidden text-sm font-900 text-[#C9872F] transition-colors hover:text-[#2D4F7A] sm:block">View all FAQs →</Link>
           </div>
           <div className="space-y-3">
             {faqs.map((faq, index) => {
@@ -27,8 +27,8 @@ export default function FaqPreview({ items = [] }: { items?: FaqItem[] }) {
               return (
                 <div key={`${faq.question}-${index}`} data-vcms-item="faq.previewItems" data-vcms-index={index} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                   <button onClick={() => setOpen(open === index ? null : index)} className="flex w-full items-center justify-between gap-5 px-5 py-4 text-left transition-colors hover:bg-slate-50">
-                    <span className="font-display text-base font-900 text-[#06101F]">{faq.question}</span>
-                    <ChevronDown size={18} className={`flex-shrink-0 text-[#B87908] transition-transform ${expanded ? "rotate-180" : ""}`} />
+                    <span className="font-display text-base font-900 text-[#2D4F7A]">{faq.question}</span>
+                    <ChevronDown size={18} className={`flex-shrink-0 text-[#C9872F] transition-transform ${expanded ? "rotate-180" : ""}`} />
                   </button>
                   {expanded && (
                     <div className="border-t border-slate-100 px-5 py-4 text-sm leading-7 text-slate-600">

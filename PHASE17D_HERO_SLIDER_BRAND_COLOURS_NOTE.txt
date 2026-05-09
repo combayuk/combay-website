@@ -1,0 +1,11 @@
+Phase 17D — Hero slider background controls and brand colour correction
+
+Changes included:
+- Visual CMS Replace background panel now lets admin choose which Home hero slide to edit.
+- Background image/colour/gradient edits no longer apply only to the first home hero slide.
+- Hero height reduced again so the full hero fits more comfortably in the first viewport.
+- Added a thin #E8A44A top stroke to the hero section where it touches the navigation/menu area.
+- Brand colour system standardised around #2D4F7A and #E8A44A, with controlled shades for hover/darker states.
+- Industrial automation background SVG updated to the new brand palette.
+
+No Prisma schema/database changes are required.

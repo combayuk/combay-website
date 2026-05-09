@@ -34,7 +34,7 @@ function LinkList({ title, links }: { title: string; links: { label: string; hre
     <div>
       <h4 className="mb-3 font-display text-sm font-900 text-white">{title}</h4>
       <ul className="space-y-2 text-sm">
-        {links.map((link) => <li key={link.label}><Link href={link.href} className="text-white/55 transition-colors hover:text-[#F4B83A]">{link.label}</Link></li>)}
+        {links.map((link) => <li key={link.label}><Link href={link.href} className="text-white/55 transition-colors hover:text-[#E8A44A]">{link.label}</Link></li>)}
       </ul>
     </div>
   );
@@ -47,7 +47,7 @@ export default function Footer({ content }: { content?: FooterContent }) {
   const phone = contact.phone || "+44 7340 383334";
   const location = contact.location || "Chelmsford, Essex, UK";
   return (
-    <footer className="bg-[#06101F] text-white" style={cmsBackgroundStyle(content?.backgroundImageUrl, "rgba(6,16,31,.96)")}>
+    <footer className="bg-[#2D4F7A] text-white" style={cmsBackgroundStyle(content?.backgroundImageUrl, "rgba(6,16,31,.96)")}>
       <div className="site-shell py-14">
         <div className="grid gap-10 lg:grid-cols-[1.2fr_2fr]">
           <div>
@@ -58,16 +58,16 @@ export default function Footer({ content }: { content?: FooterContent }) {
             </Link>
             <p className="mt-5 max-w-sm text-sm leading-7 text-white/58">{content?.description || "UK-based industrial and commercial equipment specialists. Buy, repair, or sell surplus stock — backed by engineers."}</p>
             <div className="mt-6 space-y-3 text-sm text-white/65">
-              <a href={`mailto:${sales}`} className="flex items-center gap-2 transition-colors hover:text-[#F4B83A]"><Mail size={15} className="text-[#F4B83A]" /> Order’s/Quotes: {sales}</a>
-              <a href={`mailto:${info}`} className="flex items-center gap-2 transition-colors hover:text-[#F4B83A]"><Mail size={15} className="text-[#F4B83A]" /> General/Media: {info}</a>
-              <a href={`tel:${phone}`} className="flex items-center gap-2 transition-colors hover:text-[#F4B83A]"><Phone size={15} className="text-[#F4B83A]" /> {phone}</a>
-              <span className="flex items-center gap-2"><MapPin size={15} className="text-[#F4B83A]" /> {location}</span>
+              <a href={`mailto:${sales}`} className="flex items-center gap-2 transition-colors hover:text-[#E8A44A]"><Mail size={15} className="text-[#E8A44A]" /> Order’s/Quotes: {sales}</a>
+              <a href={`mailto:${info}`} className="flex items-center gap-2 transition-colors hover:text-[#E8A44A]"><Mail size={15} className="text-[#E8A44A]" /> General/Media: {info}</a>
+              <a href={`tel:${phone}`} className="flex items-center gap-2 transition-colors hover:text-[#E8A44A]"><Phone size={15} className="text-[#E8A44A]" /> {phone}</a>
+              <span className="flex items-center gap-2"><MapPin size={15} className="text-[#E8A44A]" /> {location}</span>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div>
               <h4 className="mb-3 font-display text-sm font-900 text-white">Shop</h4>
-              <ul className="space-y-2 text-sm">{shopLinks.map((label) => <li key={label}><Link href="/shop" className="text-white/55 transition-colors hover:text-[#F4B83A]">{label}</Link></li>)}</ul>
+              <ul className="space-y-2 text-sm">{shopLinks.map((label) => <li key={label}><Link href="/shop" className="text-white/55 transition-colors hover:text-[#E8A44A]">{label}</Link></li>)}</ul>
             </div>
             <LinkList title="Services" links={serviceLinks} />
             <LinkList title="Company" links={companyLinks} />

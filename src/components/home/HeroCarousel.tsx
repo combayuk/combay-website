@@ -27,7 +27,7 @@ const DEFAULT_SLIDES: HeroSlide[] = [
     cta1: { label: "Browse Equipment", href: "/shop" },
     cta2: { label: "View Categories", href: "/shop" },
     stats: [{ v: "10K+", l: "stock items" }, { v: "30d", l: "warranty" }, { v: "48h", l: "typical dispatch" }],
-    bg: "from-[#06101F] via-[#0A1A2D] to-[#102840]",
+    bg: "from-[#203A5E] via-[#2D4F7A] to-[#355F8E]",
   },
   {
     eyebrow: "Repair service",
@@ -37,7 +37,7 @@ const DEFAULT_SLIDES: HeroSlide[] = [
     cta1: { label: "Book a Repair", href: "/repair" },
     cta2: { label: "How It Works", href: "/repair#how" },
     stats: [{ v: "40%", l: "below OEM target" }, { v: "60d", l: "checking warranty" }, { v: "Free", l: "collection options" }],
-    bg: "from-[#06101F] via-[#0B221A] to-[#102840]",
+    bg: "from-[#203A5E] via-[#2D4F7A] to-[#355F8E]",
   },
   {
     eyebrow: "Asset recovery",
@@ -47,7 +47,7 @@ const DEFAULT_SLIDES: HeroSlide[] = [
     cta1: { label: "Sell Your Stock", href: "/asset-recovery" },
     cta2: { label: "Recovery Process", href: "/asset-recovery#how" },
     stats: [{ v: "24h", l: "response" }, { v: "Free", l: "collection" }, { v: "Paid", l: "before removal" }],
-    bg: "from-[#06101F] via-[#251706] to-[#102840]",
+    bg: "from-[#203A5E] via-[#2D4F7A] to-[#355F8E]",
   },
 ];
 
@@ -120,34 +120,34 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
   };
 
   return (
-    <section className={`relative overflow-hidden bg-gradient-to-br ${s.bg} text-white`} style={{ ...cmsBackgroundStyle(s.backgroundImageUrl || "/images/hero/industrial-automation-bg.svg", "rgba(6,16,31,.74)") }}>
+    <section className={`relative overflow-hidden border-t-[3px] border-[#E8A44A] bg-gradient-to-br ${s.bg} text-white`} style={{ ...cmsBackgroundStyle(s.backgroundImageUrl || "/images/hero/industrial-automation-bg.svg", "rgba(45,79,122,.76)") }}>
       <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.65) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.65) 1px, transparent 1px)", backgroundSize: "56px 56px" }} />
       <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/25 to-transparent" />
-      <div className="site-shell relative flex min-h-[500px] items-center py-7 sm:min-h-[520px] lg:min-h-[560px] xl:min-h-[590px] lg:py-8">
+      <div className="site-shell relative flex min-h-[430px] items-center py-5 sm:min-h-[445px] lg:min-h-[490px] xl:min-h-[510px] lg:py-6">
         <div className="w-full max-w-5xl">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-sm border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-900 uppercase tracking-[0.16em] text-white/85 backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#D99611]" /> {s.eyebrow}
+          <div className="mb-3 inline-flex items-center gap-2 rounded-sm border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-900 uppercase tracking-[0.16em] text-white/85 backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#E8A44A]" /> {s.eyebrow}
           </div>
-          <h1 className="max-w-4xl font-display text-[2.25rem] font-900 leading-[1.02] tracking-[-0.045em] sm:text-[2.85rem] lg:text-[4rem]">
-            {s.heading} <span className="text-[#F4B83A]">{s.accent}</span>
+          <h1 className="max-w-4xl font-display text-[2.05rem] font-900 leading-[1.02] tracking-[-0.045em] sm:text-[2.55rem] lg:text-[3.55rem]">
+            {s.heading} <span className="text-[#E8A44A]">{s.accent}</span>
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/76 lg:text-base">{s.body}</p>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/76 lg:text-base">{s.body}</p>
 
-          <form onSubmit={handleSearch} className="mt-6 flex max-w-2xl items-center overflow-hidden rounded-md border border-white/15 bg-white shadow-xl shadow-black/10">
+          <form onSubmit={handleSearch} className="mt-5 flex max-w-2xl items-center overflow-hidden rounded-md border border-white/15 bg-white shadow-xl shadow-black/10">
             <Search size={18} className="ml-4 flex-shrink-0 text-slate-400" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search SKU, brand, MPN, model or category..." className="min-w-0 flex-1 px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400" />
-            <button type="submit" className="h-full bg-[#D99611] px-5 py-3 text-sm font-900 text-[#06101F] transition-colors hover:bg-[#B87908] hover:text-white">Search</button>
+            <button type="submit" className="h-full bg-[#E8A44A] px-5 py-3 text-sm font-900 text-[#2D4F7A] transition-colors hover:bg-[#C9872F] hover:text-white">Search</button>
           </form>
 
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-3">
             {s.cta1.label ? <Link href={s.cta1.href} className="btn-primary">{s.cta1.label} <ArrowRight size={16} /></Link> : null}
             {s.cta2.label ? <Link href={s.cta2.href} className="btn-outline-white">{s.cta2.label}</Link> : null}
           </div>
 
-          <div className="mt-6 grid max-w-4xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid max-w-4xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {capabilityStrip.map(({ Icon, label, note }) => (
               <div key={label} className="flex items-start gap-3 border-l border-white/14 bg-white/[0.055] px-3 py-3 backdrop-blur-sm">
-                <Icon size={17} className="mt-0.5 flex-shrink-0 text-[#F4B83A]" />
+                <Icon size={17} className="mt-0.5 flex-shrink-0 text-[#E8A44A]" />
                 <div>
                   <p className="text-xs font-900 text-white">{label}</p>
                   <p className="mt-1 text-[11px] leading-4 text-white/48">{note}</p>
@@ -156,10 +156,10 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
             ))}
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {s.stats.map((stat) => (
               <div key={stat.l} className="inline-flex items-center gap-2 rounded-sm border border-white/14 bg-black/15 px-3 py-2">
-                <span className="font-display text-lg font-900 text-[#F4B83A]">{stat.v}</span>
+                <span className="font-display text-lg font-900 text-[#E8A44A]">{stat.v}</span>
                 <span className="text-[11px] font-800 uppercase tracking-wide text-white/48">{stat.l}</span>
               </div>
             ))}
@@ -167,7 +167,7 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
         </div>
 
         <div className="absolute bottom-5 right-5 hidden items-center gap-2 rounded-sm border border-white/12 bg-black/25 px-3 py-2 text-[11px] font-900 uppercase tracking-[0.14em] text-white/55 backdrop-blur lg:flex">
-          <CheckCircle2 size={14} className="text-[#F4B83A]" /> Combay stockholding supply desk
+          <CheckCircle2 size={14} className="text-[#E8A44A]" /> Combay stockholding supply desk
         </div>
       </div>
     </section>

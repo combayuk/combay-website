@@ -59,7 +59,7 @@ export default function Navigation() {
 
           <nav className="hidden h-full items-center lg:flex">
             <div className="relative flex h-full items-center" onMouseEnter={openShop} onMouseLeave={closeShop}>
-              <button className="flex h-full items-center gap-1.5 border-b-2 border-transparent px-4 text-sm font-800 text-slate-700 transition-colors hover:border-[#D99611] hover:text-[#06101F]">
+              <button className="flex h-full items-center gap-1.5 border-b-2 border-transparent px-4 text-sm font-800 text-slate-700 transition-colors hover:border-[#E8A44A] hover:text-[#2D4F7A]">
                 Shop <ChevronDown size={14} className={`transition-transform ${shopOpen ? "rotate-180" : ""}`} />
               </button>
               {shopOpen && (
@@ -71,7 +71,7 @@ export default function Navigation() {
                           <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-slate-50">
                             <img src={cat.image} alt="" className="h-10 w-10 object-contain" />
                           </span>
-                          <span className="font-display text-sm font-900 text-[#06101F] group-hover:text-[#B87908]">{cat.name}</span>
+                          <span className="font-display text-sm font-900 text-[#2D4F7A] group-hover:text-[#C9872F]">{cat.name}</span>
                         </div>
                         <ul className="space-y-1 pl-[60px]">
                           {cat.items.map((item) => <li key={item} className="text-xs text-slate-500">{item}</li>)}
@@ -80,14 +80,14 @@ export default function Navigation() {
                     ))}
                   </div>
                   <form action="/shop" method="get" onSubmit={() => setShopOpen(false)} className="flex items-center justify-between gap-3 bg-slate-50 px-6 py-4">
-                    <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-800 text-slate-500 shadow-sm focus-within:border-[#D99611]">
-                      <Search size={15} className="flex-shrink-0 text-[#B87908]" />
+                    <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-800 text-slate-500 shadow-sm focus-within:border-[#E8A44A]">
+                      <Search size={15} className="flex-shrink-0 text-[#C9872F]" />
                       <input
                         name="q"
                         value={megaSearch}
                         onChange={(event) => setMegaSearch(event.target.value)}
                         placeholder="Search by SKU, MPN, model or manufacturer"
-                        className="min-w-0 flex-1 bg-transparent text-sm font-600 text-[#06101F] outline-none placeholder:text-slate-400"
+                        className="min-w-0 flex-1 bg-transparent text-sm font-600 text-[#2D4F7A] outline-none placeholder:text-slate-400"
                       />
                     </label>
                     <button type="submit" className="btn-primary py-2 text-xs">Search stock →</button>
@@ -97,24 +97,24 @@ export default function Navigation() {
               )}
             </div>
             {NAV.map((item) => (
-              <Link key={item.href} href={item.href} className="flex h-full items-center border-b-2 border-transparent px-3.5 text-sm font-800 text-slate-700 transition-colors hover:border-[#D99611] hover:text-[#06101F]">
+              <Link key={item.href} href={item.href} className="flex h-full items-center border-b-2 border-transparent px-3.5 text-sm font-800 text-slate-700 transition-colors hover:border-[#E8A44A] hover:text-[#2D4F7A]">
                 {item.label}
               </Link>
             ))}
           </nav>
 
           <div className="hidden items-center gap-2 lg:flex">
-            <Link href="/cart" className="relative rounded-md border border-slate-200 p-2.5 text-slate-600 transition-colors hover:border-slate-400 hover:text-[#06101F]" aria-label="Cart">
+            <Link href="/cart" className="relative rounded-md border border-slate-200 p-2.5 text-slate-600 transition-colors hover:border-slate-400 hover:text-[#2D4F7A]" aria-label="Cart">
               <ShoppingCart size={18} />
-              {cartCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#D99611] px-1 text-[10px] font-900 text-[#06101F]">{cartCount}</span>}
+              {cartCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E8A44A] px-1 text-[10px] font-900 text-[#2D4F7A]">{cartCount}</span>}
             </Link>
             <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? "447340383334"}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-md border border-[#25D366]/50 px-3.5 py-2 text-sm font-800 text-[#128C4A] transition-colors hover:bg-[#25D366] hover:text-white">
               <WAIcon /> WhatsApp
             </a>
-            <Link href="/repair" className="rounded-md bg-[#06101F] px-4 py-2.5 text-sm font-900 text-white transition-colors hover:bg-[#102840]">Request Repair</Link>
+            <Link href="/repair" className="rounded-md bg-[#2D4F7A] px-4 py-2.5 text-sm font-900 text-white transition-colors hover:bg-[#355F8E]">Request Repair</Link>
           </div>
 
-          <button className="rounded-md border border-slate-200 p-2.5 text-[#06101F] lg:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
+          <button className="rounded-md border border-slate-200 p-2.5 text-[#2D4F7A] lg:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
@@ -124,7 +124,7 @@ export default function Navigation() {
         <div className="border-t border-slate-200 bg-white lg:hidden">
           <div className="site-shell py-4">
             <div className="grid gap-2">
-              <Link href="/shop" className="rounded-lg bg-slate-50 px-4 py-3 font-900 text-[#06101F]">Shop equipment</Link>
+              <Link href="/shop" className="rounded-lg bg-slate-50 px-4 py-3 font-900 text-[#2D4F7A]">Shop equipment</Link>
               {NAV.map((item) => <Link key={item.href} href={item.href} className="rounded-lg px-4 py-3 font-800 text-slate-700 hover:bg-slate-50">{item.label}</Link>)}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Link href="/cart" className="btn-secondary">Cart {cartCount ? `(${cartCount})` : ""}</Link>

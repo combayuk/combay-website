@@ -10,16 +10,16 @@ const config: Config = {
     extend: {
       colors: {
         navy: {
-          950: "#05111F",
-          900: "#091929",
-          800: "#0E2640",
-          700: "#163452",
-          600: "#1E4468",
+          950: "#203A5E",
+          900: "#2D4F7A",
+          800: "#355F8E",
+          700: "#3E6B9D",
+          600: "#4D7BAA",
         },
         accent: {
-          DEFAULT: "#F0A500",
-          dark:    "#D08E00",
-          light:   "#FFBE3D",
+          DEFAULT: "#E8A44A",
+          dark:    "#C9872F",
+          light:   "#F1BE69",
         },
         steel:   "#7A90A8",
         surface: "#F5F7FA",
