@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       qualityNotes: body.qualityNotes,
       error: body.error,
     });
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Could not complete job." }, { status: 400 });
   }

@@ -1,0 +1,14 @@
+Phase 20A.4 — Build fix for duplicate ok property
+
+Fixes Vercel TypeScript error in:
+src/app/api/image-worker/jobs/[id]/route.ts
+
+Problem:
+return NextResponse.json({ ok: true, ...result });
+
+completeImageJob already returns { ok: true, ... }, so TypeScript correctly flagged duplicate object property 'ok'.
+
+Fix:
+return NextResponse.json(result);
+
+No Prisma schema change beyond Phase 20A.3.
