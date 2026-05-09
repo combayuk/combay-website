@@ -1,0 +1,7 @@
+Phase 19C — Paid proforma/invoice shipping and paid stamp fix
+
+- Paid proformas now show a visible PAID stamp in the document HTML/PDF view once Stripe or manual receipt sets status PAID/RECEIVED or balance is zero with amount paid.
+- Paid proforma remains the customer-facing paid invoice document rather than requiring a separate duplicate paid-invoice document.
+- Creating a paid invoice/commercial invoice from an order now carries over the order shipping value by default instead of defaulting shipping to £0.
+- Shipping country also defaults from the order shipping address where available.
+- No Prisma schema change.

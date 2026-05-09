@@ -40,6 +40,14 @@ function isCommercial(type: string) { return type === "COMMERCIAL_INVOICE"; }
 function isPaid(type: string) { return type === "PAID_INVOICE" || type === "INVOICE"; }
 function isPacking(type: string) { return type === "PACKING_LIST"; }
 function isPayable(type: string, balance: number) { return type === "PROFORMA_INVOICE" && balance > 0; }
+function shouldShowPaidStamp(doc: any, balance: number) {
+  if (isPacking(doc.type) || doc.type === "QUOTE") return false;
+  const amountPaid = money(doc.amountPaid);
+  const status = String(doc.status || "").toUpperCase();
+  const paidStatus = status === "PAID" || status === "RECEIVED";
+  const fullyPaid = balance === 0 && amountPaid > 0;
+  return paidStatus || fullyPaid;
+}
 function formatAddress(raw: unknown) {
   if (!raw) return "";
   if (typeof raw === "object") return Object.values(raw as Record<string, unknown>).filter(Boolean).map(esc).join("<br/>");
@@ -59,7 +67,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   const balance = money(doc.balanceDue);
   const payable = isPayable(doc.type, balance);
-  const paidDoc = (isCommercial(doc.type) || isPaid(doc.type)) && balance === 0;
+  const paidDoc = shouldShowPaidStamp(doc, balance);
   const packing = isPacking(doc.type);
   const bank = doc.bankDetails || DEFAULT_BANK_DETAILS;
   const terms = doc.paymentTerms || DEFAULT_TERMS;

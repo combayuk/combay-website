@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
       const isPackingList = orderDocType === "PACKING_LIST";
       const subtotal = isPackingList ? 0 : money(body.subtotalOverride ?? order.subtotal);
       const tax = isPackingList ? 0 : money(body.taxOverride ?? order.tax);
-      const shippingCost = isPackingList ? 0 : money(body.shippingCost ?? 0);
+      const shippingCost = isPackingList ? 0 : money(body.shippingCost ?? order.shipping ?? 0);
       const total = isPackingList ? 0 : money(body.totalOverride ?? (subtotal + tax + shippingCost));
       const isPaidDoc = ["COMMERCIAL_INVOICE", "PAID_INVOICE"].includes(orderDocType) && order.paymentStatus === "PAID";
       const paid = isPaidDoc ? total : money(body.amountPaid ?? 0);
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
           currency: order.currency ?? "GBP",
           subtotal,
           tax,
-          shippingCountry: String(body.shippingCountry ?? "").trim() || null,
+          shippingCountry: String(body.shippingCountry ?? (typeof order.shippingAddress === "object" && order.shippingAddress && "country" in order.shippingAddress ? (order.shippingAddress as any).country : "")).trim() || null,
           shippingCost,
           total,
           amountPaid: paid,
