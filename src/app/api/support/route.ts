@@ -45,7 +45,11 @@ export async function GET(req: Request) {
   const portal = searchParams.get("portal") === "1";
   const session = await getServerSession(authOptions).catch(() => null);
   const sessionEmail = session?.user?.email || "";
+  const sessionRole = (session?.user as any)?.role as string | undefined;
   const email = portal ? sessionEmail : "";
+
+  if (portal && !sessionEmail) return Response.json({ ok: false, error: "Customer sign-in required." }, { status: 401 });
+  if (portal && sessionRole !== "CUSTOMER") return Response.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
 
   const dbResult = await withDatabase(async () => prisma.supportTicket.findMany({
     where: portal ? (email ? { email } : { id: "__no_portal_session__" }) : undefined,
@@ -59,6 +63,7 @@ export async function GET(req: Request) {
     return Response.json({ ok: true, mode: "database", data, tickets: data });
   }
 
+  if (portal) return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: [], tickets: [] });
   const preview = DEMO_REQUESTS.filter((request) => request.type === "support");
   return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: preview, tickets: preview });
 }
@@ -70,8 +75,13 @@ export async function POST(req: Request) {
   const product = typeof body.product === "object" && body.product !== null ? (body.product as any) : {};
   const source = String(body.source || "website");
   const sessionEmail = session?.user?.email || "";
+  const sessionRole = (session?.user as any)?.role as string | undefined;
   const sessionName = session?.user?.name || "";
   const submittedEmail = String(body.email || "").trim();
+  if (source === "customer-portal" && (!sessionEmail || sessionRole !== "CUSTOMER")) {
+    return Response.json({ ok: false, error: "Customer sign-in is required to create a portal support ticket." }, { status: 401 });
+  }
+
   const canonicalEmail = source === "customer-portal" && sessionEmail ? sessionEmail : submittedEmail;
 
   if (!canonicalEmail && !body.subject && !product.sku) {

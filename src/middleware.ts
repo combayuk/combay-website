@@ -57,6 +57,16 @@ export async function middleware(request: NextRequest) {
     if (role !== "ADMIN") return jsonError("Admin access required.", 403);
   }
 
+  if (pathname.startsWith("/api/account")) {
+    if (!token) return jsonError("Customer sign-in required.", 401);
+    if (role !== "CUSTOMER") return jsonError("Customer portal access is required.", 403);
+  }
+
+  if (["/api/orders", "/api/returns", "/api/support"].includes(pathname) && request.nextUrl.searchParams.get("portal") === "1") {
+    if (!token) return jsonError("Customer sign-in required.", 401);
+    if (role !== "CUSTOMER") return jsonError("Customer portal access is required.", 403);
+  }
+
   const adminOnlyApiPrefixes = [
     "/api/ai/",
     "/api/ebay/",

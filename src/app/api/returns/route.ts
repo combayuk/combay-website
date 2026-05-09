@@ -23,8 +23,12 @@ export async function GET(req: Request) {
   const portal = url.searchParams.get("portal") === "1";
   const session = portal ? await getServerSession(authOptions).catch(() => null) : null;
   const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
+  const sessionRole = (session?.user as any)?.role as string | undefined;
   if (portal && !sessionEmail) {
-    return Response.json({ ok: true, mode: "database", data: [], returns: [], portalReturns: [] });
+    return Response.json({ ok: false, error: "Customer sign-in required." }, { status: 401 });
+  }
+  if (portal && sessionRole !== "CUSTOMER") {
+    return Response.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   }
   const dbResult = await withDatabase(async () => {
     const rows = await prisma.return.findMany({
@@ -38,14 +42,20 @@ export async function GET(req: Request) {
   if (dbResult.ok) {
     return Response.json({ ok: true, mode: "database", data: dbResult.data, returns: dbResult.data, portalReturns: portal ? dbResult.data : undefined });
   }
-  return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: DEMO_RETURNS, returns: DEMO_RETURNS, portalReturns: portal ? DEMO_RETURNS : undefined });
+  if (portal) return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: [], returns: [], portalReturns: [] });
+  return Response.json({ ok: true, mode: "preview", reason: dbResult.reason, data: DEMO_RETURNS, returns: DEMO_RETURNS, portalReturns: undefined });
 }
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions).catch(() => null);
   const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
+  const sessionRole = (session?.user as any)?.role as string | undefined;
   const body = await readJsonBody(req);
   const reference = typeof body.reference === "string" ? body.reference : generateReference("RET");
+
+  if (String(body.source || "customer-portal") === "customer-portal" && (!sessionEmail || sessionRole !== "CUSTOMER")) {
+    return Response.json({ ok: false, error: "Customer sign-in is required to request a return from the portal." }, { status: 401 });
+  }
 
   if (!body.orderId && !body.email && !body.reason) {
     return Response.json({ ok: false, error: "Return request requires order context or contact details." }, { status: 400 });

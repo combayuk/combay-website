@@ -1,0 +1,15 @@
+Phase 18B — Customer auth hardening
+
+Implemented:
+- Customer/admin password reset flow using the existing Prisma VerificationToken table; no schema change required.
+- Added /auth/forgot-password and /auth/reset-password pages.
+- Added POST /api/auth/password-reset/request and POST /api/auth/password-reset/confirm.
+- Added forgot password links on admin and customer login screens.
+- Password reset emails use Resend through existing mailer/htmlShell if configured.
+- Account API routes now require CUSTOMER role rather than any logged-in session.
+- Portal orders/returns/support APIs now require CUSTOMER role when portal=1.
+- Portal returns/support no longer return demo rows to signed-in customers when DB fallback is triggered.
+- Checkout links order.userId only when the signed-in user is a CUSTOMER, not admin.
+- Account settings mock password checks now only apply when MOCK_AUTH_ENABLED=true.
+
+No Prisma db push is required because this uses the existing User and VerificationToken models.

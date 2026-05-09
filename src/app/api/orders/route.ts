@@ -86,10 +86,14 @@ export async function GET(request: NextRequest) {
   const portal = request.nextUrl.searchParams.get("portal") === "1";
   const session = portal ? await getServerSession(authOptions).catch(() => null) : null;
   const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
+  const sessionRole = (session?.user as any)?.role as string | undefined;
   const email = portal ? sessionEmail : requestedEmail;
 
   if (portal && !sessionEmail) {
-    return NextResponse.json({ ok: true, mode: "database", data: [], orders: [], portalOrders: [] });
+    return NextResponse.json({ ok: false, error: "Customer sign-in required." }, { status: 401 });
+  }
+  if (portal && sessionRole !== "CUSTOMER") {
+    return NextResponse.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   }
 
   const dbResult = await withDatabase(async () => {
@@ -120,6 +124,7 @@ export async function GET(request: NextRequest) {
         status: order.status,
       }));
 
+  if (portal) return NextResponse.json({ ok: true, mode: "preview", reason: dbResult.reason, data: [], orders: [], portalOrders: [] });
   return NextResponse.json({ ok: true, mode: "preview", reason: dbResult.reason, data: orders, orders, portalOrders });
 }
 
