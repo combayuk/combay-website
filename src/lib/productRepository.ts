@@ -22,7 +22,7 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   adminNotes?: string;
   image?: string | null;
   videoUrl?: string | null;
-  images?: { url: string; originalUrl?: string | null; alt?: string; isPrimary?: boolean; sortOrder?: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
+  images?: { url: string; originalUrl?: string | null; alt?: string | null; isPrimary?: boolean; sortOrder?: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
   specs?: { label: string; value: string }[];
   variants?: { id?: string; sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any }[];
   documents?: { name: string; url: string; fileType?: string }[];

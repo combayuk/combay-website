@@ -613,7 +613,7 @@ async function saveEbayListing(listing: NormalizedEbayListing, options: { forceR
     variants: importedVariants,
     description: existing?.descriptionLocked && !forceRichUpdate ? existing.description ?? "" : description,
     productOverview: existing?.descriptionLocked && !forceRichUpdate ? existing.productOverview ?? existing.description ?? "" : generatedOverview,
-    images: existing?.imagesLocked && !forceRichUpdate ? existingImages : importedImages,
+    images: (existing?.imagesLocked && !forceRichUpdate ? existingImages : importedImages).map((image) => ({ ...image, alt: image.alt ?? listing.title })),
     specs: existing?.specsLocked && !forceRichUpdate ? existingSpecs : listing.specs,
     rawEbayDescription: listing.rawDescription || null,
     itemLocation: (existing as any)?.itemLocation || "United Kingdom",

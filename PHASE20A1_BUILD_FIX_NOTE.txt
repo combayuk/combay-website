@@ -1,0 +1,9 @@
+Phase 20A.1 — Build fix for ProductImage alt typing
+
+Fixes Vercel TypeScript error in src/lib/ebay.ts where processed imported image payloads could contain alt: null but ProductWriteInput expected alt?: string only.
+
+Changes:
+- ProductWriteInput image alt now accepts string | null.
+- eBay save payload normalises image.alt to listing title when null/undefined.
+
+No Prisma schema change beyond Phase 20A.
