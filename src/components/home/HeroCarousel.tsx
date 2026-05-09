@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { ArrowRight, CheckCircle2, Search, ShieldCheck, Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 
@@ -20,34 +20,34 @@ type HeroSlide = {
 
 const DEFAULT_SLIDES: HeroSlide[] = [
   {
-    eyebrow: "10,000+ Items In Stock",
+    eyebrow: "10,000+ items in stock",
     heading: "Mission-critical equipment,",
-    accent:  "ready to dispatch.",
-    body:    "Tested, warranted industrial and commercial equipment. 30-day warranty. Trusted by UK businesses across every industry.",
-    cta1: { label:"Browse Equipment", href:"/shop" },
-    cta2: { label:"View Categories",  href:"/shop" },
-    stats: [{v:"10K+",l:"In stock"},{v:"30d",l:"Warranty"},{v:"48h",l:"Dispatch"}],
-    bg: "from-navy-950 via-navy-900 to-navy-800",
+    accent: "ready to dispatch.",
+    body: "Tested, warranted industrial and commercial equipment for maintenance teams, engineers and procurement buyers who cannot afford downtime.",
+    cta1: { label: "Browse Equipment", href: "/shop" },
+    cta2: { label: "View Categories", href: "/shop" },
+    stats: [{ v: "10K+", l: "stock items" }, { v: "30d", l: "warranty" }, { v: "48h", l: "typical dispatch" }],
+    bg: "from-[#06101F] via-[#0A1A2D] to-[#102840]",
   },
   {
-    eyebrow: "Repair Service",
-    heading: "40% lower than",
-    accent:  "manufacturer quotes.",
-    body:    "Free collection. 60-day checking warranty. Calibration, repair, PPM and installation — all covered by our engineers.",
-    cta1: { label:"Book a Repair",  href:"/repair" },
-    cta2: { label:"How It Works",   href:"/repair#how" },
-    stats: [{v:"40%",l:"Below OEM"},{v:"60d",l:"Warranty"},{v:"Free",l:"Collection"}],
-    bg: "from-navy-950 via-[#091E14] to-[#0A2016]",
+    eyebrow: "Repair service",
+    heading: "Reduce replacement cost",
+    accent: "without losing time.",
+    body: "Repairs, calibration support, preventative maintenance and installation help for industrial, lab and commercial equipment.",
+    cta1: { label: "Book a Repair", href: "/repair" },
+    cta2: { label: "How It Works", href: "/repair#how" },
+    stats: [{ v: "40%", l: "below OEM repair" }, { v: "60d", l: "checking warranty" }, { v: "Free", l: "collection options" }],
+    bg: "from-[#06101F] via-[#0B221A] to-[#102840]",
   },
   {
-    eyebrow: "Asset Recovery",
-    heading: "Cash for your",
-    accent:  "surplus equipment.",
-    body:    "Fair value. Free collection from anywhere. Payment before goods leave your site. No stock list needed.",
-    cta1: { label:"Get Cash for Goods",  href:"/asset-recovery" },
-    cta2: { label:"How It Works",        href:"/asset-recovery#how" },
-    stats: [{v:"Same Day",l:"Collection"},{v:"Cash",l:"On-site"},{v:"24h",l:"Response"}],
-    bg: "from-navy-950 via-[#1A1006] to-[#1A1200]",
+    eyebrow: "Asset recovery",
+    heading: "Turn surplus stock",
+    accent: "into working capital.",
+    body: "Fair-value purchasing, free collection and payment before equipment leaves your site. No perfect stock list required.",
+    cta1: { label: "Sell Your Stock", href: "/asset-recovery" },
+    cta2: { label: "Recovery Process", href: "/asset-recovery#how" },
+    stats: [{ v: "24h", l: "response" }, { v: "Free", l: "collection" }, { v: "Paid", l: "before removal" }],
+    bg: "from-[#06101F] via-[#251706] to-[#102840]",
   },
 ];
 
@@ -81,8 +81,8 @@ function buildSlides(contentSlides?: HeroSlideInput[]): HeroSlide[] {
       heading: input.heading || fallback.heading,
       accent: input.accent || fallback.accent,
       body: input.body || fallback.body,
-      cta1: { label: input.cta1Label === "__HIDDEN__" ? "" : (input.cta1Label || fallback.cta1.label), href: input.cta1Href || fallback.cta1.href },
-      cta2: { label: input.cta2Label === "__HIDDEN__" ? "" : (input.cta2Label || fallback.cta2.label), href: input.cta2Href || fallback.cta2.href },
+      cta1: { label: input.cta1Label === "__HIDDEN__" ? "" : input.cta1Label || fallback.cta1.label, href: input.cta1Href || fallback.cta1.href },
+      cta2: { label: input.cta2Label === "__HIDDEN__" ? "" : input.cta2Label || fallback.cta2.label, href: input.cta2Href || fallback.cta2.href },
       stats: [
         { v: input.stat1Value || fallback.stats[0].v, l: input.stat1Label || fallback.stats[0].l },
         { v: input.stat2Value || fallback.stats[1].v, l: input.stat2Label || fallback.stats[1].l },
@@ -94,149 +94,106 @@ function buildSlides(contentSlides?: HeroSlideInput[]): HeroSlide[] {
   });
 }
 
+const catalogueRows = [
+  ["Siemens S7-400 PLC CPU", "Automation", "Ready"],
+  ["Thermo Scientific FT-IR", "Lab", "Tested"],
+  ["Tektronix MDO3054", "Test", "In stock"],
+  ["ABB ACS550 Drive 75kW", "Drives", "Warranted"],
+];
+
 export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroSlideInput[] }) {
   const router = useRouter();
-  const SLIDES = buildSlides(contentSlides);
+  const slides = buildSlides(contentSlides);
   const [active, setActive] = useState(0);
-  const [fading, setFading] = useState(false);
-  const [query,  setQuery]  = useState("");
+  const [query, setQuery] = useState("");
+  const s = slides[active];
 
   useEffect(() => {
-    const t = setInterval(() => go((active + 1) % SLIDES.length), 7000);
-    return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+    const timer = setInterval(() => setActive((current) => (current + 1) % slides.length), 8000);
+    return () => clearInterval(timer);
+  }, [slides.length]);
 
-  const go = (i: number) => {
-    if (i === active) return;
-    setFading(true);
-    setTimeout(() => { setActive(i); setFading(false); }, 280);
+  const handleSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const clean = query.trim();
+    if (clean) router.push(`/shop?q=${encodeURIComponent(clean)}`);
   };
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim()) router.push(`/shop?q=${encodeURIComponent(query.trim())}`);
-  };
-
-  const s = SLIDES[active];
 
   return (
-    <section className={`relative bg-gradient-to-br ${s.bg} text-white overflow-hidden transition-all duration-700`}
-      style={{minHeight:"520px", ...cmsBackgroundStyle(s.backgroundImageUrl)}}>
-      {/* Grid texture */}
-      <div className="absolute inset-0 opacity-[0.035]" style={{
-        backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 47px,rgba(255,255,255,.4) 48px),repeating-linear-gradient(90deg,transparent,transparent 47px,rgba(255,255,255,.4) 48px)"
-      }}/>
-      {/* Left accent bar */}
-      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-accent via-accent-light to-transparent"/>
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 lg:py-16">
-        <div className="grid lg:grid-cols-[1fr_420px] gap-10 items-center">
-
-          {/* Left */}
-          <div className={`transition-all duration-280 ${fading?"opacity-0 translate-y-2":"opacity-100 translate-y-0"}`}>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-4 h-px bg-accent"/>
-              <span className="font-mono text-accent text-[10px] tracking-[0.2em] uppercase">{s.eyebrow}</span>
+    <section className={`relative overflow-hidden bg-gradient-to-br ${s.bg} text-white`} style={{ ...cmsBackgroundStyle(s.backgroundImageUrl) }}>
+      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.65) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.65) 1px, transparent 1px)", backgroundSize: "56px 56px" }} />
+      <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/22 to-transparent" />
+      <div className="site-shell relative py-14 lg:py-20">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_470px] lg:items-center">
+          <div className="max-w-3xl">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-800 text-white/85 backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#D99611]" /> {s.eyebrow}
             </div>
-            <h1 className="font-display font-800 text-3xl lg:text-[2.6rem] leading-[1.15] mb-1">{s.heading}</h1>
-            <h1 className="font-display font-800 text-3xl lg:text-[2.6rem] leading-[1.15] text-accent mb-5">{s.accent}</h1>
-            <p className="text-white/70 text-base leading-relaxed mb-7 max-w-lg">{s.body}</p>
+            <h1 className="font-display text-[2.35rem] font-900 leading-[1.03] tracking-[-0.04em] sm:text-5xl lg:text-[4.15rem]">
+              {s.heading}<br /><span className="text-[#F4B83A]">{s.accent}</span>
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-8 text-white/72 lg:text-lg">{s.body}</p>
 
-            {/* Search bar — CRITICAL feature per spec */}
-            <form onSubmit={handleSearch} className="flex items-center bg-white/10 border border-white/20 rounded-xl overflow-hidden mb-7 focus-within:border-accent/60 transition-colors max-w-lg">
-              <Search size={16} className="ml-4 text-white/40 flex-shrink-0"/>
-              <input
-                type="text" value={query} onChange={e=>setQuery(e.target.value)}
-                placeholder="Search by SKU, brand, MPN, model, category..."
-                className="flex-1 bg-transparent px-3 py-3 text-sm text-white placeholder:text-white/35 focus:outline-none"
-              />
-              <button type="submit" className="bg-accent text-navy-950 font-display font-700 text-xs px-4 py-3 hover:bg-accent-dark transition-colors whitespace-nowrap">
-                Search →
-              </button>
+            <form onSubmit={handleSearch} className="mt-8 flex max-w-2xl items-center overflow-hidden rounded-lg border border-white/15 bg-white shadow-xl shadow-black/10">
+              <Search size={18} className="ml-4 flex-shrink-0 text-slate-400" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search SKU, brand, MPN, model or category..." className="min-w-0 flex-1 px-3 py-4 text-sm text-slate-900 outline-none placeholder:text-slate-400" />
+              <button type="submit" className="h-full bg-[#D99611] px-5 py-4 text-sm font-900 text-[#06101F] transition-colors hover:bg-[#B87908] hover:text-white">Search</button>
             </form>
 
-            <div className="flex flex-wrap gap-3">
-              {s.cta1.label ? <Link href={s.cta1.href} className="btn-primary">{s.cta1.label} →</Link> : null}
+            <div className="mt-7 flex flex-wrap gap-3">
+              {s.cta1.label ? <Link href={s.cta1.href} className="btn-primary">{s.cta1.label} <ArrowRight size={16} /></Link> : null}
               {s.cta2.label ? <Link href={s.cta2.href} className="btn-outline-white">{s.cta2.label}</Link> : null}
+            </div>
+
+            <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
+              {s.stats.map((stat) => (
+                <div key={stat.l} className="rounded-lg border border-white/15 bg-white/10 p-3 backdrop-blur">
+                  <div className="font-display text-2xl font-900 text-[#F4B83A]">{stat.v}</div>
+                  <div className="mt-1 text-xs font-700 uppercase tracking-wide text-white/45">{stat.l}</div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Right stats panel */}
-          <div className={`hidden lg:block transition-all duration-280 ${fading?"opacity-0 translate-x-2":"opacity-100 translate-x-0"}`}>
-            {s.imageUrl ? <div className="bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-sm"><img src={s.imageUrl} alt="Homepage hero" className="w-full h-80 object-cover rounded-xl"/></div> : <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-              <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-accent mb-4">
-                {["01 · Equipment","02 · Repair","03 · Recovery"][active]}
-              </p>
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-5">
-                {s.stats.map(st => (
-                  <div key={st.l} className="text-center bg-white/5 rounded-xl py-4 border border-white/8">
-                    <div className="font-display font-800 text-2xl text-accent">{st.v}</div>
-                    <div className="text-white/50 text-xs mt-1">{st.l}</div>
-                  </div>
-                ))}
-              </div>
-              {/* Quick links */}
-              <div className="space-y-2">
-                {active===0 && [
-                  ["Siemens S7-400 PLC CPU",  "Automation",  "£1,240"],
-                  ["Thermo Scientific FT-IR", "Lab",         "£2,450"],
-                  ["Tektronix MDO3054",        "Test",        "£875"],
-                  ["ABB ACS550 Drive 75kW",    "Automation",  "£890"],
-                ].map(([n,c,p])=>(
-                  <div key={n} className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2.5 border border-white/8">
+          <div className="hidden lg:block">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 shadow-2xl shadow-black/20 backdrop-blur">
+              {s.imageUrl ? (
+                <img src={s.imageUrl} alt="Combay featured equipment" className="h-[410px] w-full rounded-xl object-cover" />
+              ) : (
+                <div className="rounded-xl bg-white p-4 text-[#06101F]">
+                  <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-4">
                     <div>
-                      <div className="font-display font-600 text-xs text-white">{n}</div>
-                      <div className="text-white/35 text-[10px]">{c}</div>
+                      <p className="font-mono text-[10px] font-800 uppercase tracking-[0.18em] text-slate-400">Procurement desk</p>
+                      <h2 className="mt-1 font-display text-xl font-900 tracking-tight">Fast stock decisions</h2>
                     </div>
-                    <div className="font-display font-700 text-accent text-sm">{p}</div>
+                    <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-900 text-green-700">Live stock</span>
                   </div>
-                ))}
-                {active===1 && [
-                  ["Submit request","5 min","01"],
-                  ["Receive quote","≤48h","02"],
-                  ["Free collection","Your site","03"],
-                  ["Return + warranty","60 days","04"],
-                ].map(([t,d,n])=>(
-                  <div key={t} className="flex items-center gap-3 bg-white/5 rounded-lg px-3 py-2.5 border border-white/8">
-                    <span className="font-mono text-accent text-[10px] w-4">{n}</span>
-                    <div className="flex-1 font-display font-600 text-xs text-white">{t}</div>
-                    <div className="text-white/35 text-[10px]">{d}</div>
+                  <div className="space-y-2.5">
+                    {catalogueRows.map(([title, category, status]) => (
+                      <div key={title} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3">
+                        <div>
+                          <p className="font-display text-sm font-900 text-[#06101F]">{title}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">{category}</p>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-900 text-slate-600 ring-1 ring-slate-200">{status}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {active===2 && [
-                  ["📦","Send disposal request","Photos OK"],
-                  ["🤝","We quote & visit","24h turnaround"],
-                  ["🚚","Free collection","Any location"],
-                  ["💷","Paid on collection","Cash or card"],
-                ].map(([i,t,d])=>(
-                  <div key={t} className="flex items-center gap-2.5 bg-white/5 rounded-lg px-3 py-2.5 border border-white/8">
-                    <span className="text-sm">{i}</span>
-                    <div className="flex-1 font-display font-600 text-xs text-white">{t}</div>
-                    <div className="text-white/35 text-[10px]">{d}</div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-800 text-slate-600">
+                    <div className="rounded-lg bg-slate-50 p-3"><ShieldCheck size={16} className="mb-1 text-[#B87908]" />Warranted</div>
+                    <div className="rounded-lg bg-slate-50 p-3"><Truck size={16} className="mb-1 text-[#B87908]" />Dispatch</div>
+                    <div className="rounded-lg bg-slate-50 p-3"><CheckCircle2 size={16} className="mb-1 text-[#B87908]" />Tested</div>
                   </div>
-                ))}
-              </div>
-              <Link href={s.cta1.href} className="block text-center text-accent font-display font-600 text-xs mt-4 hover:text-accent-light transition-colors">
-                {s.cta1.label} →
-              </Link>
-            </div>}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Slide controls */}
-        <div className="flex items-center gap-3 mt-8">
-          {SLIDES.map((_,i)=>(
-            <button key={i} onClick={()=>go(i)}
-              className={`transition-all duration-300 rounded-full ${i===active?"w-8 h-2 bg-accent":"w-2 h-2 bg-white/25 hover:bg-white/50"}`}/>
+        <div className="mt-10 flex items-center gap-3">
+          {slides.map((slide, index) => (
+            <button key={`${slide.eyebrow}-${index}`} onClick={() => setActive(index)} aria-label={`Show slide ${index + 1}`} className={`h-2 rounded-full transition-all ${index === active ? "w-10 bg-[#D99611]" : "w-2 bg-white/25 hover:bg-white/45"}`} />
           ))}
-          <div className="ml-auto flex gap-1.5">
-            <button onClick={()=>go((active-1+SLIDES.length)%SLIDES.length)}
-              className="w-7 h-7 rounded border border-white/20 text-white/60 hover:border-accent hover:text-accent transition-colors text-xs flex items-center justify-center">←</button>
-            <button onClick={()=>go((active+1)%SLIDES.length)}
-              className="w-7 h-7 rounded border border-white/20 text-white/60 hover:border-accent hover:text-accent transition-colors text-xs flex items-center justify-center">→</button>
-          </div>
         </div>
       </div>
     </section>

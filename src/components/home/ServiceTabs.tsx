@@ -1,27 +1,51 @@
 "use client";
-import { useState } from "react";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 import type { CmsPage } from "@/lib/siteContent";
 
-function adaptiveGridClass(count: number) {
+function gridClass(count: number) {
   if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "sm:grid-cols-2";
-  if (count === 3) return "sm:grid-cols-2 lg:grid-cols-3";
-  return "sm:grid-cols-2 lg:grid-cols-4";
-}
-
-function cardSpan(count: number, index: number) {
-  if (count === 1) return "max-w-2xl";
-  if (count === 5 && index >= 3) return "lg:col-span-2";
-  return "";
+  if (count === 2) return "md:grid-cols-2";
+  if (count === 3) return "md:grid-cols-3";
+  return "md:grid-cols-2 xl:grid-cols-4";
 }
 
 export default function ServiceTabs({ content }: { content?: CmsPage }) {
-  const [active, setActive] = useState(0);
-  const tabs = content?.blocks || [];
-  const safeActive = Math.min(active, Math.max(tabs.length - 1, 0));
-  const tab = tabs[safeActive];
-  if (!content || !tab) return null;
-  return <section className="py-16 bg-white" data-vcms-collection="page.blocks" style={cmsBackgroundStyle(content.backgroundImageUrl, "rgba(255,255,255,.94)")}><div className="max-w-7xl mx-auto px-4"><div className="mb-8"><p className="font-mono text-xs tracking-widest uppercase text-accent mb-2">{content.eyebrow}</p><h2 className="font-display font-800 text-3xl lg:text-4xl text-navy-900">{content.heading} <em className="not-italic text-accent">{content.accent}</em></h2><p className="text-gray-500 text-sm mt-2 max-w-2xl">{content.body}</p></div><div className="flex flex-wrap gap-2 mb-8">{tabs.map((t,i)=><button key={`${t.title}-${i}`} data-vcms-item="page.blocks" data-vcms-index={i} onClick={()=>setActive(i)} className={`flex items-center gap-2 font-display font-600 text-sm px-5 py-3 rounded-lg border transition-all ${i===safeActive?"bg-navy-900 text-white border-navy-900":"bg-white text-navy-800 border-gray-200 hover:border-navy-900"}`}><span>{t.icon}</span>{t.title}</button>)}</div><div className="grid lg:grid-cols-2 gap-10 items-start"><div><h3 className="font-display font-800 text-2xl text-navy-900 mb-3">{tab.title}</h3><p className="text-accent text-sm font-display font-700 mb-3">{tab.subtitle}</p><p className="text-gray-600 leading-relaxed mb-6">{tab.body}</p><div className="flex flex-wrap gap-3">{tab.linkLabel && <Link href={tab.linkHref || "/"} className="bg-navy-900 text-white font-display font-700 px-5 py-2.5 rounded hover:bg-navy-800 transition-colors">{tab.linkLabel} →</Link>}<Link href="/contact" className="border border-gray-300 text-navy-900 font-display font-600 px-5 py-2.5 rounded hover:border-navy-900 transition-colors">Ask a Question</Link></div></div><div className="bg-gray-50 border border-gray-200 rounded-xl p-6">{tab.imageUrl ? <img src={tab.imageUrl} alt={tab.title} className="w-full h-72 object-cover rounded-lg"/> : <div className="text-center py-16"><div className="text-5xl mb-4">{tab.icon}</div><div className="font-display font-800 text-2xl text-navy-900">{tab.title}</div><div className="text-gray-500 mt-2">{tab.subtitle}</div></div>}</div></div></div></section>;
+  const cards = content?.blocks || [];
+  if (!content || !cards.length) return null;
+  return (
+    <section className="section-pad bg-white" data-vcms-collection="page.blocks" style={cmsBackgroundStyle(content.backgroundImageUrl, "rgba(255,255,255,.96)")}>
+      <div className="site-shell">
+        <div className="mb-9 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)] lg:items-end">
+          <div>
+            <p className="section-label">{content.eyebrow || "What We Do"}</p>
+            <h2 className="section-heading mt-2 text-3xl lg:text-5xl">
+              {content.heading} <span className="text-[#B87908]">{content.accent}</span>
+            </h2>
+          </div>
+          <p className="section-lede max-w-2xl lg:justify-self-end">{content.body}</p>
+        </div>
+
+        <div className={`grid gap-4 ${gridClass(cards.length)}`}>
+          {cards.map((card, index) => (
+            <article key={`${card.title}-${index}`} data-vcms-item="page.blocks" data-vcms-index={index} className="group flex min-h-[330px] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#D99611]/55 hover:shadow-xl">
+              {card.imageUrl ? (
+                <img src={card.imageUrl} alt={card.title} className="mb-5 h-40 w-full rounded-xl object-cover" />
+              ) : (
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-3xl transition-colors group-hover:border-[#D99611]/40 group-hover:bg-[#D99611]/10">{card.icon || "⚙"}</div>
+              )}
+              <p className="mb-2 text-xs font-900 uppercase tracking-[0.14em] text-[#B87908]">{card.subtitle}</p>
+              <h3 className="font-display text-xl font-900 tracking-[-0.02em] text-[#06101F]">{card.title}</h3>
+              <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">{card.body}</p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                {card.linkLabel ? <Link href={card.linkHref || "/"} className="btn-primary py-2 text-xs">{card.linkLabel} <ArrowRight size={14} /></Link> : null}
+                <Link href="/contact" className="btn-secondary py-2 text-xs">Ask a Question</Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }

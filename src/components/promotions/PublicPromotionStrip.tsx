@@ -7,21 +7,22 @@ export default async function PublicPromotionStrip({ placement = "home" }: { pla
   const promotions = await getPublicPromotions(placement, placement === "home" ? 3 : 2);
   if (promotions.length === 0) return null;
 
+  const home = placement === "home";
   return (
-    <section data-vcms-collection={placement === "home" ? "home.promotionStrip" : undefined} className={placement === "home" ? "bg-white border-y border-gray-200" : "bg-amber-50 border-b border-amber-200"}>
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-navy-950"><Tag size={17} /></span>
+    <section data-vcms-collection={home ? "home.promotionStrip" : undefined} className={home ? "border-y border-[#E6C06E]/50 bg-[#FFF8E8]" : "border-b border-[#E6C06E]/60 bg-[#FFF8E8]"}>
+      <div className="site-shell py-5">
+        <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_auto] lg:items-center">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#D99611] text-[#06101F]"><Tag size={18} /></span>
             <div>
-              <p className="font-display font-800 text-navy-950 text-sm">Current Combay offers</p>
-              <p className="text-xs text-gray-500">Copy the code and apply it at checkout where eligible.</p>
+              <p className="font-display text-sm font-900 text-[#06101F]">Current Combay offers</p>
+              <p className="text-xs leading-5 text-slate-600">Copy eligible codes and apply at checkout.</p>
             </div>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2 flex-1">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <PublicPromotionCards promotions={promotions} />
           </div>
-          <Link href="/shop" className="btn-secondary text-sm flex-shrink-0">Shop offers</Link>
+          <Link href="/shop" className="btn-secondary justify-self-start whitespace-nowrap lg:justify-self-end">Shop offers</Link>
         </div>
       </div>
     </section>

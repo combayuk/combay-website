@@ -1,0 +1,44 @@
+Phase 17A — Public Website Redesign Foundation
+
+Purpose
+- Start the complete redesign phase without touching the Visual CMS architecture.
+- Move the public site toward a restrained, professional industrial B2B/procurement design.
+- Improve reusable public components and design tokens so future pages share a consistent visual language.
+
+Changed
+- Reworked global typography/design tokens from the earlier more stylised look to a cleaner Inter / IBM Plex Sans system.
+- Added stronger reusable public UI classes: site-shell, section-pad, section-label, section-heading, section-lede, revised buttons, cards, forms, badges and tables.
+- Redesigned the public top bar, navigation, shop mega menu and mobile menu.
+- Redesigned homepage hero with better hierarchy, search panel, procurement-style stats and stock/status panel.
+- Redesigned industry strip, service/What We Do cards, promotion strip/cards, trust section, FAQ preview and final CTA.
+- Redesigned footer with clearer contact blocks and link hierarchy.
+- Improved CMS-backed inner page layout and policy page layout to match the new public visual foundation.
+- Fixed public leak from Phase 16W where empty Visual CMS zones showed '+ add section/widget here' on the live website. These markers now render only when the page is opened with ?vcms=1. Saved Visual CMS widgets still render on the public site.
+
+Files touched
+- src/app/globals.css
+- tailwind.config.ts
+- src/components/layout/TopBar.tsx
+- src/components/layout/Navigation.tsx
+- src/components/layout/Footer.tsx
+- src/components/home/HeroCarousel.tsx
+- src/components/home/IndustryStrip.tsx
+- src/components/home/ServiceTabs.tsx
+- src/components/home/TrustSection.tsx
+- src/components/home/FaqPreview.tsx
+- src/components/home/FinalCta.tsx
+- src/components/promotions/PublicPromotionCards.tsx
+- src/components/promotions/PublicPromotionStrip.tsx
+- src/components/pages/CmsPageLayout.tsx
+- src/components/pages/PolicyPageLayout.tsx
+- src/components/visual-cms/VisualWidgetZone.tsx
+
+Validation
+- npm install --ignore-scripts --no-audit --no-fund completed in the sandbox.
+- npx next build --no-lint reached 'Compiled successfully'.
+- Build then failed at type-check because Prisma Client could not be generated in this sandbox: binaries.prisma.sh DNS resolution failed. This is the existing environment limitation around Prisma generation, not a confirmed Phase 17A code compile problem.
+- No Prisma schema or database changes were made.
+
+Deployment
+- No Prisma push required.
+- Deploy as a normal code patch.

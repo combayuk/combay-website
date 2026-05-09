@@ -1,10 +1,86 @@
 import Link from "next/link";
+import { Mail, MapPin, Phone } from "lucide-react";
 import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 
 type FooterContent = { description?: string; backgroundImageUrl?: string; contact?: { salesEmail?: string; infoEmail?: string; phone?: string; location?: string; whatsapp?: string } };
+
+const shopLinks = ["All Categories", "Lab & Scientific", "Automation & Control", "IT & Networking", "Test & Detection", "Display & AV", "Oil & Gas", "New Arrivals"];
+const serviceLinks = [
+  { label: "Repair Services", href: "/repair" },
+  { label: "Calibration", href: "/repair#calibration" },
+  { label: "Installation", href: "/repair#installation" },
+  { label: "Preventative Maintenance", href: "/repair#ppm" },
+  { label: "Asset Recovery", href: "/asset-recovery" },
+  { label: "Request a Quote", href: "/contact" },
+];
+const companyLinks = [
+  { label: "About Us", href: "/about" },
+  { label: "Manufacturers", href: "/manufacturers" },
+  { label: "Contact", href: "/contact" },
+  { label: "Customer Portal", href: "/portal" },
+  { label: "FAQs", href: "/faq" },
+];
+const policyLinks = [
+  { label: "Condition Codes", href: "/condition-codes" },
+  { label: "Returns Policy", href: "/returns-policy" },
+  { label: "Warranty", href: "/warranty" },
+  { label: "Payment Policy", href: "/payment-policy" },
+  { label: "Terms & Conditions", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy-policy" },
+];
+
+function LinkList({ title, links }: { title: string; links: { label: string; href: string }[] }) {
+  return (
+    <div>
+      <h4 className="mb-3 font-display text-sm font-900 text-white">{title}</h4>
+      <ul className="space-y-2 text-sm">
+        {links.map((link) => <li key={link.label}><Link href={link.href} className="text-white/55 transition-colors hover:text-[#F4B83A]">{link.label}</Link></li>)}
+      </ul>
+    </div>
+  );
+}
+
 export default function Footer({ content }: { content?: FooterContent }) {
   const contact = content?.contact || {};
   const sales = contact.salesEmail || "sales@combay.co.uk";
   const info = contact.infoEmail || "info@combay.co.uk";
-  return <footer className="bg-navy-950 text-gray-400" style={cmsBackgroundStyle(content?.backgroundImageUrl, "rgba(3,14,33,.94)")}><div className="max-w-7xl mx-auto px-4 py-14"><div className="grid grid-cols-2 lg:grid-cols-5 gap-8 mb-10"><div className="col-span-2"><div className="flex items-center gap-1.5 mb-4"><div className="w-7 h-7 bg-navy-800 border border-white/10 rounded flex items-center justify-center"><span className="text-accent font-display font-900 text-xs">C</span></div><span className="font-display font-800 text-white text-lg tracking-tight">COMBAY</span></div><p className="text-xs leading-relaxed mb-4 text-gray-500 max-w-xs">{content?.description || "UK-based industrial and commercial equipment specialists."}</p><div className="space-y-1.5 text-xs"><a href={`mailto:${sales}`} className="flex items-center gap-2 hover:text-accent transition-colors">✉ Order’s/Quotes: {sales}</a><a href={`mailto:${info}`} className="flex items-center gap-2 hover:text-accent transition-colors">✉ General/Media Inquiries: {info}</a><a href={`tel:${contact.phone || "+447340383334"}`} className="flex items-center gap-2 hover:text-accent transition-colors">☎ {contact.phone || "+44 7340 383334"}</a><span className="flex items-center gap-2">⌖ {contact.location || "Chelmsford, Essex, UK"}</span></div></div><div><h4 className="font-display font-700 text-white text-sm mb-3">Shop</h4><ul className="space-y-2 text-xs">{["All Categories","Lab & Scientific","Automation & Control","IT & Networking","Test & Detection","Display & AV","Oil & Gas","New Arrivals"].map(l=><li key={l}><Link href="/shop" className="hover:text-accent transition-colors">{l}</Link></li>)}</ul></div><div><h4 className="font-display font-700 text-white text-sm mb-3">Services</h4><ul className="space-y-2 text-xs">{[{l:"Repair Services",h:"/repair"},{l:"Calibration",h:"/repair#calibration"},{l:"Installation",h:"/repair#installation"},{l:"Preventative Maintenance",h:"/repair#ppm"},{l:"Asset Recovery",h:"/asset-recovery"},{l:"Request a Quote",h:"/contact"}].map(i=><li key={i.l}><Link href={i.h} className="hover:text-accent transition-colors">{i.l}</Link></li>)}</ul></div><div><h4 className="font-display font-700 text-white text-sm mb-3">Company</h4><ul className="space-y-2 text-xs mb-5">{[{l:"About Us",h:"/about"},{l:"Manufacturers",h:"/manufacturers"},{l:"Contact",h:"/contact"},{l:"Customer Portal",h:"/portal"},{l:"FAQs",h:"/faq"}].map(i=><li key={i.l}><Link href={i.h} className="hover:text-accent transition-colors">{i.l}</Link></li>)}</ul><h4 className="font-display font-700 text-white text-sm mb-3">Policies</h4><ul className="space-y-2 text-xs">{[{l:"Condition Codes",h:"/condition-codes"},{l:"Returns Policy",h:"/returns-policy"},{l:"Warranty",h:"/warranty"},{l:"Payment Policy",h:"/payment-policy"},{l:"Terms & Conditions",h:"/terms"},{l:"Privacy Policy",h:"/privacy-policy"}].map(i=><li key={i.l}><Link href={i.h} className="hover:text-accent transition-colors">{i.l}</Link></li>)}</ul></div></div><div className="pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600"><span>© {new Date().getFullYear()} Combay Ltd. All rights reserved. Registered in England & Wales.</span><a href={`https://wa.me/${contact.whatsapp || "447340383334"}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[#25D366] hover:text-[#1EBE5A] transition-colors font-600">Chat on WhatsApp</a></div></div></footer>;
+  const phone = contact.phone || "+44 7340 383334";
+  const location = contact.location || "Chelmsford, Essex, UK";
+  return (
+    <footer className="bg-[#06101F] text-white" style={cmsBackgroundStyle(content?.backgroundImageUrl, "rgba(6,16,31,.96)")}>
+      <div className="site-shell py-14">
+        <div className="grid gap-10 lg:grid-cols-[1.2fr_2fr]">
+          <div>
+            <Link href="/" className="inline-flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-white/5"><span className="font-display text-sm font-900 text-[#F4B83A]">CB</span></div>
+              <div>
+                <span className="block font-display text-xl font-900 tracking-[-0.04em] text-white">COMBAY</span>
+                <span className="text-[10px] font-800 uppercase tracking-[0.16em] text-white/35">Industrial supply</span>
+              </div>
+            </Link>
+            <p className="mt-5 max-w-sm text-sm leading-7 text-white/58">{content?.description || "UK-based industrial and commercial equipment specialists. Buy, repair, or sell surplus stock — backed by engineers."}</p>
+            <div className="mt-6 space-y-3 text-sm text-white/65">
+              <a href={`mailto:${sales}`} className="flex items-center gap-2 transition-colors hover:text-[#F4B83A]"><Mail size={15} className="text-[#F4B83A]" /> Order’s/Quotes: {sales}</a>
+              <a href={`mailto:${info}`} className="flex items-center gap-2 transition-colors hover:text-[#F4B83A]"><Mail size={15} className="text-[#F4B83A]" /> General/Media: {info}</a>
+              <a href={`tel:${phone}`} className="flex items-center gap-2 transition-colors hover:text-[#F4B83A]"><Phone size={15} className="text-[#F4B83A]" /> {phone}</a>
+              <span className="flex items-center gap-2"><MapPin size={15} className="text-[#F4B83A]" /> {location}</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+            <div>
+              <h4 className="mb-3 font-display text-sm font-900 text-white">Shop</h4>
+              <ul className="space-y-2 text-sm">{shopLinks.map((label) => <li key={label}><Link href="/shop" className="text-white/55 transition-colors hover:text-[#F4B83A]">{label}</Link></li>)}</ul>
+            </div>
+            <LinkList title="Services" links={serviceLinks} />
+            <LinkList title="Company" links={companyLinks} />
+            <LinkList title="Policies" links={policyLinks} />
+          </div>
+        </div>
+        <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs text-white/38 sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} Combay Ltd. All rights reserved. Registered in England & Wales.</span>
+          <a href={`https://wa.me/${contact.whatsapp || "447340383334"}`} target="_blank" rel="noopener noreferrer" className="font-900 text-[#25D366] transition-colors hover:text-[#7EF0A2]">Chat on WhatsApp</a>
+        </div>
+      </div>
+    </footer>
+  );
 }

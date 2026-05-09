@@ -20,20 +20,19 @@ function promotionOfferLabel(promotion: { type?: string; value?: number }) {
 
 function OfferCard({ promotion, compact = false, index = 0 }: { promotion: PromotionCardData; compact?: boolean; index?: number }) {
   return (
-    <div data-vcms-item="home.promotionStrip" data-vcms-index={index} className={`rounded-xl border px-4 py-3 ${compact ? "border-white/15 bg-white/10 text-white" : "border-amber-200 bg-amber-50"}`}>
+    <div data-vcms-item="home.promotionStrip" data-vcms-index={index} className={compact ? "rounded-lg border border-white/15 bg-white/10 p-3 text-white" : "rounded-xl border border-[#E6C06E]/60 bg-[#FFF8E8] p-4 shadow-sm"}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`font-display font-800 text-sm ${compact ? "text-white" : "text-navy-950"}`}>{promotionOfferLabel(promotion)}</p>
-          <p className={`text-xs mt-0.5 ${compact ? "text-white/75" : "text-gray-700"}`}>{promotion.bannerText || promotion.description || promotion.name}</p>
-          {promotion.minOrderValue ? <p className={`text-[11px] mt-1 ${compact ? "text-white/55" : "text-gray-500"}`}>Minimum order £{Number(promotion.minOrderValue).toFixed(2)} before VAT.</p> : null}
+        <div className="min-w-0">
+          <p className={compact ? "font-display text-sm font-900 text-white" : "font-display text-base font-900 text-[#06101F]"}>{promotionOfferLabel(promotion)}</p>
+          <p className={compact ? "mt-1 line-clamp-2 text-xs text-white/70" : "mt-1 line-clamp-2 text-sm leading-6 text-slate-700"}>{promotion.bannerText || promotion.description || promotion.name}</p>
+          {promotion.minOrderValue ? <p className={compact ? "mt-1 text-[10px] text-white/50" : "mt-2 text-xs text-slate-500"}>Minimum order £{Number(promotion.minOrderValue).toFixed(2)}</p> : null}
         </div>
-        {promotion.code ? <PromotionCodeCopyButton code={promotion.code} compact /> : null}
+        {promotion.code ? <PromotionCodeCopyButton code={promotion.code} compact={compact} /> : null}
       </div>
     </div>
   );
 }
 
 export default function PublicPromotionCards({ promotions, compact = false }: { promotions: PromotionCardData[]; compact?: boolean }) {
-  if (!promotions.length) return null;
   return <>{promotions.map((promotion, index) => <OfferCard key={promotion.id} promotion={promotion} compact={compact} index={index} />)}</>;
 }

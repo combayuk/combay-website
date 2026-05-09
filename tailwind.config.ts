@@ -25,13 +25,13 @@ const config: Config = {
         surface: "#F5F7FA",
       },
       fontFamily: {
-        sans:    ["DM Sans", "system-ui", "sans-serif"],
-        display: ["Syne", "system-ui", "sans-serif"],
+        sans:    ["Inter", "system-ui", "sans-serif"],
+        display: ["IBM Plex Sans", "Inter", "system-ui", "sans-serif"],
         mono:    ["JetBrains Mono", "monospace"],
       },
       fontWeight: {
         "300": "300", "400": "400", "500": "500",
-        "600": "600", "700": "700", "800": "800",
+        "600": "600", "700": "700", "800": "800", "900": "900",
       },
       borderRadius: {
         "xl":  "0.75rem",

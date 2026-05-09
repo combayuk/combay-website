@@ -1,77 +1,57 @@
 import Link from "next/link";
-import type { CmsBlock, CmsPage, CmsStep, SiteContent } from "@/lib/siteContent";
-import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 import VisualWidgetZone from "@/components/visual-cms/VisualWidgetZone";
+import { cmsBackgroundStyle } from "@/lib/cmsBackground";
+import type { CmsBlock, CmsPage, CmsStep, SiteContent } from "@/lib/siteContent";
 
-function Paragraphs({ text, className }: { text: string; className: string }) {
+function Paragraphs({ text, className }: { text?: string; className: string }) {
   const parts = String(text || "").split(/\n{1,}/).map((part) => part.trim()).filter(Boolean);
   if (!parts.length) return null;
   return <div className={className}>{parts.map((part, index) => <p key={index}>{part}</p>)}</div>;
 }
 
-function cardWidth(width?: string, blockType?: string) {
-  // Only true banners/promotions should span. Normal cards are governed by the adaptive grid,
-  // otherwise copied cards can become larger than the card they were copied from.
-  if (width === "full" || blockType === "promotion" || blockType === "slider" || blockType === "animation") return "lg:col-span-full";
-  return "";
-}
-
 function adaptiveGridClass(count: number) {
   if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "sm:grid-cols-2";
-  if (count === 3) return "sm:grid-cols-2 lg:grid-cols-3";
-  return "sm:grid-cols-2 lg:grid-cols-4";
-}
-
-function adaptiveItemClass(count: number, index: number) {
-  if (count === 1) return "max-w-2xl";
-  if (count === 5 && index >= 3) return "lg:col-span-2";
-  return "";
+  if (count === 2) return "md:grid-cols-2";
+  if (count === 3) return "md:grid-cols-3";
+  return "md:grid-cols-2 xl:grid-cols-4";
 }
 
 function blockBg(background?: string) {
-  if (background === "accent") return "bg-accent/10 border-accent/40";
-  if (background === "dark") return "bg-navy-950 text-white border-navy-950";
-  if (background === "soft") return "bg-gray-50 border-gray-200";
-  return "bg-white border-gray-200";
-}
-
-function animationClass(animation?: string) {
-  if (animation === "float") return "hover:-translate-y-1";
-  if (animation === "pulse") return "hover:shadow-lg";
-  if (animation === "slide") return "hover:translate-x-1";
-  return "";
+  if (background === "accent") return "border-[#E6C06E] bg-[#FFF8E8]";
+  if (background === "dark") return "border-[#06101F] bg-[#06101F] text-white";
+  if (background === "soft") return "border-slate-200 bg-slate-50";
+  return "border-slate-200 bg-white";
 }
 
 function CmsBlockCard({ block, index, count }: { block: CmsBlock; index: number; count: number }) {
-  const align = block.align === "center" ? "text-center" : block.align === "right" ? "text-right" : "text-left";
   const isDark = block.background === "dark";
-  const type = block.blockType || "icon";
-  const isBanner = type === "promotion" || type === "slider" || type === "animation";
   return (
-    <div data-vcms-item="page.blocks" data-vcms-index={index} className={`${cardWidth(block.width, block.blockType)} ${adaptiveItemClass(count, index)} ${blockBg(block.background)} ${align} ${animationClass(block.animation)} border rounded-xl p-6 transition-all hover:border-accent/40 hover:shadow-sm`}>
-      {block.imageUrl ? <img src={block.imageUrl} alt={block.title} className={`w-full ${isBanner ? "h-56" : "h-32"} object-cover rounded-lg mb-4`} /> : <div className="text-3xl mb-3">{block.icon}</div>}
-      {type !== "text" ? <p className="font-mono text-[10px] uppercase tracking-widest text-accent mb-2">{type}</p> : null}
-      <h3 className={`font-display font-800 mb-1 ${isDark ? "text-white" : "text-navy-900"}`}>{block.title}</h3>
-      <p className="text-accent text-xs font-600 mb-2">{block.subtitle}</p>
-      <Paragraphs text={block.body} className={`text-xs leading-relaxed mb-4 space-y-2 ${isDark ? "text-white/70" : "text-gray-500"}`} />
-      {block.linkLabel && <Link href={block.linkHref || "#"} className="text-accent font-display font-700 text-xs hover:text-accent-dark">{block.linkLabel} →</Link>}
-    </div>
+    <article data-vcms-item="page.blocks" data-vcms-index={index} className={`${blockBg(block.background)} flex min-h-[250px] flex-col rounded-2xl border p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D99611]/50 hover:shadow-lg`}>
+      {block.imageUrl ? <img src={block.imageUrl} alt={block.title} className="mb-5 h-36 w-full rounded-xl object-cover" /> : <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-current/10 bg-current/5 text-2xl">{block.icon || "•"}</div>}
+      <p className="mb-2 font-mono text-[10px] font-800 uppercase tracking-[0.18em] text-[#B87908]">{block.blockType || "service"}</p>
+      <h3 className={`font-display text-xl font-900 tracking-[-0.02em] ${isDark ? "text-white" : "text-[#06101F]"}`}>{block.title}</h3>
+      {block.subtitle ? <p className="mt-1 text-sm font-900 text-[#B87908]">{block.subtitle}</p> : null}
+      <Paragraphs text={block.body} className={`mt-4 flex-1 space-y-2 text-sm leading-7 ${isDark ? "text-white/64" : "text-slate-600"}`} />
+      {block.linkLabel ? <Link href={block.linkHref || "#"} className="mt-5 inline-flex text-sm font-900 text-[#B87908] hover:text-[#06101F]">{block.linkLabel} →</Link> : null}
+    </article>
   );
 }
 
 function HeroSection({ page }: { page: CmsPage }) {
-  const heroStyle = cmsBackgroundStyle(page.backgroundImageUrl);
   return (
-    <section className="bg-navy-950 text-white py-16" style={heroStyle}>
-      <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-[1fr_420px] gap-10 items-center">
-        <div className="max-w-2xl">
-          <p className="font-mono text-xs tracking-widest uppercase text-accent mb-3">{page.eyebrow}</p>
-          <h1 className="font-display font-900 text-4xl lg:text-5xl mb-4">{page.heading} <em className="not-italic text-accent">{page.accent}</em></h1>
-          <Paragraphs text={page.body} className="text-gray-300 text-lg leading-relaxed mb-8 space-y-3" />
-          <div className="flex flex-wrap gap-3">{page.primaryLabel !== "__HIDDEN__" && page.primaryLabel ? <Link href={page.primaryHref} className="btn-primary">{page.primaryLabel}</Link> : null}{page.secondaryLabel !== "__HIDDEN__" && page.secondaryLabel ? <Link href={page.secondaryHref} className="border border-white/30 text-white font-display font-600 px-5 py-2.5 rounded hover:border-white transition-colors">{page.secondaryLabel}</Link> : null}</div>
+    <section className="relative overflow-hidden bg-[#06101F] py-14 text-white lg:py-20" style={cmsBackgroundStyle(page.backgroundImageUrl, "rgba(6,16,31,.94)")}>
+      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)", backgroundSize: "52px 52px" }} />
+      <div className="site-shell relative grid gap-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
+        <div className="max-w-3xl">
+          <p className="section-label">{page.eyebrow}</p>
+          <h1 className="mt-3 font-display text-4xl font-900 leading-[1.05] tracking-[-0.04em] text-white lg:text-6xl">{page.heading} <span className="text-[#F4B83A]">{page.accent}</span></h1>
+          <Paragraphs text={page.body} className="mt-5 max-w-2xl space-y-3 text-base leading-8 text-white/68" />
+          <div className="mt-8 flex flex-wrap gap-3">
+            {page.primaryLabel !== "__HIDDEN__" && page.primaryLabel ? <Link href={page.primaryHref} className="btn-primary">{page.primaryLabel}</Link> : null}
+            {page.secondaryLabel !== "__HIDDEN__" && page.secondaryLabel ? <Link href={page.secondaryHref} className="btn-outline-white">{page.secondaryLabel}</Link> : null}
+          </div>
         </div>
-        {page.heroImageUrl && <div className="hidden lg:block bg-white/5 border border-white/10 rounded-2xl p-3"><img src={page.heroImageUrl} alt={page.eyebrow} className="w-full h-80 object-cover rounded-xl"/></div>}
+        {page.heroImageUrl ? <div className="hidden rounded-2xl border border-white/15 bg-white/10 p-3 shadow-2xl lg:block"><img src={page.heroImageUrl} alt={page.eyebrow} className="h-80 w-full rounded-xl object-cover" /></div> : null}
       </div>
     </section>
   );
@@ -79,30 +59,60 @@ function HeroSection({ page }: { page: CmsPage }) {
 
 function ContactBar({ contact }: { contact?: SiteContent["contact"] }) {
   if (!contact) return null;
-  return <section className="py-8 bg-gray-50 border-y border-gray-200"><div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm"><a className="bg-white border border-gray-200 rounded-xl p-4 hover:border-accent" href={`mailto:${contact.salesEmail}`}><strong className="block text-navy-900">Order’s/Quotes</strong><span className="text-gray-500">{contact.salesEmail}</span></a><a className="bg-white border border-gray-200 rounded-xl p-4 hover:border-accent" href={`mailto:${contact.infoEmail}`}><strong className="block text-navy-900">General/Media Inquiries</strong><span className="text-gray-500">{contact.infoEmail}</span></a><a className="bg-white border border-gray-200 rounded-xl p-4 hover:border-accent" href={`tel:${contact.phone}`}><strong className="block text-navy-900">Phone</strong><span className="text-gray-500">{contact.phone}</span></a><div className="bg-white border border-gray-200 rounded-xl p-4"><strong className="block text-navy-900">Location</strong><span className="text-gray-500">{contact.location}</span></div></div></section>;
+  const cards = [
+    ["Order’s/Quotes", contact.salesEmail, `mailto:${contact.salesEmail}`],
+    ["General/Media Inquiries", contact.infoEmail, `mailto:${contact.infoEmail}`],
+    ["Phone", contact.phone, `tel:${contact.phone}`],
+    ["Location", contact.location, "#"],
+  ];
+  return <section className="border-y border-slate-200 bg-[#F4F6F8] py-8"><div className="site-shell grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{cards.map(([label, value, href]) => href === "#" ? <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><strong className="block text-sm font-900 text-[#06101F]">{label}</strong><span className="mt-1 block text-sm text-slate-500">{value}</span></div> : <a key={label} href={href} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D99611]/50"><strong className="block text-sm font-900 text-[#06101F]">{label}</strong><span className="mt-1 block text-sm text-slate-500">{value}</span></a>)}</div></section>;
 }
 
 function ContentSection({ page }: { page: CmsPage }) {
   if (!page.sectionHeading && !page.blocks.length) return null;
-  return <section className="py-14 bg-white" data-vcms-collection="page.blocks"><div className="max-w-7xl mx-auto px-4"><p className="section-label">{page.sectionEyebrow}</p><h2 className="section-heading text-3xl mb-2">{page.sectionHeading}</h2><Paragraphs text={page.sectionBody} className="text-gray-500 mb-8 text-sm max-w-3xl leading-relaxed space-y-3" />{page.blocks.length > 0 && <div className={`grid ${adaptiveGridClass(page.blocks.length)} gap-5`}>{page.blocks.map((b,i)=><CmsBlockCard key={`${b.title}-${i}`} block={b} index={i} count={page.blocks.length}/>)}</div>}</div></section>;
+  return (
+    <section className="section-pad bg-white" data-vcms-collection="page.blocks">
+      <div className="site-shell">
+        <div className="mb-8 max-w-3xl">
+          <p className="section-label">{page.sectionEyebrow}</p>
+          <h2 className="section-heading mt-2 text-3xl lg:text-5xl">{page.sectionHeading}</h2>
+          <Paragraphs text={page.sectionBody} className="mt-4 space-y-3 text-sm leading-7 text-slate-600" />
+        </div>
+        {page.blocks.length > 0 ? <div className={`grid gap-4 ${adaptiveGridClass(page.blocks.length)}`}>{page.blocks.map((block, index) => <CmsBlockCard key={`${block.title}-${index}`} block={block} index={index} count={page.blocks.length} />)}</div> : null}
+      </div>
+    </section>
+  );
 }
 
 function ProcessSection({ steps }: { steps: CmsStep[] }) {
   if (!steps.length) return null;
-  return <section className="py-14 bg-gray-50" data-vcms-collection="page.steps"><div className="max-w-7xl mx-auto px-4"><p className="section-label">Process</p><h2 className="section-heading text-3xl mb-8">How it works.</h2><div className={`grid ${adaptiveGridClass(steps.length)} gap-5`}>{steps.map((s,i)=><div key={`${s.number}-${i}`} data-vcms-item="page.steps" data-vcms-index={i} className={`bg-white border border-gray-200 rounded-lg p-5 ${adaptiveItemClass(steps.length, i)}`}>{s.imageUrl && <img src={s.imageUrl} alt={s.title} className="w-full h-28 object-cover rounded mb-4"/>}<div className="font-mono text-accent text-xs mb-3">{s.number}</div><h3 className="font-display font-700 text-navy-900 mb-2">{s.title}</h3><p className="text-gray-500 text-xs leading-relaxed">{s.body}</p></div>)}</div></div></section>;
+  return (
+    <section className="section-pad border-y border-slate-200 bg-[#F4F6F8]" data-vcms-collection="page.steps">
+      <div className="site-shell">
+        <p className="section-label">Process</p>
+        <h2 className="section-heading mt-2 text-3xl lg:text-5xl">How it works.</h2>
+        <div className={`mt-9 grid gap-4 ${adaptiveGridClass(steps.length)}`}>{steps.map((step, index) => <article key={`${step.number}-${index}`} data-vcms-item="page.steps" data-vcms-index={index} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{step.imageUrl ? <img src={step.imageUrl} alt={step.title} className="mb-4 h-32 w-full rounded-xl object-cover" /> : null}<div className="mb-4 font-mono text-xs font-900 text-[#B87908]">{step.number}</div><h3 className="font-display text-lg font-900 text-[#06101F]">{step.title}</h3><p className="mt-3 text-sm leading-7 text-slate-600">{step.body}</p></article>)}</div>
+      </div>
+    </section>
+  );
 }
 
 type Contact = SiteContent["contact"];
 export default function CmsPageLayout({ page, pageKey = "page", visualWidgets = {}, contact, children, formTitle }: { page: CmsPage; pageKey?: string; visualWidgets?: SiteContent["visualWidgets"]; contact?: Contact; children?: React.ReactNode; formTitle?: string }) {
   const order = Array.isArray(page.sectionOrder) && page.sectionOrder.length ? page.sectionOrder : ["hero", "contactBar", "content", "process", "formOrCta"];
-  const widgetsFor = (zone: string) => visualWidgets?.[`${pageKey}:${zone}`] || [];
-  const rendered = order.map((section, index) => {
-    if (section === "hero") return <><VisualWidgetZone pageKey={pageKey} zone={`before-${section}-${index}`} allWidgets={visualWidgets} /><HeroSection key={`${section}-${index}`} page={page} /><VisualWidgetZone pageKey={pageKey} zone={`after-${section}-${index}`} allWidgets={visualWidgets} /></>;
-    if (section === "contactBar") return <><VisualWidgetZone pageKey={pageKey} zone={`before-${section}-${index}`} allWidgets={visualWidgets} /><ContactBar key={`${section}-${index}`} contact={contact} /><VisualWidgetZone pageKey={pageKey} zone={`after-${section}-${index}`} allWidgets={visualWidgets} /></>;
-    if (section === "content") return <><VisualWidgetZone pageKey={pageKey} zone={`before-${section}-${index}`} allWidgets={visualWidgets} /><ContentSection key={`${section}-${index}`} page={page} /><VisualWidgetZone pageKey={pageKey} zone={`after-${section}-${index}`} allWidgets={visualWidgets} /></>;
-    if (section === "process") return <><VisualWidgetZone pageKey={pageKey} zone={`before-${section}-${index}`} allWidgets={visualWidgets} /><ProcessSection key={`${section}-${index}`} steps={page.steps} /><VisualWidgetZone pageKey={pageKey} zone={`after-${section}-${index}`} allWidgets={visualWidgets} /></>;
-    if (section === "formOrCta") return children ? <><VisualWidgetZone pageKey={pageKey} zone={`before-${section}-${index}`} allWidgets={visualWidgets} /><section key={`${section}-${index}`} id="request" className="py-14 bg-white"><div className="max-w-3xl mx-auto px-4"><p className="section-label">Get Started</p><h2 className="section-heading text-3xl mb-2">{formTitle || page.ctaHeading}</h2><Paragraphs text={page.ctaBody} className="text-gray-500 mb-8 text-sm space-y-2" />{children}</div></section><VisualWidgetZone pageKey={pageKey} zone={`after-${section}-${index}`} allWidgets={visualWidgets} /></> : <><VisualWidgetZone pageKey={pageKey} zone={`before-${section}-${index}`} allWidgets={visualWidgets} /><section key={`${section}-${index}`} className="py-12 bg-accent"><div className="max-w-3xl mx-auto px-4 text-center"><h2 className="font-display font-900 text-3xl text-navy-900 mb-3">{page.ctaHeading}</h2><Paragraphs text={page.ctaBody} className="text-navy-800 mb-6 text-sm space-y-2" /><div className="flex flex-wrap justify-center gap-3">{page.ctaPrimaryLabel !== "__HIDDEN__" && page.ctaPrimaryLabel ? <Link href={page.ctaPrimaryHref} className="bg-navy-900 text-white font-display font-700 px-6 py-3 rounded hover:bg-navy-800 transition-colors">{page.ctaPrimaryLabel}</Link> : null}{page.ctaSecondaryLabel !== "__HIDDEN__" && page.ctaSecondaryLabel ? <Link href={page.ctaSecondaryHref} className="bg-white/25 border border-navy-900/20 text-navy-900 font-display font-700 px-6 py-3 rounded hover:bg-white/40 transition-colors">{page.ctaSecondaryLabel}</Link> : null}</div></div></section><VisualWidgetZone pageKey={pageKey} zone={`after-${section}-${index}`} allWidgets={visualWidgets} /></>;
-    return null;
-  });
-  return <>{rendered}</>;
+  return (
+    <>
+      {order.map((section, index) => {
+        const before = <VisualWidgetZone pageKey={pageKey} zone={`before-${section}-${index}`} allWidgets={visualWidgets} />;
+        const after = <VisualWidgetZone pageKey={pageKey} zone={`after-${section}-${index}`} allWidgets={visualWidgets} />;
+        let body: React.ReactNode = null;
+        if (section === "hero") body = <HeroSection page={page} />;
+        if (section === "contactBar") body = <ContactBar contact={contact} />;
+        if (section === "content") body = <ContentSection page={page} />;
+        if (section === "process") body = <ProcessSection steps={page.steps} />;
+        if (section === "formOrCta") body = children ? <section id="request" className="section-pad bg-white"><div className="site-shell"><div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8"><p className="section-label">Get Started</p><h2 className="section-heading mt-2 text-3xl">{formTitle || page.ctaHeading}</h2><Paragraphs text={page.ctaBody} className="mt-3 space-y-2 text-sm leading-7 text-slate-600" /> <div className="mt-7">{children}</div></div></div></section> : <section className="bg-[#D99611] py-14"><div className="site-shell text-center"><h2 className="font-display text-3xl font-900 text-[#06101F]">{page.ctaHeading}</h2><Paragraphs text={page.ctaBody} className="mx-auto mt-3 max-w-2xl space-y-2 text-sm leading-7 text-[#06101F]/75" /><div className="mt-6 flex flex-wrap justify-center gap-3">{page.ctaPrimaryLabel !== "__HIDDEN__" && page.ctaPrimaryLabel ? <Link href={page.ctaPrimaryHref} className="rounded-md bg-[#06101F] px-6 py-3 text-sm font-900 text-white">{page.ctaPrimaryLabel}</Link> : null}{page.ctaSecondaryLabel !== "__HIDDEN__" && page.ctaSecondaryLabel ? <Link href={page.ctaSecondaryHref} className="rounded-md border border-[#06101F]/20 bg-white/40 px-6 py-3 text-sm font-900 text-[#06101F]">{page.ctaSecondaryLabel}</Link> : null}</div></div></section>;
+        return <div key={`${section}-${index}`}>{before}{body}{after}</div>;
+      })}
+    </>
+  );
 }

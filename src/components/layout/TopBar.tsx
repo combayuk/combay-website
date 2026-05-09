@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Mail, Phone } from "lucide-react";
+import { Mail, Phone, ShieldCheck } from "lucide-react";
 
 export default function TopBar() {
   const { data: session } = useSession();
@@ -10,34 +10,28 @@ export default function TopBar() {
   const adminHref = role === "ADMIN" ? "/admin" : "/admin-login";
 
   return (
-    <div className="bg-navy-950 text-white text-xs py-2 border-b border-white/5">
-      <div className="max-w-7xl mx-auto px-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-5 min-w-0">
-          <a href="mailto:sales@combay.co.uk" className="flex items-center gap-1.5 hover:text-accent transition-colors min-w-0">
-            <Mail size={11} className="text-accent flex-shrink-0" />
-            <span className="text-white/60 font-display font-600 hidden sm:inline">Order’s/Quotes:</span>
+    <div className="bg-[#06101F] text-white text-xs border-b border-white/10">
+      <div className="site-shell flex h-9 items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4 text-white/75">
+          <a href="mailto:sales@combay.co.uk" className="flex min-w-0 items-center gap-1.5 transition-colors hover:text-white">
+            <Mail size={12} className="flex-shrink-0 text-[#D99611]" />
+            <span className="hidden font-800 text-white/45 sm:inline">Orders & quotes</span>
             <span className="truncate">sales@combay.co.uk</span>
           </a>
-          <a href="tel:+447340383334" className="hidden sm:flex items-center gap-1.5 hover:text-accent transition-colors">
-            <Phone size={11} className="text-steel" />
+          <a href="tel:+447340383334" className="hidden items-center gap-1.5 transition-colors hover:text-white sm:flex">
+            <Phone size={12} className="text-[#D99611]" />
             <span>+44 7340 383334</span>
           </a>
+          <span className="hidden items-center gap-1.5 text-white/45 lg:flex">
+            <ShieldCheck size={12} className="text-[#D99611]" />
+            UK based · 30-day warranty · B2B procurement support
+          </span>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          <Link href={customerHref} className="hover:text-accent transition-colors font-display font-600 whitespace-nowrap">
-            Customer Portal
-          </Link>
+        <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+          <Link href={customerHref} className="font-800 text-white/80 transition-colors hover:text-white">Customer Portal</Link>
           <span className="text-white/15">|</span>
-          <Link href={adminHref} className="hover:text-accent transition-colors font-display font-600 whitespace-nowrap">
-            Admin Portal
-          </Link>
-          <span className="text-white/15 hidden sm:inline">|</span>
-          <Link href="/asset-recovery" className="text-accent font-display font-600 hover:text-accent-light transition-colors hidden md:inline">
-            Sell Your Stock →
-          </Link>
-          <Link href="/contact?type=quote" className="bg-accent text-navy-950 font-display font-700 px-3 py-1 rounded hover:bg-accent-dark transition-colors hidden sm:inline">
-            Get a Quote
-          </Link>
+          <Link href={adminHref} className="font-800 text-white/80 transition-colors hover:text-white">Admin Portal</Link>
+          <Link href="/contact?type=quote" className="hidden rounded-sm bg-[#D99611] px-3 py-1 font-900 text-[#06101F] transition-colors hover:bg-[#F4B83A] sm:inline-flex">Request quote</Link>
         </div>
       </div>
     </div>

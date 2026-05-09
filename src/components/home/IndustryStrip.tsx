@@ -2,32 +2,31 @@
 import Link from "next/link";
 
 const INDUSTRIES = [
-  { label:"Scientific Research",  slug:"lab-scientific",    icon:"🔬", count:"1,200+" },
-  { label:"Automation & Control", slug:"automation-control",icon:"⚙️", count:"2,400+" },
-  { label:"Manufacturing",        slug:"manufacturing",     icon:"🏭", count:"890+" },
-  { label:"Display & Projectors", slug:"display-av",        icon:"📺", count:"340+" },
-  { label:"Oil & Gas",            slug:"oil-gas",           icon:"🛢️", count:"520+" },
-  { label:"Audio & Broadcast",   slug:"audio-broadcast",   icon:"🎙️", count:"280+" },
-  { label:"IT & Networking",      slug:"it-networking",     icon:"🖧",  count:"1,100+" },
-  { label:"Test & Detection",     slug:"test-detection",    icon:"🔭", count:"1,650+" },
+  { label: "Scientific Research", slug: "lab-scientific", icon: "🔬", count: "1,200+" },
+  { label: "Automation & Control", slug: "automation-control", icon: "⚙️", count: "2,400+" },
+  { label: "Manufacturing", slug: "manufacturing", icon: "🏭", count: "890+" },
+  { label: "Display & Projectors", slug: "display-av", icon: "📺", count: "340+" },
+  { label: "Oil & Gas", slug: "oil-gas", icon: "🛢️", count: "520+" },
+  { label: "Audio & Broadcast", slug: "audio-broadcast", icon: "🎙️", count: "280+" },
+  { label: "IT & Networking", slug: "it-networking", icon: "🖧", count: "1,100+" },
+  { label: "Test & Detection", slug: "test-detection", icon: "🔭", count: "1,650+" },
 ];
 
 export default function IndustryStrip() {
   return (
-    <section className="bg-surface border-b border-gray-200 py-5">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[10px] text-gray-400 tracking-[0.18em] uppercase whitespace-nowrap">Serving Industries</span>
-          <div className="flex-1 h-px bg-gray-200"/>
-          <Link href="/shop" className="font-display font-600 text-xs text-accent hover:text-accent-dark whitespace-nowrap transition-colors">Browse all →</Link>
+    <section className="border-y border-slate-200 bg-[#F4F6F8] py-8">
+      <div className="site-shell">
+        <div className="mb-4 flex items-center gap-3">
+          <p className="font-mono text-[11px] font-800 uppercase tracking-[0.18em] text-slate-500">Serving industries</p>
+          <div className="h-px flex-1 bg-slate-200" />
+          <Link href="/shop" className="text-xs font-900 text-[#B87908] transition-colors hover:text-[#06101F]">Browse all →</Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-          {INDUSTRIES.map(ind => (
-            <Link key={ind.slug} href={`/shop?category=${ind.slug}`}
-              className="group flex flex-col items-center text-center bg-white border border-gray-200 rounded-xl p-3 hover:border-accent hover:bg-accent/5 hover:shadow-sm transition-all duration-200">
-              <span className="text-xl mb-1.5 group-hover:scale-110 transition-transform duration-200">{ind.icon}</span>
-              <span className="font-display font-600 text-gray-800 text-[10px] leading-tight mb-1">{ind.label}</span>
-              <span className="font-mono text-[9px] text-gray-400">{ind.count}</span>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+          {INDUSTRIES.map((industry) => (
+            <Link key={industry.slug} href={`/shop?category=${industry.slug}`} className="group rounded-xl border border-slate-200 bg-white p-3.5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D99611]/45 hover:shadow-md">
+              <span className="mb-2 block text-2xl transition-transform group-hover:scale-110">{industry.icon}</span>
+              <span className="block text-[11px] font-900 leading-tight text-[#06101F]">{industry.label}</span>
+              <span className="mt-1 block font-mono text-[10px] text-slate-400">{industry.count}</span>
             </Link>
           ))}
         </div>
