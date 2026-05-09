@@ -1,0 +1,12 @@
+Phase 19A — Shop category taxonomy cleanup and category navigation behaviour
+
+- Adds a canonical public category taxonomy with expandable subcategories.
+- Hides noisy eBay-imported marketplace categories from the public shop filters.
+- Remaps existing database/eBay categories at read time into Combay website categories.
+- Remaps future product saves/imports into canonical Combay categories to prevent new eBay categories being created publicly.
+- Updates eBay inference to use the canonical taxonomy.
+- Updates shop sidebar to show expandable category groups and subcategories.
+- Makes selected category visually obvious on the shop page.
+- Updates mega menu and homepage category cards to link to canonical categories.
+- Keeps old/legacy category links such as display-av, test-detection, oil-gas and manufacturing mapped to the closest canonical group.
+- No Prisma schema change required.

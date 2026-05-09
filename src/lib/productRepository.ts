@@ -1,5 +1,6 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { CATEGORIES, PRODUCTS, searchProducts, type CatalogProduct, type ConditionCode, type StockStatus } from "@/lib/catalog";
+import { PUBLIC_CATEGORY_LIST, canonicalCategoryForText, isPublicCategoryMatch } from "@/lib/categoryTaxonomy";
 
 export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs" | "variants" | "documents"> & {
   id?: string;
@@ -60,6 +61,16 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
   const productTags = (product.tags ?? []) as Array<{ name: string }>;
   const productVariants = ((product as any).variants ?? []) as Array<{ id: string; sku: string | null; label: string; optionName: string | null; optionValue: string | null; price: any; stockQty: number; sortOrder: number }>;
   const primaryImage = productImages.find((image) => image.isPrimary)?.url ?? productImages[0]?.url ?? null;
+  const canonicalCategory = canonicalCategoryForText({
+    title: product.title,
+    category: product.category?.name,
+    categorySlug: product.category?.slug,
+    brand: product.brand,
+    manufacturer: product.manufacturer,
+    model: product.model,
+    mpn: product.mpn,
+    specsText: productSpecs.map((spec) => `${spec.label} ${spec.value}`).join(" "),
+  });
 
   return {
     id: product.id,
@@ -70,8 +81,10 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     manufacturer: product.manufacturer ?? product.brand ?? "",
     model: product.model ?? "",
     mpn: product.mpn ?? "",
-    category: product.category?.name ?? "Uncategorised",
-    categorySlug: product.category?.slug ?? "uncategorised",
+    category: canonicalCategory.groupLabel,
+    categorySlug: canonicalCategory.groupSlug,
+    subcategory: canonicalCategory.subcategoryLabel ?? "",
+    subcategorySlug: canonicalCategory.subcategorySlug ?? "",
     condition: product.condition as ConditionCode,
     price,
     priceOnRequest: product.priceOnRequest,
@@ -129,9 +142,18 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
   };
 }
 
-async function getCategoryId(input?: { category?: string; categorySlug?: string }) {
-  const label = input?.category?.trim() || "Uncategorised";
-  const slug = input?.categorySlug?.trim() || slugify(label, "uncategorised");
+async function getCategoryId(input?: { category?: string; categorySlug?: string; title?: string; brand?: string; manufacturer?: string; model?: string; mpn?: string }) {
+  const canonical = canonicalCategoryForText({
+    title: input?.title,
+    category: input?.category,
+    categorySlug: input?.categorySlug,
+    brand: input?.brand,
+    manufacturer: input?.manufacturer,
+    model: input?.model,
+    mpn: input?.mpn,
+  });
+  const label = canonical.groupLabel;
+  const slug = canonical.groupSlug;
   const category = await prisma.category.upsert({
     where: { slug },
     update: { name: label },
@@ -209,7 +231,8 @@ export async function getProductsFromRepository(params: {
     if (params.status) where.status = params.status;
     else if (!params.includeArchived) where.status = "PUBLISHED";
 
-    if (params.category) where.category = { slug: params.category };
+    // Public category filtering is applied after products are mapped into Combay's canonical taxonomy.
+    // This hides noisy marketplace/eBay categories without requiring destructive DB cleanup.
     if (params.condition) where.condition = params.condition;
     if (params.priceMin !== null && params.priceMin !== undefined) where.price = { ...(where.price ?? {}), gte: params.priceMin };
     if (params.priceMax !== null && params.priceMax !== undefined) where.price = { ...(where.price ?? {}), lte: params.priceMax };
@@ -241,13 +264,10 @@ export async function getProductsFromRepository(params: {
       take: 5000,
     });
 
-    const dbCategories = await prisma.category.findMany({ orderBy: { name: "asc" } });
-    const categoryMap = new Map(CATEGORIES.map((category) => [category.slug, category]));
-    for (const category of dbCategories) {
-      if (category.slug) categoryMap.set(category.slug, { label: category.name, slug: category.slug });
-    }
+    const mappedProducts = products.map(mapDbProduct);
+    const filteredProducts = params.category ? mappedProducts.filter((product) => isPublicCategoryMatch(product, params.category)) : mappedProducts;
 
-    return { products: products.map(mapDbProduct), categories: Array.from(categoryMap.values()) };
+    return { products: filteredProducts, categories: PUBLIC_CATEGORY_LIST };
   });
 
   if (dbResult.ok) {
@@ -262,18 +282,32 @@ export async function getProductsFromRepository(params: {
 
   const products = searchProducts({
     query: params.query ?? "",
-    category: params.category ?? "",
+    category: "",
     condition: params.condition ?? "",
     priceMin: params.priceMin ?? null,
     priceMax: params.priceMax ?? null,
-  });
+  })
+    .map((product) => {
+      const canonical = canonicalCategoryForText({
+        title: product.title,
+        category: product.category,
+        categorySlug: product.categorySlug,
+        brand: product.brand,
+        manufacturer: product.manufacturer,
+        model: product.model,
+        mpn: product.mpn,
+        specsText: product.specs?.map((s) => `${s.label} ${s.value}`).join(" "),
+      });
+      return { ...product, category: canonical.groupLabel, categorySlug: canonical.groupSlug, subcategory: canonical.subcategoryLabel ?? "", subcategorySlug: canonical.subcategorySlug ?? "" };
+    })
+    .filter((product) => isPublicCategoryMatch(product, params.category));
 
   return {
     source: "catalog-fallback",
     message: dbResult.reason,
     products,
-    total: PRODUCTS.length,
-    categories: CATEGORIES,
+    total: products.length,
+    categories: PUBLIC_CATEGORY_LIST,
   };
 }
 
@@ -299,7 +333,7 @@ export async function saveProductToRepository(input: ProductWriteInput) {
     const sku = input.sku?.trim() || await nextSku();
     const title = input.title?.trim() || "Untitled product";
     const slug = slugify(input.slug || title, sku.toLowerCase());
-    const categoryId = await getCategoryId({ category: input.category, categorySlug: input.categorySlug });
+    const categoryId = await getCategoryId({ category: input.category, categorySlug: input.categorySlug, title, brand: input.brand, manufacturer: input.manufacturer, model: input.model, mpn: input.mpn });
     const relations = relationPayload(input);
     const existing = input.id
       ? await prisma.product.findFirst({ where: { OR: [{ id: input.id }, { sku }, { slug }] } })

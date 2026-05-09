@@ -1,16 +1,13 @@
 "use client";
 import Link from "next/link";
+import { PUBLIC_CATEGORY_GROUPS } from "@/lib/categoryTaxonomy";
 
-const INDUSTRIES = [
-  { label: "Scientific Research", slug: "lab-scientific", image: "/images/categories/real/lab-instrument.svg", count: "1,200+" },
-  { label: "Automation & Control", slug: "automation-control", image: "/images/categories/real/plc-module.svg", count: "2,400+" },
-  { label: "Manufacturing", slug: "manufacturing", image: "/images/categories/real/robot-arm.svg", count: "890+" },
-  { label: "Display & Projectors", slug: "display-av", image: "/images/categories/real/projector.svg", count: "340+" },
-  { label: "Oil & Gas", slug: "oil-gas", image: "/images/categories/real/gas-detector.svg", count: "520+" },
-  { label: "Audio & Broadcast", slug: "audio-broadcast", image: "/images/categories/real/audio-broadcast.svg", count: "280+" },
-  { label: "IT & Networking", slug: "it-networking", image: "/images/categories/real/server-switch.svg", count: "1,100+" },
-  { label: "Test & Detection", slug: "test-detection", image: "/images/categories/real/oscilloscope.svg", count: "1,650+" },
-];
+const INDUSTRIES = PUBLIC_CATEGORY_GROUPS.map((group) => ({
+  label: group.label,
+  slug: group.slug,
+  image: group.image,
+  count: group.subcategories.length ? `${group.subcategories.length} groups` : "Stock",
+}));
 
 export default function IndustryStrip() {
   return (

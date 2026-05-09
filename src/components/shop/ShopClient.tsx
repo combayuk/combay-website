@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, SlidersHorizontal, X, ShoppingCart } from "lucide-react";
-import { CATEGORIES, CONDITION_LABELS, type CatalogProduct } from "@/lib/catalog";
+import { ChevronDown, Search, SlidersHorizontal, X, ShoppingCart } from "lucide-react";
+import { CONDITION_LABELS, type CatalogProduct } from "@/lib/catalog";
+import { PUBLIC_CATEGORY_LIST, normaliseSelectedCategorySlug, selectedCategoryLabel, type PublicSubcategory } from "@/lib/categoryTaxonomy";
 import { addCartItem } from "@/lib/cart";
 import PublicPromotionCards, { type PromotionCardData } from "@/components/promotions/PublicPromotionCards";
 
@@ -25,8 +26,9 @@ const SORT_OPTIONS = [
 type ShopClientProps = { initialQuery?: string; initialCategory?: string; promotions?: PromotionCardData[] };
 
 export default function ShopClient({ initialQuery = "", initialCategory = "", promotions = [] }: ShopClientProps) {
+  const initialCategoryNormalised = normaliseSelectedCategorySlug(initialCategory);
   const [query, setQuery] = useState(initialQuery);
-  const [category, setCategory] = useState(initialCategory);
+  const [category, setCategory] = useState(() => initialCategoryNormalised);
   const [condition, setCondition] = useState("");
   const [sort, setSort] = useState("newest");
   const [showFilters, setShowFilters] = useState(false);
@@ -35,7 +37,8 @@ export default function ShopClient({ initialQuery = "", initialCategory = "", pr
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState("");
-  const [categories, setCategories] = useState(CATEGORIES);
+  const [categories, setCategories] = useState(PUBLIC_CATEGORY_LIST);
+  const [openCategory, setOpenCategory] = useState(() => PUBLIC_CATEGORY_LIST.find((cat) => cat.slug === initialCategoryNormalised || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === initialCategoryNormalised))?.slug || "automation-control");
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -69,13 +72,58 @@ export default function ShopClient({ initialQuery = "", initialCategory = "", pr
 
   const clearFilters = () => { setQuery(""); setCategory(""); setCondition(""); setPriceMin(""); setPriceMax(""); };
   const hasFilters = Boolean(query || category || condition || priceMin || priceMax);
+  const activeCategoryLabel = selectedCategoryLabel(category);
+
+  function selectCategory(slug: string) {
+    setCategory(slug);
+    if (slug) {
+      const parent = categories.find((cat) => cat.slug === slug || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === slug));
+      if (parent?.slug) setOpenCategory(parent.slug);
+    }
+  }
 
   return (
     <div>
       <div className="bg-navy-950 text-white py-10"><div className="max-w-7xl mx-auto px-4"><div className="grid lg:grid-cols-[1fr_420px] gap-6 items-end"><div><p className="font-mono text-xs tracking-widest uppercase text-accent mb-2">Inventory</p><h1 className="font-display font-900 text-3xl lg:text-4xl mb-3">Browse industrial equipment</h1><p className="text-gray-400 text-sm max-w-2xl">Search tested automation, laboratory, test, AV, networking and process equipment by SKU, brand, MPN, model or manufacturer.</p></div>{promotions.length > 0 ? <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex items-center justify-between gap-3 mb-3"><div><p className="font-display font-800 text-sm text-white">Current shop offers</p><p className="text-xs text-white/60">Copy a code and apply it at checkout.</p></div></div><div className="space-y-2"><PublicPromotionCards promotions={promotions} compact /></div></div> : null}</div></div></div>
       <div className="bg-white border-b border-gray-200 py-4 sticky top-16 z-30"><div className="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-3 lg:items-center"><div className="relative flex-1 max-w-2xl"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search SKU, MPN, model, manufacturer, brand or product name..." className="input pl-9" /></div><select value={sort} onChange={(event) => setSort(event.target.value)} className="select lg:w-auto">{SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button onClick={() => setShowFilters(!showFilters)} className={`flex items-center justify-center gap-1.5 border font-display font-600 text-sm px-4 py-2.5 rounded-lg transition-colors ${showFilters ? "bg-navy-900 text-white border-navy-900" : "border-gray-200 text-navy-900 hover:border-navy-900"}`}><SlidersHorizontal size={14} /> Filters {hasFilters && <span className="bg-accent text-navy-900 text-xs rounded-full w-4 h-4 flex items-center justify-center font-700">!</span>}</button>{hasFilters && <button onClick={clearFilters} className="flex items-center justify-center gap-1 text-red-500 text-sm font-600 hover:text-red-700"><X size={14} /> Clear</button>}</div></div>
-      <div className="max-w-7xl mx-auto px-4 py-8"><div className="flex gap-6"><aside className={`${showFilters ? "block" : "hidden"} lg:block w-56 flex-shrink-0`}><div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-36 space-y-5"><div><p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Category</p><div className="space-y-0.5">{categories.map((cat) => <button key={cat.slug || "all"} onClick={() => setCategory(cat.slug)} className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${category === cat.slug ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}>{cat.label}</button>)}</div></div><div><p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Condition</p><div className="space-y-0.5">{CONDITIONS.map((cond) => <button key={cond.value || "all"} onClick={() => setCondition(cond.value)} className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${condition === cond.value ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}>{cond.label}</button>)}</div></div><div><p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Price Range (£)</p><div className="flex items-center gap-2"><input type="number" placeholder="Min" value={priceMin} onChange={(event) => setPriceMin(event.target.value)} className="input w-full text-sm" /><span className="text-gray-400 flex-shrink-0">–</span><input type="number" placeholder="Max" value={priceMax} onChange={(event) => setPriceMax(event.target.value)} className="input w-full text-sm" /></div></div></div></aside>
-        <div className="flex-1 min-w-0"><div className="flex items-center justify-between mb-5"><p className="text-sm text-gray-500"><span className="font-display font-700 text-navy-900">{filtered.length}</span> items found {loading && "· loading…"}</p><p className="hidden md:block text-xs text-gray-400">Source: {source || "database"}</p></div>{filtered.length === 0 && !loading ? <div className="text-center py-20 text-gray-400"><div className="text-4xl mb-3">🔍</div><p className="font-display font-600 text-navy-900 mb-1">No items found</p><p className="text-sm mb-4">Try a brand, SKU, MPN, model or category.</p><button onClick={clearFilters} className="btn-secondary">Clear all filters</button></div> : <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">{filtered.map((product) => <ProductCard key={product.id} product={product} />)}</div>}</div>
+      <div className="max-w-7xl mx-auto px-4 py-8"><div className="flex gap-6"><aside className={`${showFilters ? "block" : "hidden"} lg:block w-56 flex-shrink-0`}><div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-36 space-y-5"><div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider">Category</p>
+                {category ? <span className="rounded-full bg-[#FFF8E8] px-2 py-0.5 text-[10px] font-900 text-[#2D4F7A]">Selected</span> : null}
+              </div>
+              <button onClick={() => selectCategory("")} className={`mb-2 w-full rounded-md px-2 py-2 text-left text-sm font-display font-800 transition-colors ${!category ? "bg-navy-900 text-white" : "bg-slate-50 text-gray-700 hover:bg-gray-100"}`}>All Categories</button>
+              <div className="space-y-1">
+                {categories.filter((cat) => cat.slug).map((cat) => {
+                  const isParentActive = category === cat.slug || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === category);
+                  const open = openCategory === cat.slug || isParentActive;
+                  return (
+                    <div key={cat.slug} className={`rounded-lg border ${isParentActive ? "border-[#E8A44A] bg-[#FFF8E8]" : "border-slate-200 bg-white"}`}>
+                      <div className="flex items-center">
+                        <button onClick={() => selectCategory(cat.slug)} className={`min-w-0 flex-1 rounded-l-lg px-2 py-2 text-left text-sm font-display font-800 transition-colors ${category === cat.slug ? "bg-[#2D4F7A] text-white" : "text-[#2D4F7A] hover:bg-slate-50"}`}>
+                          {cat.label}
+                        </button>
+                        <button type="button" onClick={() => setOpenCategory(open ? "" : cat.slug)} className="flex h-9 w-9 items-center justify-center rounded-r-lg text-[#2D4F7A] hover:bg-slate-50" aria-label={`Toggle ${cat.label} sub-categories`}>
+                          <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+                        </button>
+                      </div>
+                      {open && cat.subcategories?.length ? (
+                        <div className="border-t border-slate-200 px-2 py-2">
+                          {cat.subcategories.map((sub: PublicSubcategory) => (
+                            <button key={sub.slug} onClick={() => selectCategory(sub.slug)} className={`block w-full rounded px-2 py-1.5 text-left text-xs font-700 transition-colors ${category === sub.slug ? "bg-[#2D4F7A] text-white" : "text-slate-600 hover:bg-white"}`}>
+                              {sub.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div><div><p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Condition</p><div className="space-y-0.5">{CONDITIONS.map((cond) => <button key={cond.value || "all"} onClick={() => setCondition(cond.value)} className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${condition === cond.value ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}>{cond.label}</button>)}</div></div><div><p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Price Range (£)</p><div className="flex items-center gap-2"><input type="number" placeholder="Min" value={priceMin} onChange={(event) => setPriceMin(event.target.value)} className="input w-full text-sm" /><span className="text-gray-400 flex-shrink-0">–</span><input type="number" placeholder="Max" value={priceMax} onChange={(event) => setPriceMax(event.target.value)} className="input w-full text-sm" /></div></div></div></aside>
+        <div className="flex-1 min-w-0"><div className="flex items-center justify-between mb-5"><div>
+                  <p className="text-sm text-gray-500"><span className="font-display font-700 text-navy-900">{filtered.length}</span> items found {loading && "· loading…"}</p>
+                  {category ? <p className="mt-1 text-xs font-900 text-[#2D4F7A]">Showing category: <span className="rounded bg-[#FFF8E8] px-2 py-0.5 text-[#C9872F]">{activeCategoryLabel}</span></p> : null}
+                </div><p className="hidden md:block text-xs text-gray-400">Source: {source || "database"}</p></div>{filtered.length === 0 && !loading ? <div className="text-center py-20 text-gray-400"><div className="text-4xl mb-3">🔍</div><p className="font-display font-600 text-navy-900 mb-1">No items found</p><p className="text-sm mb-4">Try a brand, SKU, MPN, model or category.</p><button onClick={clearFilters} className="btn-secondary">Clear all filters</button></div> : <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">{filtered.map((product) => <ProductCard key={product.id} product={product} />)}</div>}</div>
       </div></div>
     </div>
   );

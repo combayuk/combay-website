@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { saveProductToRepository } from "@/lib/productRepository";
 import { CATEGORIES } from "@/lib/catalog";
+import { canonicalCategoryForText } from "@/lib/categoryTaxonomy";
 
 type EbayConfig = {
   id?: string;
@@ -423,6 +424,16 @@ function categoryFromStaticSlug(slug: string) {
 
 function inferWebsiteCategory(listing: NormalizedEbayListing) {
   const specText = listing.specs.map((spec) => `${spec.label} ${spec.value}`).join(" ");
+  const canonical = canonicalCategoryForText({
+    title: listing.title,
+    category: listing.category,
+    brand: listing.brand,
+    manufacturer: listing.manufacturer,
+    model: listing.model,
+    mpn: listing.mpn,
+    specsText: specText,
+  });
+  if (canonical.groupSlug) return categoryChoice(canonical.groupLabel, canonical.groupSlug);
   const haystack = `${listing.title} ${listing.category || ""} ${listing.brand || ""} ${listing.manufacturer || ""} ${listing.model || ""} ${listing.mpn || ""} ${specText}`.toLowerCase();
   const rules: Array<{ slug: string; keywords: string[] }> = [
     { slug: "plcs-industrial-controllers", keywords: ["plc", "simatic", "s7-", "cpu module", "controller", "control unit", "input module", "output module", "i/o module", "io module"] },
