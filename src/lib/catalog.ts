@@ -28,6 +28,8 @@ export type CatalogProduct = {
   mpn: string;
   category: string;
   categorySlug: string;
+  subcategory?: string;
+  subcategorySlug?: string;
   condition: ConditionCode;
   price: number | null;
   priceOnRequest: boolean;

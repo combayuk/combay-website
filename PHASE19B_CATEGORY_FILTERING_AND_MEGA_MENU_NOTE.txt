@@ -1,0 +1,11 @@
+Phase 19B — Shop category filtering correction and mega-menu compacting
+
+- Fixed subcategory filtering bug caused by already-mapped products being reclassified only by master category slug.
+- Master categories are now first-class filters: selecting Automation & Control, Lab & Scientific, etc. returns all items inferred under that master group.
+- Subcategories remain selectable and visually highlighted.
+- Product cards now show both master category and inferred subcategory where available.
+- Rebuilt the taxonomy matcher with stronger keyword/brand/eBay-category rules so existing imported items are placed into Combay's public categories at runtime instead of raw eBay marketplace categories.
+- Raw eBay category clutter remains hidden from the public shop.
+- Mega menu made smaller and scroll-safe with compact cards, fewer visible child links and max-height constraint.
+
+No Prisma schema change required.
