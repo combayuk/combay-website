@@ -1,0 +1,7 @@
+Phase 17J — About section final compact media-panel refinement
+- Narrows the left image/staff panel to a fixed 360px desktop column.
+- Reduces image height to ~230px with object-cover crop.
+- Removes the large rounded testimonial-card feel in favour of a restrained bordered media panel.
+- Reduces quote area into a slim caption strip with thin orange left border.
+- Tightens vertical spacing and proof-chip sizing.
+- Keeps admin editability intact through existing CMS fields.

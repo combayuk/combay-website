@@ -49,20 +49,22 @@ function AboutFounderSection({ page }: { page: CmsPage }) {
   const paragraphs = limitedParagraphs(page.sectionBody, 2);
   const proofPoints = (page.proofPoints && page.proofPoints.length ? page.proofPoints : ["Tested stock", "Warranty-backed supply", "Repair-led asset recovery"]).slice(0, 4);
   return (
-    <section className="border-y border-slate-200 bg-white py-9 sm:py-10 lg:py-14">
+    <section className="border-y border-slate-200 bg-white py-8 sm:py-10 lg:py-12">
       <div className="site-shell">
-        <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center xl:gap-12">
+        <div className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start xl:gap-14">
           <div className="order-2 lg:order-1">
-            <div className="mx-auto max-w-[460px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:mx-0">
-              <img
-                src={page.quoteImageUrl || "/images/about/industrial-supply-desk.svg"}
-                alt={page.quoteName || "Combay industrial supply desk"}
-                className="h-[230px] w-full object-cover sm:h-[250px] lg:h-[280px]"
-              />
-              <div className="border-t border-slate-200 px-4 py-4 lg:px-5">
-                <p className="font-display text-base font-900 text-[#2D4F7A]">{page.quoteName || "Combay Team"}</p>
-                <p className="mt-0.5 text-[10px] font-900 uppercase tracking-[0.16em] text-[#C9872F]">{page.quoteDesignation || "Industrial equipment supply, repair and asset recovery"}</p>
-                <blockquote className="mt-3 border-l-2 border-[#E8A44A] pl-3 text-[13px] font-800 leading-6 text-slate-700">
+            <div className="mx-auto max-w-[380px] lg:mx-0">
+              <div className="overflow-hidden border border-slate-200 bg-white">
+                <img
+                  src={page.quoteImageUrl || "/images/about/industrial-supply-desk.svg"}
+                  alt={page.quoteName || "Combay industrial supply desk"}
+                  className="h-[220px] w-full object-cover sm:h-[230px] lg:h-[230px]"
+                />
+              </div>
+              <div className="pt-3">
+                <p className="font-display text-[1.05rem] font-900 leading-tight text-[#2D4F7A]">{page.quoteName || "Combay Team"}</p>
+                <p className="mt-1 text-[10px] font-900 uppercase tracking-[0.16em] text-[#C9872F]">{page.quoteDesignation || "Industrial equipment supply, repair and asset recovery"}</p>
+                <blockquote className="mt-3 max-w-[34ch] border-l-2 border-[#E8A44A] pl-3 text-[12.5px] font-700 leading-5 text-slate-700">
                   “{page.quoteText || "Combay was built for maintenance and procurement teams who need practical answers before spending money."}”
                 </blockquote>
               </div>
@@ -72,15 +74,15 @@ function AboutFounderSection({ page }: { page: CmsPage }) {
           <div className="order-1 flex flex-col justify-center lg:order-2">
             <div className="max-w-[720px]">
               <p className="section-label">{page.sectionEyebrow || "Built to solve a real problem"}</p>
-              <h2 className="mt-2 max-w-[660px] font-display text-3xl font-900 leading-[1.1] tracking-[-0.035em] text-[#2D4F7A] lg:text-[2.25rem]">
+              <h2 className="mt-2 max-w-[640px] font-display text-[2.1rem] font-900 leading-[1.08] tracking-[-0.035em] text-[#2D4F7A] lg:text-[3rem]">
                 {page.sectionHeading || "Industrial equipment decisions need practical proof, not sales theatre."}
               </h2>
-              <div className="mt-4 max-w-[690px] space-y-2.5 text-sm leading-7 text-slate-600">
+              <div className="mt-4 max-w-[700px] space-y-2.5 text-sm leading-7 text-slate-600">
                 {paragraphs.map((part, index) => <p key={index}>{part}</p>)}
               </div>
-              <div className="mt-5 flex flex-wrap gap-2.5">
+              <div className="mt-5 flex flex-wrap gap-2">
                 {proofPoints.map((point) => (
-                  <div key={point} className="inline-flex items-center rounded-full border border-[#2D4F7A]/15 bg-[#F8FAFC] px-3 py-2 text-[12px] font-900 text-[#2D4F7A]">
+                  <div key={point} className="inline-flex items-center rounded-full border border-[#2D4F7A]/15 bg-[#F8FAFC] px-3 py-1.5 text-[11px] font-900 text-[#2D4F7A] sm:text-[12px]">
                     <span className="mr-2 h-1.5 w-1.5 rounded-full bg-[#E8A44A]" />{point}
                   </div>
                 ))}
