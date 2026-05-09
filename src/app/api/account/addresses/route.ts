@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
 async function currentUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
-  if ((session.user as any).role !== "CUSTOMER") return { forbidden: true } as any;
   if (!isDatabaseConfigured()) {
     return { id: "preview", email: session.user.email, name: session.user.name || "", phone: "", company: "", addresses: [] } as any;
   }
@@ -44,7 +43,6 @@ function clean(body: any) {
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Please sign in." }, { status: 401 });
-  if ((user as any).forbidden) return NextResponse.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   return NextResponse.json({
     ok: true,
     customer: { name: user.name || "", email: user.email || "", phone: user.phone || "", company: user.company || "" },
@@ -55,7 +53,6 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Please sign in." }, { status: 401 });
-  if ((user as any).forbidden) return NextResponse.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   try {
     const data = clean(await request.json().catch(() => ({})));
     if (user.id === "preview") return NextResponse.json({ ok: true, address: { id: "preview", ...data } });
@@ -75,7 +72,6 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Please sign in." }, { status: 401 });
-  if ((user as any).forbidden) return NextResponse.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   try {
     const body = await request.json().catch(() => ({}));
     const id = String(body?.id || "").trim();
@@ -99,7 +95,6 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Please sign in." }, { status: 401 });
-  if ((user as any).forbidden) return NextResponse.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   const url = new URL(request.url);
   const id = url.searchParams.get("id") || "";
   if (!id) return NextResponse.json({ ok: false, error: "Address ID is required." }, { status: 400 });

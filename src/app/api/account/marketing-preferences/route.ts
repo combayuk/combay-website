@@ -10,7 +10,6 @@ export const dynamic = "force-dynamic";
 async function currentUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
-  if ((session.user as any).role !== "CUSTOMER") return { forbidden: true } as any;
   if (!isDatabaseConfigured()) return { id: "preview", email: session.user.email, name: session.user.name || "Preview Customer", marketingPrefs: null } as any;
   return prisma.user.findUnique({ where: { email: session.user.email.toLowerCase() }, include: { marketingPrefs: true } });
 }
@@ -18,7 +17,6 @@ async function currentUser() {
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Please sign in before viewing marketing preferences." }, { status: 401 });
-  if ((user as any).forbidden) return NextResponse.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   if (user.id === "preview") return NextResponse.json({ ok: true, categories: CATEGORY_INTERESTS, prefs: publicMarketingPrefs(null), mode: "preview" });
   const prefs = user.marketingPrefs || await ensureMarketingPrefs(user.id, "customer-portal-load");
   return NextResponse.json({ ok: true, categories: CATEGORY_INTERESTS, prefs: publicMarketingPrefs(prefs) });
@@ -27,7 +25,6 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Please sign in before updating marketing preferences." }, { status: 401 });
-  if ((user as any).forbidden) return NextResponse.json({ ok: false, error: "Customer portal access is required." }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   if (user.id === "preview") return NextResponse.json({ ok: true, mode: "preview", prefs: publicMarketingPrefs(body), message: "Marketing preferences validated in preview mode." });
   const prefs = await updateMarketingPrefs(user.id, { ...body, consentSource: "customer-portal" });

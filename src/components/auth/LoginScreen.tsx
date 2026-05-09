@@ -45,7 +45,6 @@ function LoginForm({ mode, showPreviewAccounts }: { mode: LoginMode; showPreview
   const defaultCallback = mode === "admin" ? "/admin" : "/portal";
   const callbackUrl = safeCallbackUrl(params.get("callbackUrl"), defaultCallback);
   const verified = params.get("verified") === "1";
-  const reset = params.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -107,9 +106,7 @@ function LoginForm({ mode, showPreviewAccounts }: { mode: LoginMode; showPreview
     >
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex justify-center">
-          <span className="rounded-xl bg-white px-4 py-3 shadow-card">
-            <img src="/images/combay-logo.svg" alt="Combay" className="h-12 w-auto max-w-[230px] object-contain" />
-          </span>
+          <img src="/images/combay-footer-logo.svg" alt="Combay" className="h-16 w-auto max-w-[260px] object-contain" />
         </Link>
 
         {showPreviewAccounts ? (
@@ -150,12 +147,6 @@ function LoginForm({ mode, showPreviewAccounts }: { mode: LoginMode; showPreview
             </div>
           )}
 
-          {reset && !error && (
-            <div className="bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg px-3 py-2.5 mb-4 font-display font-600">
-              Password updated. You can now sign in.
-            </div>
-          )}
-
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2.5 mb-4 font-display font-600">
               {error}
@@ -168,16 +159,17 @@ function LoginForm({ mode, showPreviewAccounts }: { mode: LoginMode; showPreview
               <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder={mode === "admin" ? "admin@combay.co.uk" : "you@company.com"} autoComplete="email" />
             </div>
             <div>
-              <div className="mb-1.5 flex items-center justify-between gap-3">
-                <label className="label mb-0">Password</label>
-                <Link href={`/auth/forgot-password?mode=${mode === "admin" ? "admin" : "customer"}`} className="text-xs font-800 text-[#C9872F] hover:text-[#2D4F7A]">Forgot password?</Link>
-              </div>
+              <label className="label">Password</label>
               <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" autoComplete="current-password" />
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base mt-1">
               {loading ? "Signing in..." : buttonText}
             </button>
           </form>
+
+          <p className="mt-4 text-center text-sm text-gray-500">
+            <Link href={`/auth/forgot-password?mode=${mode === "admin" ? "admin" : "customer"}`} className="font-700 text-accent hover:text-accent-dark">Forgot password?</Link>
+          </p>
 
           {mode === "customer" && (
             <p className="text-center text-sm text-gray-500 mt-5">

@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { isDatabaseConfigured } from "@/lib/db";
+import { normaliseEmail } from "@/lib/authSecurity";
 
 export type AuthRole = "ADMIN" | "CUSTOMER";
 
@@ -31,10 +32,6 @@ const ADMIN_LOGIN_PASSWORD =
   process.env.MOCK_ADMIN_PASSWORD ??
   process.env.ADMIN_LOGIN_PASSWORD ??
   "Admin12345";
-
-function normaliseEmail(value?: string | null) {
-  return String(value || "").trim().toLowerCase();
-}
 
 function normaliseLoginMode(value?: string | null): "admin" | "customer" | "generic" {
   if (value === "admin") return "admin";
@@ -83,6 +80,7 @@ export const authOptions: NextAuthOptions = {
         if (isDatabaseConfigured()) {
           const user = await prisma.user.findUnique({ where: { email } });
           if (!user?.passwordHash) return null;
+          if (user.suspendedAt) return null;
           if (user.requiresEmailVerification && !user.emailVerified) {
             throw new Error("EMAIL_NOT_VERIFIED");
           }

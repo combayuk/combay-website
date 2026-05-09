@@ -11,6 +11,7 @@ const NAV = [
   { href:"/admin/products/ai", label:"Product AI",        icon:<Sparkles size={15}/> },
   { href:"/admin/orders",     label:"Orders",            icon:<ShoppingCart size={15}/> },
   { href:"/admin/invoices",   label:"Invoices & Quotes", icon:<Receipt size={15}/> },
+  { href:"/admin/users",      label:"Users",             icon:<UsersRound size={15}/> },
   { href:"/admin/leads",      label:"Leads",             icon:<UsersRound size={15}/> },
   { href:"/admin/requests",   label:"Requests",          icon:<Wrench size={15}/> },
   { href:"/admin/support",    label:"Support",           icon:<MessageSquare size={15}/> },

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { isDatabaseConfigured } from "@/lib/db";
 import { createEmailVerificationCode, sendEmailVerificationCode } from "@/lib/emailVerification";
+import { findSuspendedUserByEmailOrPhone } from "@/lib/authSecurity";
 
 const PERSONAL_EMAIL_DOMAINS = new Set(["gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com", "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com", "aol.com", "zoho.com", "gmx.com", "mail.com", "yandex.com"]);
 function isPersonalEmail(email: string) { return PERSONAL_EMAIL_DOMAINS.has(email.toLowerCase().split("@").pop() || ""); }
@@ -31,7 +32,10 @@ export async function POST(req: NextRequest) {
     if (isPersonalEmail(email)) return NextResponse.json({ error: "Company accounts must use a work email address, not Gmail, Outlook, Proton or other personal email providers." }, { status: 400 });
   }
   try {
+    const suspended = await findSuspendedUserByEmailOrPhone({ email, phone, phoneCode });
+    if (suspended) return NextResponse.json({ error: "Registration could not be completed. Please check the details and try again." }, { status: 400 });
     const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing?.suspendedAt) return NextResponse.json({ error: "Registration could not be completed. Please check the details and try again." }, { status: 400 });
     if (existing && !(existing.requiresEmailVerification && !existing.emailVerified)) return NextResponse.json({ error: "An account already exists with this email address." }, { status: 409 });
     const passwordHash = await bcrypt.hash(password, 12);
     const data = { email, name, passwordHash, role: "CUSTOMER" as const, phone, phoneCode: phoneCode || "+44", accountType, company: accountType === "company" ? company : null, companyEmail: accountType === "company" ? companyEmail || null : null, designation: accountType === "company" ? designation || null : null, companyNumber: accountType === "company" ? companyNumber || null : null, vatNumber: accountType === "company" ? vatNumber || null : null, requiresEmailVerification: true, emailVerified: null };

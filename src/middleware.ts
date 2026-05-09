@@ -36,7 +36,8 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === "/admin-login" && role === "ADMIN") return redirectTo(request, "/admin");
   if (pathname === "/portal/login" && role === "CUSTOMER") return redirectTo(request, "/portal");
-  if (pathname === "/portal/login" && role === "ADMIN") return redirectTo(request, "/admin");
+  // Admins may still visit the customer login page from the public website.
+  // Do not redirect them back to admin here; they may need to sign into a customer account separately.
   if (pathname === "/auth/login") {
     if (role === "ADMIN") return redirectTo(request, "/admin");
     if (role === "CUSTOMER") return redirectTo(request, "/portal");
@@ -55,16 +56,6 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/api/admin")) {
     if (!token) return jsonError("Admin sign-in required.", 401);
     if (role !== "ADMIN") return jsonError("Admin access required.", 403);
-  }
-
-  if (pathname.startsWith("/api/account")) {
-    if (!token) return jsonError("Customer sign-in required.", 401);
-    if (role !== "CUSTOMER") return jsonError("Customer portal access is required.", 403);
-  }
-
-  if (["/api/orders", "/api/returns", "/api/support"].includes(pathname) && request.nextUrl.searchParams.get("portal") === "1") {
-    if (!token) return jsonError("Customer sign-in required.", 401);
-    if (role !== "CUSTOMER") return jsonError("Customer portal access is required.", 403);
   }
 
   const adminOnlyApiPrefixes = [

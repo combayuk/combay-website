@@ -39,8 +39,7 @@ export async function POST(request: Request) {
 
   const dbResult = await withDatabase(async () => {
     const sessionEmail = authSession?.user?.email ? String(authSession.user.email).toLowerCase() : "";
-    const sessionRole = (authSession?.user as any)?.role as string | undefined;
-    const currentUser = sessionEmail && sessionRole === "CUSTOMER" ? await prisma.user.findUnique({ where: { email: sessionEmail }, select: { id: true, role: true } }).catch(() => null) : null;
+    const currentUser = sessionEmail ? await prisma.user.findUnique({ where: { email: sessionEmail }, select: { id: true } }).catch(() => null) : null;
     const requestedSkus = lines.map((line) => String(line.sku)).filter(Boolean);
     const products = await prisma.product.findMany({
       where: { sku: { in: requestedSkus }, status: "PUBLISHED" },
