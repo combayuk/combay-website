@@ -1,0 +1,19 @@
+Phase 17C — Brand-specific design refinement and checkout account prompt
+
+Changes:
+- Added account benefit banner for checkout and cart: sign in/register for regular discount codes and faster checkout.
+- Replaced the hero right-side “Fast stock decisions” card with a tighter industrial procurement hero layout and capability rail.
+- Reduced hero visual weight/height and kept it within first viewport intent.
+- Strengthened the hero copy and industrial automation background treatment.
+- Reworked the “Built by engineers, for engineers” section into a more brand-specific supply-desk/value section with industrial categories and operational proof points.
+- Made mega-menu search use a native GET form to /shop?q=... so it works even if client-side routing/hover state is fragile.
+- Kept the public admin portal link removed; admin subdomain root rewrite remains in middleware.
+- Preserved Visual CMS architecture for later revisit.
+
+Design audit findings carried into this phase:
+- The earlier design had industrial colours but several blocks still felt generic/SaaS-like.
+- The hero side card was visually disconnected from the rest of the hero and occupied too much attention.
+- The engineering/value section needed brand-specific procurement and maintenance language instead of generic benefit cards.
+- Checkout was missing a clear incentive for account creation.
+
+No Prisma/database changes required.

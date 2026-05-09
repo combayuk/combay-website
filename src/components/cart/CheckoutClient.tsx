@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { CheckCircle2, Lock, AlertTriangle } from "lucide-react";
+import AccountBenefitBanner from "@/components/commerce/AccountBenefitBanner";
 import { clearCart, formatCurrency, getCartSummary, readCartLines, type CartLine } from "@/lib/cart";
 
 type SavedAddress = { id: string; label?: string | null; fullName?: string | null; company?: string | null; phone?: string | null; address1: string; address2?: string | null; city: string; postcode: string; country: string; isPrimary: boolean; };
@@ -203,6 +204,7 @@ export default function CheckoutClient() {
 
       <form onSubmit={submit} className="max-w-7xl mx-auto px-4 py-8 grid lg:grid-cols-[1fr_360px] gap-6">
         <div className="space-y-6">
+          <AccountBenefitBanner />
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-2 text-sm text-red-700">
               <AlertTriangle size={16} className="mt-0.5" /> {error}

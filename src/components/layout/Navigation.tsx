@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChevronDown, Menu, Search, ShoppingCart, X } from "lucide-react";
 import { readCartLines } from "@/lib/cart";
 
@@ -30,7 +29,6 @@ function WAIcon() {
 }
 
 export default function Navigation() {
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
@@ -50,13 +48,6 @@ export default function Navigation() {
 
   const openShop = () => { if (closeTimer.current) clearTimeout(closeTimer.current); setShopOpen(true); };
   const closeShop = () => { closeTimer.current = setTimeout(() => setShopOpen(false), 140); };
-
-  function submitMegaSearch(event: React.FormEvent) {
-    event.preventDefault();
-    const query = megaSearch.trim();
-    setShopOpen(false);
-    router.push(query ? `/shop?q=${encodeURIComponent(query)}` : "/shop");
-  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/95">
@@ -88,10 +79,11 @@ export default function Navigation() {
                       </Link>
                     ))}
                   </div>
-                  <form onSubmit={submitMegaSearch} className="flex items-center justify-between gap-3 bg-slate-50 px-6 py-4">
+                  <form action="/shop" method="get" onSubmit={() => setShopOpen(false)} className="flex items-center justify-between gap-3 bg-slate-50 px-6 py-4">
                     <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-800 text-slate-500 shadow-sm focus-within:border-[#D99611]">
                       <Search size={15} className="flex-shrink-0 text-[#B87908]" />
                       <input
+                        name="q"
                         value={megaSearch}
                         onChange={(event) => setMegaSearch(event.target.value)}
                         placeholder="Search by SKU, MPN, model or manufacturer"

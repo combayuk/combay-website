@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Minus, Plus, Trash2, ShoppingCart, ArrowRight } from "lucide-react";
+import AccountBenefitBanner from "@/components/commerce/AccountBenefitBanner";
 import {
   formatCurrency,
   getCartSummary,
@@ -63,7 +64,9 @@ export default function CartClient() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8 grid lg:grid-cols-[1fr_360px] gap-6">
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="space-y-4">
+          <AccountBenefitBanner />
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           {summary.lines.map(({ product, variant, qty, lineTotal, availableQty }) => {
             const unavailable = availableQty <= 0 || product.priceOnRequest || qty > availableQty;
             return (
@@ -103,6 +106,7 @@ export default function CartClient() {
               </div>
             );
           })}
+          </div>
         </div>
 
         <aside className="bg-white border border-gray-200 rounded-2xl p-5 h-fit sticky top-24">
