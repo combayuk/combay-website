@@ -32,14 +32,21 @@ export default function EbayAdminPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | "backgrounds" | null>(null);
+  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | "backgrounds" | "queueImages" | "backupImages" | null>(null);
+  const [imageQueueStats, setImageQueueStats] = useState<any>(null);
 
   async function load() {
-    const [configRes, runsRes] = await Promise.all([fetch("/api/ebay/config", { cache: "no-store" }), fetch("/api/ebay/runs", { cache: "no-store" })]);
+    const [configRes, runsRes, queueRes] = await Promise.all([
+      fetch("/api/ebay/config", { cache: "no-store" }),
+      fetch("/api/ebay/runs", { cache: "no-store" }),
+      fetch("/api/admin/product-images/queue", { cache: "no-store" }).catch(() => null),
+    ]);
     const configJson = await configRes.json();
     const runsJson = await runsRes.json();
+    const queueJson = queueRes ? await queueRes.json().catch(() => null) : null;
     if (configJson.config) setConfig(configJson.config);
     setRuns(runsJson.runs ?? []);
+    if (queueJson?.ok) setImageQueueStats(queueJson);
   }
 
   useEffect(() => { load().catch(() => setMessage("Could not load eBay settings.")); }, []);
@@ -137,16 +144,32 @@ export default function EbayAdminPage() {
     }
   }
 
-  async function processImageBackgrounds() {
-    setSyncing("backgrounds");
-    setMessage("Processing imported eBay product images onto the Combay branded background. This requires REMOVE_BG_API_KEY and VPS upload settings.");
+  async function queueImageBackgrounds() {
+    setSyncing("queueImages");
+    setMessage("Queueing eBay product images for VPS/local background removal. Original image files are not stored permanently.");
     try {
-      const response = await fetch("/api/admin/product-images/process-backgrounds", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 25, perProduct: 1 }) });
+      const response = await fetch("/api/admin/product-images/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "queue", source: "ebay", limit: 5000, includeGallery: true }) });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) throw new Error(result.reason || result.error || "Image background processing failed.");
-      setMessage(result.message || `Processed ${result.processed || 0} image(s).`);
+      if (!response.ok || !result.ok) throw new Error(result.error || "Could not queue image background jobs.");
+      setMessage(result.message || `Queued ${result.queued || 0} image(s).`);
     } catch (error: any) {
-      setMessage(error.message || "Could not process image backgrounds.");
+      setMessage(error.message || "Could not queue image background jobs.");
+    } finally {
+      setSyncing(null);
+      await load();
+    }
+  }
+
+  async function requestImageBackup() {
+    setSyncing("backupImages");
+    setMessage("Requesting a 48-hour downloadable processed-image backup export.");
+    try {
+      const response = await fetch("/api/admin/product-images/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "backup", email: "sales@combay.co.uk" }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || "Could not request image backup export.");
+      setMessage(result.message || "Image backup export queued.");
+    } catch (error: any) {
+      setMessage(error.message || "Could not request image backup export.");
     } finally {
       setSyncing(null);
       await load();
@@ -194,8 +217,11 @@ export default function EbayAdminPage() {
           <button onClick={refreshCategoriesAndOverviews} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
             <RefreshCw size={14} className={syncing === "refresh" ? "animate-spin" : ""} /> Refresh categories/overviews
           </button>
-          <button onClick={processImageBackgrounds} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
-            <RefreshCw size={14} className={syncing === "backgrounds" ? "animate-spin" : ""} /> Process image backgrounds
+          <button onClick={queueImageBackgrounds} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "queueImages" ? "animate-spin" : ""} /> Queue image backgrounds
+          </button>
+          <button onClick={requestImageBackup} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "backupImages" ? "animate-spin" : ""} /> Export image backup
           </button>
         </div>
       </div>
@@ -215,6 +241,26 @@ export default function EbayAdminPage() {
           </div>
         ))}
       </section>
+
+      {imageQueueStats ? (
+        <section className="grid gap-3 md:grid-cols-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="text-xs text-gray-400 uppercase tracking-widest">Image worker</p>
+            <p className="font-display font-800 text-navy-950 mt-1">{imageQueueStats.stats?.workerConfigured ? "Secret configured" : "Secret missing"}</p>
+            <p className="text-xs text-gray-500 mt-1">Set IMAGE_WORKER_SECRET for VPS/local workers.</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="text-xs text-gray-400 uppercase tracking-widest">Queued jobs</p>
+            <p className="font-display font-800 text-navy-950 mt-1">{imageQueueStats.stats?.jobs?.QUEUED || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Waiting for background removal.</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="text-xs text-gray-400 uppercase tracking-widest">Needs review / failed</p>
+            <p className="font-display font-800 text-navy-950 mt-1">{(imageQueueStats.stats?.jobs?.NEEDS_REVIEW || 0) + (imageQueueStats.stats?.jobs?.FAILED || 0)}</p>
+            <p className="text-xs text-gray-500 mt-1">Review before applying poor cut-outs.</p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="bg-amber-50 border border-amber-200 rounded-xl p-5">
         <div className="flex items-start gap-3">
@@ -297,7 +343,7 @@ export default function EbayAdminPage() {
             <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
             <p><strong>Repair missing details</strong> scans all imported eBay products, then repairs shallow records that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories. It repairs a safe batch at a time; run again if the message says products remain queued.</p><p><strong>Refresh categories/overviews</strong> remaps eBay imports into the closest website category and rebuilds shorter, more precise overview text. It processes a safe batch at a time.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
-            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p><p><strong>Process image backgrounds</strong> removes the background from imported eBay images and places them onto the Combay branded image background. It requires <span className="font-mono">REMOVE_BG_API_KEY</span> and the existing VPS upload receiver env vars. It runs a safe batch at a time.</p>
+            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p><p><strong>Queue image backgrounds</strong> adds all imported eBay images to the self-hosted VPS/local worker queue. The worker downloads originals temporarily, removes backgrounds locally, applies the Combay background, uploads the final processed image, then deletes temporary originals. Original image files are not stored permanently.</p><p><strong>Export image backup</strong> creates a 48-hour downloadable backup request for processed images. The worker creates the ZIP and emails the admin a secure temporary download link.</p>
           </div>
           <div className="border-t border-gray-100 mt-4 pt-4 text-xs text-gray-400 space-y-1">
             <p>Last sync: {config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"}</p>

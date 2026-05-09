@@ -23,7 +23,9 @@ function envFlag(value?: string | null) {
 }
 
 export function productBackgroundProcessingEnabled() {
-  return envFlag(process.env.EBAY_IMAGE_BACKGROUND_PROCESSING_ENABLED || process.env.PRODUCT_IMAGE_BACKGROUND_PROCESSING);
+  // Direct in-app remove.bg processing is intentionally opt-in only.
+  // Phase 20A.3 uses the scalable VPS/local queue worker instead.
+  return envFlag(process.env.EBAY_IMAGE_BACKGROUND_DIRECT_PROCESSING_ENABLED || process.env.PRODUCT_IMAGE_BACKGROUND_DIRECT_PROCESSING);
 }
 
 export function productBackgroundProcessingConfigured() {

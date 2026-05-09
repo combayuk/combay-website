@@ -1,0 +1,43 @@
+Phase 20A.3 — Scalable self-hosted product image background worker
+
+This patch changes the image-background strategy from API-first/remove.bg to queue-based VPS/local worker processing.
+
+Key changes:
+- Adds ProductImageProcessingJob for queued/claimed/processed/needs_review/failed/approved/rejected image processing.
+- Adds ProductImageBackupExport for 48-hour downloadable backup exports.
+- Adds admin API: /api/admin/product-images/queue
+  - GET stats/review jobs
+  - POST action=queue to queue eBay product images
+  - POST action=backup to request a temporary processed-image backup
+  - POST action=approve/reject for processed review jobs
+- Adds worker API:
+  - POST /api/image-worker/jobs to claim queued jobs
+  - POST /api/image-worker/jobs/[id] to complete/mark jobs
+  - POST /api/image-worker/backups to claim backup export requests
+  - POST /api/image-worker/backups/[token] to mark a ZIP backup ready and email the admin
+- Adds Admin > eBay controls:
+  - Queue image backgrounds
+  - Export image backup
+  - Image worker stats
+- Adds scripts/image-worker Python worker using rembg, Pillow and the existing upload receiver.
+- Original eBay image files are NOT stored permanently. The worker downloads original images temporarily, processes them, uploads the final Combay-background image, then deletes temporary files.
+- Only the processed final image is stored. The database may retain the original source URL for retry/audit, but not the original file.
+- Direct remove.bg processing is disabled unless explicitly enabled with EBAY_IMAGE_BACKGROUND_DIRECT_PROCESSING_ENABLED=true.
+
+Required Vercel env:
+IMAGE_WORKER_SECRET=<long random secret>
+IMAGE_WORKER_AUTO_APPROVE_MIN_SCORE=85
+IMAGE_WORKER_DEFAULT_MODEL=isnet-general-use
+PRODUCT_IMAGE_BACKGROUND_URL=https://combay-website-lt8v.vercel.app/images/product-backgrounds/combay-background.jpg
+
+Required worker/VPS env:
+COMBAY_SITE_URL=https://combay-website-lt8v.vercel.app
+IMAGE_WORKER_SECRET=<same long random secret>
+UPLOAD_RECEIVER_URL=<existing VPS upload receiver>
+UPLOAD_RECEIVER_SECRET=<existing upload receiver secret>
+PRODUCT_IMAGE_BACKGROUND_URL=https://combay-website-lt8v.vercel.app/images/product-backgrounds/combay-background.jpg
+IMAGE_WORKER_BATCH_SIZE=5
+IMAGE_WORKER_MODEL=isnet-general-use
+
+Prisma:
+npx prisma db push is required.
