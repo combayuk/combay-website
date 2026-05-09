@@ -62,7 +62,8 @@ async function uploadProcessedImage(buffer: Buffer, filename: string) {
   const form = new FormData();
   form.set("folder", "products");
   form.set("requestId", randomUUID());
-  form.set("file", new Blob([buffer], { type: "image/png" }), filename);
+  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+  form.set("file", new Blob([arrayBuffer], { type: "image/png" }), filename);
 
   const response = await fetch(receiverUrl, {
     method: "POST",

@@ -1,0 +1,7 @@
+Phase 20A.2 — Build fix for BlobPart Buffer typing
+
+Fixes Vercel TypeScript error in src/lib/productImageProcessing.ts where Node Buffer was passed directly into new Blob([buffer]).
+
+Vercel/TypeScript requires a strict BlobPart. The code now slices Buffer's underlying ArrayBuffer and casts it as ArrayBuffer before creating the Blob.
+
+No Prisma schema change beyond Phase 20A.
