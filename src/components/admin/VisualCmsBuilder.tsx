@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CmsBlock, CmsStep, FaqItem, SiteContent, VisualWidget } from "@/lib/siteContent";
+import type { CmsBlock, CmsStep, CmsTextStyle, FaqItem, SiteContent, VisualWidget } from "@/lib/siteContent";
 
 type PageKey = "home" | "repair" | "assetRecovery" | "about" | "contact" | "faq" | "shop" | "cart" | "checkout" | "portal" | "manufacturers" | "terms" | "privacy" | "returns" | "warranty" | "payment";
 type DeviceMode = "desktop" | "tablet" | "mobile";
@@ -121,6 +121,32 @@ function updateFirstHrefMatch(target: unknown, oldHref: string, newHref: string)
   return false;
 }
 
+function textStyleKey(pageKey: string, text: string) {
+  const normalised = String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
+  let hash = 0;
+  for (let i = 0; i < normalised.length; i += 1) hash = ((hash << 5) - hash + normalised.charCodeAt(i)) | 0;
+  return `${pageKey}:${Math.abs(hash).toString(36)}`;
+}
+
+const FONT_FAMILIES = [
+  { label: "Default", value: "" },
+  { label: "Inter", value: "Inter, Arial, sans-serif" },
+  { label: "IBM Plex Sans", value: "'IBM Plex Sans', Inter, Arial, sans-serif" },
+  { label: "Arial", value: "Arial, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+];
+
+const FONT_SIZES = [
+  { label: "Default", value: "" },
+  { label: "12px", value: "12px" },
+  { label: "14px", value: "14px" },
+  { label: "16px", value: "16px" },
+  { label: "18px", value: "18px" },
+  { label: "22px", value: "22px" },
+  { label: "28px", value: "28px" },
+  { label: "36px", value: "36px" },
+];
+
 function UploadButton({ accept, label, onUploaded }: { accept: string; label: string; onUploaded: (url: string) => void }) {
   const [uploading, setUploading] = useState(false);
   async function upload(file: File | null) {
@@ -147,6 +173,7 @@ export default function VisualCmsBuilder() {
   const [leftTab, setLeftTab] = useState<LeftTab>("widgets");
   const [refreshKey, setRefreshKey] = useState(Date.now());
   const [selectedText, setSelectedText] = useState("");
+  const [selectedTextStyleKey, setSelectedTextStyleKey] = useState<string | null>(null);
   const [selectedLink, setSelectedLink] = useState<SelectedLink | null>(null);
   const [selectedWidget, setSelectedWidget] = useState<SelectedWidget | null>(null);
   const [selectedCollection, setSelectedCollection] = useState<CollectionKey | null>(null);
@@ -181,19 +208,28 @@ export default function VisualCmsBuilder() {
       const data = event.data || {};
       if (data.type === "VCMS_TEXT_SELECTED") {
         setSelectedText(String(data.text || ""));
+        setSelectedTextStyleKey(String(data.styleKey || "") || null);
         setSelectedWidget(null);
-        if (data.href) setSelectedLink({ text: String(data.text || "Button/link"), href: String(data.href || "#") });
+        setSelectedLink(data.href ? { text: String(data.text || "Button/link"), href: String(data.href || "#") } : null);
+        setLeftTab("style");
       }
-      if (data.type === "VCMS_COLLECTION_SELECTED") { setSelectedCollection(String(data.collection || "page.blocks") as CollectionKey); setSelectedZone(null); setSelectedWidget(null); setMessage(`Target selected: ${String(data.label || data.collection || "section")}.`); }
-      if (data.type === "VCMS_ZONE_SELECTED") { setSelectedZone(String(data.zone || `${pageKey}:beforeFooter`)); setSelectedCollection(null); setSelectedWidget(null); setMessage(`Placement selected: ${String(data.zone || "page area")}.`); }
+      if (data.type === "VCMS_COLLECTION_SELECTED") { setSelectedCollection(String(data.collection || "page.blocks") as CollectionKey); setSelectedZone(null); setSelectedWidget(null); setSelectedTextStyleKey(null); setMessage(`Target selected: ${String(data.label || data.collection || "section")}.`); }
+      if (data.type === "VCMS_ZONE_SELECTED") { setSelectedZone(String(data.zone || `${pageKey}:beforeFooter`)); setSelectedCollection(null); setSelectedWidget(null); setSelectedTextStyleKey(null); setMessage(`Placement selected: ${String(data.zone || "page area")}.`); }
       if (data.type === "VCMS_WIDGET_SELECTED") {
         const zone = String(data.zone || "");
         const index = Number(data.index);
         const widget = content?.visualWidgets?.[zone]?.[index];
-        if (zone && Number.isFinite(index) && widget) { setSelectedWidget({ zone, index, widget }); setSelectedZone(zone); setSelectedCollection(null); setLeftTab("style"); setMessage(`Selected ${widget.type || "widget"}. Edit it in the Style panel.`); }
+        if (zone && Number.isFinite(index) && widget) { setSelectedWidget({ zone, index, widget }); setSelectedZone(zone); setSelectedCollection(null); setSelectedTextStyleKey(null); setLeftTab("style"); setMessage(`Selected ${widget.type || "widget"}. Edit it in the Style panel.`); }
       }
       if (data.type === "VCMS_TEXT_UPDATE" && content && data.oldText && data.newText && String(data.oldText).trim() !== String(data.newText).trim()) {
         const next = cloneContent(content);
+        const oldKey = textStyleKey(pageKey, String(data.oldText));
+        const newKey = textStyleKey(pageKey, String(data.newText));
+        if (next.textStyles?.[oldKey]) {
+          next.textStyles = { ...(next.textStyles || {}), [newKey]: next.textStyles[oldKey] };
+          if (oldKey !== newKey) delete next.textStyles[oldKey];
+          setSelectedTextStyleKey(newKey);
+        }
         if (updateFirstStringMatch(next, String(data.oldText), String(data.newText))) { setContent(next); setMessage("Text changed on canvas. Click Save website to publish."); }
         else setMessage("This text is visible for exact preview but is not linked to CMS storage yet.");
       }
@@ -264,6 +300,17 @@ export default function VisualCmsBuilder() {
     }, false);
     setSelectedWidget({ ...selectedWidgetLive, widget: { ...selectedWidgetLive.widget, ...changes } });
     setMessage("Widget updated in draft. Click Save website to publish.");
+  }
+
+  function updateSelectedTextStyle(changes: CmsTextStyle) {
+    if (!selectedTextStyleKey) return;
+    mutateContent((draft) => {
+      draft.textStyles = draft.textStyles || {};
+      const next = { ...(draft.textStyles[selectedTextStyleKey] || {}), ...changes };
+      if (!next.fontSize && !next.fontFamily && !next.fontWeight && !next.italic && !next.colour) delete draft.textStyles[selectedTextStyleKey];
+      else draft.textStyles[selectedTextStyleKey] = next;
+    }, false);
+    setMessage("Text style updated in draft. Click Save website to publish.");
   }
 
   function addCollectionItem(collection: CollectionKey, widget?: WidgetTemplate) {
@@ -390,9 +437,19 @@ export default function VisualCmsBuilder() {
       const linkEl = (el.closest("a") || (el.tagName.toLowerCase() === "a" ? el : null)) as HTMLAnchorElement | null;
       if (linkEl?.href) el.classList.add("vcms-edit-link");
       const initial = el.textContent.trim();
+      const styleKey = textStyleKey(pageKey, initial);
+      el.dataset.vcmsStyleKey = styleKey;
+      const cmsStyle = content?.textStyles?.[styleKey];
+      if (cmsStyle) {
+        el.style.fontSize = cmsStyle.fontSize || "";
+        el.style.fontFamily = cmsStyle.fontFamily || "";
+        el.style.fontWeight = cmsStyle.fontWeight || "";
+        el.style.fontStyle = cmsStyle.italic ? "italic" : "";
+        el.style.color = cmsStyle.colour || "";
+      }
       el.setAttribute("contenteditable", "true");
-      el.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "" }); });
-      el.addEventListener("focus", () => send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "" }));
+      el.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "", styleKey }); });
+      el.addEventListener("focus", () => send({ type: "VCMS_TEXT_SELECTED", text: el.textContent?.trim() || "", href: linkEl?.getAttribute("href") || "", styleKey }));
       el.addEventListener("blur", () => { const next = el.textContent?.trim() || ""; if (next && next !== initial) send({ type: "VCMS_TEXT_UPDATE", oldText: initial, newText: next }); });
     });
     doc.querySelectorAll<HTMLElement>("[data-system-protected], [data-admin-only], .stripe, .checkout, [href*='/checkout'], [href*='/cart']").forEach((el) => { el.dataset.vcmsProtected = "1"; });
@@ -445,6 +502,7 @@ export default function VisualCmsBuilder() {
         {leftTab === "widgets" ? <div className="space-y-3"><p className="text-xs text-slate-500">Drag a widget onto the live page. Use the yellow placement line to add between sections, inside sections, or into section columns. Current target: <strong>{selectedZone || selectedCollection || defaultZone()}</strong>.</p><div className="grid grid-cols-2 gap-2">{WIDGETS.map((widget) => <button key={widget.label} type="button" draggable onDragStart={(event) => { setDraggingWidget(widget); event.dataTransfer.setData("application/x-combay-widget", JSON.stringify(widget)); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => { setDraggingWidget(null); setDropPreview(null); }} onClick={() => addWidget(widget)} className="rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-accent hover:bg-accent/5"><span className="text-xl">{widget.icon}</span><span className="mt-2 block text-xs font-display font-900 text-navy-950">{widget.label}</span><span className="mt-1 block text-[10px] text-slate-500">Click or drag</span></button>)}</div><div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-5 text-navy-950">To place image next to text: add a 2-column section, then drag Image into one column and Text/Button into the other. This is saved in CMS JSON and rendered on the live site.</div></div> : null}
         {leftTab === "style" ? <div className="space-y-5">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-display font-900">Selected</p><p className="mt-1 break-words text-xs text-slate-600">{selectedWidgetLive ? `${selectedWidgetLive.widget.type} widget in ${selectedWidgetLive.zone}` : selectedText || "Click text, a link, or a widget on the website screen."}</p>{selectedLink ? <div className="mt-3 rounded-lg border border-accent/30 bg-white p-2"><label className="block text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Button/link URL</label><input className="input mt-1 h-9 w-full text-xs" value={selectedLink.href} onChange={(e) => updateSelectedLinkHref(e.target.value)} placeholder="/contact, /shop, mailto:, tel:, https://..." /></div> : null}</div>
+          {selectedTextStyleKey && !selectedWidgetLive ? <TextStyleInspector value={content.textStyles?.[selectedTextStyleKey] || {}} update={updateSelectedTextStyle} /> : null}
           {selectedWidgetLive ? <WidgetInspector selected={selectedWidgetLive} update={updateSelectedWidget} deleteWidget={() => deleteVisualWidget(selectedWidgetLive.zone, selectedWidgetLive.index)} duplicateWidget={() => duplicateVisualWidget(selectedWidgetLive.zone, selectedWidgetLive.index)} /> : null}
           {pageKey === "about" ? <div className="rounded-xl border border-slate-200 bg-[#F8FAFC] p-3"><p className="text-xs font-display font-900">About: Built to solve a real problem</p><p className="mt-1 text-[10px] text-slate-500">Controls the balanced image/staff/quote and editorial text section.</p><div className="mt-3 space-y-2"><Field label="Section label"><input className="input h-9 w-full text-xs" value={content.pages.about.sectionEyebrow || ""} onChange={(e) => mutateContent((draft) => { draft.pages.about.sectionEyebrow = e.target.value; })} /></Field><Field label="Heading"><textarea className="input min-h-16 w-full text-xs" value={content.pages.about.sectionHeading || ""} onChange={(e) => mutateContent((draft) => { draft.pages.about.sectionHeading = e.target.value; })} /></Field><Field label="Body text"><textarea className="input min-h-28 w-full text-xs" value={content.pages.about.sectionBody || ""} onChange={(e) => mutateContent((draft) => { draft.pages.about.sectionBody = e.target.value; })} /></Field><Field label="Proof points — one per line"><textarea className="input min-h-20 w-full text-xs" value={(content.pages.about.proofPoints || []).join("\n")} onChange={(e) => mutateContent((draft) => { draft.pages.about.proofPoints = e.target.value.split(/\n+/).map((x) => x.trim()).filter(Boolean).slice(0, 5); })} /></Field><Field label="Image URL"><input className="input h-9 w-full text-xs" value={content.pages.about.quoteImageUrl || ""} onChange={(e) => mutateContent((draft) => { draft.pages.about.quoteImageUrl = e.target.value; })} /></Field><UploadButton accept="image/png,image/jpeg,image/webp,image/svg+xml" label="Upload/replace image" onUploaded={(url) => mutateContent((draft) => { draft.pages.about.quoteImageUrl = url; })} /><Field label="Name"><input className="input h-9 w-full text-xs" value={content.pages.about.quoteName || ""} onChange={(e) => mutateContent((draft) => { draft.pages.about.quoteName = e.target.value; })} /></Field><Field label="Designation"><input className="input h-9 w-full text-xs" value={content.pages.about.quoteDesignation || ""} onChange={(e) => mutateContent((draft) => { draft.pages.about.quoteDesignation = e.target.value; })} /></Field><Field label="Quote text"><textarea className="input min-h-20 w-full text-xs" value={content.pages.about.quoteText || ""} onChange={(e) => mutateContent((draft) => { draft.pages.about.quoteText = e.target.value; })} /></Field></div></div> : null}
                     {pageKey === "home" ? <div className="rounded-xl border border-slate-200 bg-[#F8FAFC] p-3"><p className="text-xs font-display font-900">Built for Engineers background</p><p className="mt-1 text-[10px] text-slate-500">Use this for the light trust/engineering section background.</p><div className="mt-3 flex gap-2"><input className="input h-9 flex-1 text-xs" value={content.trust.backgroundImageUrl || ""} onChange={(e) => mutateContent((draft) => { draft.trust.backgroundImageUrl = e.target.value; })} placeholder="Image URL, colour or gradient" /><button type="button" className="rounded bg-navy-950 px-3 py-2 text-xs font-display font-900 text-white" onClick={() => setTrustBackground(content.trust.backgroundImageUrl || "")}>Use</button></div><div className="mt-3 flex flex-wrap gap-2">{COLOURS.map((colour) => <button key={`trust-${colour}`} type="button" title={colour} onClick={() => setTrustBackground(colour)} className="h-8 w-8 rounded-full border border-slate-300" style={{ background: colour }} />)}</div><div className="mt-2 space-y-2">{GRADIENTS.map((g) => <button key={`trust-${g.label}`} type="button" onClick={() => setTrustBackground(g.value)} className="h-8 w-full rounded border border-slate-200 px-3 text-left text-xs font-display font-800 text-[#2D4F7A]" style={{ backgroundImage: g.value }}>{g.label}</button>)}</div></div> : null}
@@ -466,6 +524,21 @@ export default function VisualCmsBuilder() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1 block text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">{label}</span>{children}</label>; }
+function TextStyleInspector({ value, update }: { value: CmsTextStyle; update: (changes: CmsTextStyle) => void }) {
+  const input = "input h-9 w-full text-xs";
+  return <div className="rounded-xl border border-accent/30 bg-white p-3">
+    <p className="text-xs font-display font-900">Selected text style</p>
+    <p className="mt-1 text-[10px] text-slate-500">Applies to this CMS-linked text on the live page after saving.</p>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <Field label="Font size"><select className={input} value={value.fontSize || ""} onChange={(e) => update({ fontSize: e.target.value })}>{FONT_SIZES.map((size) => <option key={size.label} value={size.value}>{size.label}</option>)}</select></Field>
+      <Field label="Font family"><select className={input} value={value.fontFamily || ""} onChange={(e) => update({ fontFamily: e.target.value })}>{FONT_FAMILIES.map((font) => <option key={font.label} value={font.value}>{font.label}</option>)}</select></Field>
+      <Field label="Weight"><select className={input} value={value.fontWeight || ""} onChange={(e) => update({ fontWeight: e.target.value })}><option value="">Default</option><option value="400">Regular</option><option value="600">Semi-bold</option><option value="700">Bold</option><option value="900">Heavy</option></select></Field>
+      <Field label="Colour"><input className={input} value={value.colour || ""} onChange={(e) => update({ colour: e.target.value })} placeholder="#2D4F7A" /></Field>
+    </div>
+    <label className="mt-3 flex items-center gap-2 text-xs font-800 text-navy-950"><input type="checkbox" checked={!!value.italic} onChange={(e) => update({ italic: e.target.checked })} /> Italic</label>
+  </div>;
+}
+
 function WidgetInspector({ selected, update, deleteWidget, duplicateWidget }: { selected: SelectedWidget; update: (changes: Partial<VisualWidget>) => void; deleteWidget: () => void; duplicateWidget: () => void }) {
   const w = selected.widget;
   const input = "input h-9 w-full text-xs";
@@ -480,6 +553,7 @@ function WidgetInspector({ selected, update, deleteWidget, duplicateWidget }: { 
     {w.type === "section" ? <div className="grid grid-cols-2 gap-2"><Field label="Columns"><select className={input} value={String(w.columns || 1)} onChange={(e) => update({ columns: Number(e.target.value) })}><option value="1">1 column</option><option value="2">2 columns</option><option value="3">3 columns</option><option value="4">4 columns</option></select></Field><Field label="Background"><select className={input} value={w.sectionVariant || "plain"} onChange={(e) => update({ sectionVariant: e.target.value as VisualWidget["sectionVariant"] })}><option value="plain">Plain</option><option value="soft">Soft grey</option><option value="accent">Accent tint</option><option value="dark">Dark</option></select></Field></div> : null}
     {w.type === "spacer" ? <Field label="Height"><input className={input} type="number" min={8} max={260} value={w.height || 48} onChange={(e) => update({ height: Number(e.target.value) })} /></Field> : null}
     {w.type === "divider" ? <div className="grid grid-cols-2 gap-2"><Field label="Thickness"><input className={input} type="number" min={1} max={8} value={w.thickness || 1} onChange={(e) => update({ thickness: Number(e.target.value) })} /></Field><Field label="Colour"><input className={input} value={w.colour || "#E5E7EB"} onChange={(e) => update({ colour: e.target.value })} /></Field></div> : null}
+    {["text","button","card","promotion","section"].includes(w.type) ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-2"><p className="mb-2 text-[10px] font-display font-900 uppercase tracking-wide text-slate-500">Text style</p><div className="grid grid-cols-2 gap-2"><Field label="Font size"><select className={input} value={w.fontSize || ""} onChange={(e) => update({ fontSize: e.target.value })}>{FONT_SIZES.map((size) => <option key={size.label} value={size.value}>{size.label}</option>)}</select></Field><Field label="Font family"><select className={input} value={w.fontFamily || ""} onChange={(e) => update({ fontFamily: e.target.value })}>{FONT_FAMILIES.map((font) => <option key={font.label} value={font.value}>{font.label}</option>)}</select></Field><Field label="Weight"><select className={input} value={w.fontWeight || ""} onChange={(e) => update({ fontWeight: e.target.value })}><option value="">Default</option><option value="400">Regular</option><option value="600">Semi-bold</option><option value="700">Bold</option><option value="900">Heavy</option></select></Field><Field label="Colour"><input className={input} value={w.textColour || ""} onChange={(e) => update({ textColour: e.target.value })} placeholder="#2D4F7A" /></Field></div><label className="mt-2 flex items-center gap-2 text-xs font-800 text-navy-950"><input type="checkbox" checked={!!w.italic} onChange={(e) => update({ italic: e.target.checked })} /> Italic</label></div> : null}
     <div className="grid grid-cols-2 gap-2"><Field label="Width"><select className={input} value={w.width || "third"} onChange={(e) => update({ width: e.target.value })}><option value="full">Full</option><option value="threeQuarter">3/4</option><option value="twoThird">2/3</option><option value="half">1/2</option><option value="third">1/3</option><option value="quarter">1/4</option></select></Field><Field label="Align"><select className={input} value={w.align || "left"} onChange={(e) => update({ align: e.target.value as VisualWidget["align"] })}><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></Field></div>
     <div className="grid grid-cols-2 gap-2"><Field label="Top spacing"><input className={input} type="number" value={w.marginTop || 0} onChange={(e) => update({ marginTop: Number(e.target.value) })} /></Field><Field label="Bottom spacing"><input className={input} type="number" value={w.marginBottom || 0} onChange={(e) => update({ marginBottom: Number(e.target.value) })} /></Field></div>
   </div></div>;

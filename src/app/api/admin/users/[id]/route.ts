@@ -4,6 +4,7 @@ import { isDatabaseConfigured } from "@/lib/db";
 import { sendAccountSuspensionEmail } from "@/lib/authSecurity";
 
 export const dynamic = "force-dynamic";
+const ROOT_ADMIN_EMAIL = "sales@combay.co.uk";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isDatabaseConfigured()) return NextResponse.json({ ok: false, error: "Database is not configured." }, { status: 503 });
@@ -45,4 +46,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   return NextResponse.json({ ok: false, error: "Unsupported action." }, { status: 400 });
+}
+
+
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  if (!isDatabaseConfigured()) return NextResponse.json({ ok: false, error: "Database is not configured." }, { status: 503 });
+  const id = params.id;
+  if (!id) return NextResponse.json({ ok: false, error: "User id is required." }, { status: 400 });
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return NextResponse.json({ ok: false, error: "User not found." }, { status: 404 });
+  if (user.role !== "ADMIN") return NextResponse.json({ ok: false, error: "Only admin accounts can be deleted here." }, { status: 400 });
+  if (user.email.toLowerCase() === ROOT_ADMIN_EMAIL) return NextResponse.json({ ok: false, error: "The primary sales@combay.co.uk admin account cannot be deleted." }, { status: 403 });
+  await prisma.user.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
 }

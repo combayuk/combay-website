@@ -1,0 +1,11 @@
+Phase 18C — auth/admin/visual CMS/payment refinements
+
+- Password reset now redirects automatically to the correct login page and shows a reset-success login message.
+- Admin Users page can create new admin accounts.
+- Additional admin accounts can be deleted.
+- sales@combay.co.uk is treated as the primary non-deletable admin.
+- Registration/email-verification page uses the menu logo and smaller code boxes.
+- Hero Google review badge is moved to the right side on desktop.
+- Visual CMS Style panel now includes persisted text styling controls for selected text and text-capable widgets.
+- Paid Stripe proforma/invoice records now automatically create/link an Order, so admin does not need to press Mark as received just to move the paid item into Orders.
+- No Prisma schema change in this patch.

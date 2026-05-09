@@ -16,5 +16,6 @@ export async function POST(req: NextRequest) {
   if (password !== confirmPassword) return NextResponse.json({ ok: false, error: "Password and confirmation do not match." }, { status: 400 });
   const result = await resetPasswordWithToken({ email, token, password });
   if (!result.ok) return NextResponse.json(result, { status: 400 });
-  return NextResponse.json({ ok: true, message: "Password updated. You can now sign in." });
+  const redirectTo = result.user?.role === "ADMIN" ? "/admin-login?reset=1" : "/portal/login?reset=1";
+  return NextResponse.json({ ok: true, message: "Password updated. You can now login with your new details.", redirectTo });
 }

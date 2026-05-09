@@ -45,6 +45,7 @@ function LoginForm({ mode, showPreviewAccounts }: { mode: LoginMode; showPreview
   const defaultCallback = mode === "admin" ? "/admin" : "/portal";
   const callbackUrl = safeCallbackUrl(params.get("callbackUrl"), defaultCallback);
   const verified = params.get("verified") === "1";
+  const resetDone = params.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -141,9 +142,9 @@ function LoginForm({ mode, showPreviewAccounts }: { mode: LoginMode; showPreview
           <h1 className="font-display font-800 text-navy-950 text-xl mb-0.5">{title}</h1>
           <p className="text-gray-400 text-xs mb-5">{subtitle}</p>
 
-          {verified && !error && (
+          {(verified || resetDone) && !error && (
             <div className="bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg px-3 py-2.5 mb-4 font-display font-600">
-              Email verified. You can now sign in.
+              {resetDone ? "You can now login with your new details." : "Email verified. You can now sign in."}
             </div>
           )}
 

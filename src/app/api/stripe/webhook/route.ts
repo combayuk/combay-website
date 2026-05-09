@@ -5,6 +5,7 @@ import { isStripeConfigured, verifyStripeWebhookSignature } from "@/lib/stripe";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 import { captureLead } from "@/lib/leads";
 import { runEmailAutomations } from "@/lib/emailAutomations";
+import { ensureOrderForPaidInvoice } from "@/lib/paidInvoiceOrder";
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
 
       if (invoiceResult.ok) {
         const invoice: any = invoiceResult.data;
+        const order = await ensureOrderForPaidInvoice(invoice.id, `Stripe webhook confirmed payment. Session: ${session.id}`).catch((orderError) => {
+          console.error("[invoice-auto-order-failed]", orderError);
+          return null;
+        });
         await sendCustomerAcknowledgement({
           to: invoice.customerEmail,
           name: invoice.customerName,
@@ -60,6 +65,7 @@ export async function POST(request: Request) {
             ["Customer", invoice.customerName],
             ["Email", invoice.customerEmail],
             ["Total", `£${Number(invoice.total).toFixed(2)}`],
+            ["Order", order?.orderNumber || invoice.order?.orderNumber || "Auto-order pending"],
             ["Session", session.id],
           ],
         }).catch((emailError) => console.error("[invoice-payment-admin-email-failed]", emailError));

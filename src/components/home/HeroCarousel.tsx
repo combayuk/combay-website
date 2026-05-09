@@ -125,6 +125,7 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
       <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.65) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.65) 1px, transparent 1px)", backgroundSize: "56px 56px" }} />
       <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/25 to-transparent" />
       <div className="site-shell relative flex min-h-[430px] items-center py-5 sm:min-h-[445px] lg:min-h-[490px] xl:min-h-[510px] lg:py-6">
+        <div className="absolute right-4 top-4 z-10 hidden lg:block"><GoogleReviewsBadge compact /></div>
         <div className="w-full max-w-5xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-sm border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-900 uppercase tracking-[0.16em] text-white/85 backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-[#E8A44A]" /> {s.eyebrow}
@@ -143,7 +144,6 @@ export default function HeroCarousel({ slides: contentSlides }: { slides?: HeroS
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {s.cta1.label ? <Link href={s.cta1.href} className="btn-primary">{s.cta1.label} <ArrowRight size={16} /></Link> : null}
             {s.cta2.label ? <Link href={s.cta2.href} className="btn-outline-white">{s.cta2.label}</Link> : null}
-            <GoogleReviewsBadge compact />
           </div>
 
           <div className="mt-4 grid max-w-4xl gap-2 sm:grid-cols-2 lg:grid-cols-4">

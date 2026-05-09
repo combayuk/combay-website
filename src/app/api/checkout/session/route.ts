@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureOrderForPaidInvoice } from "@/lib/paidInvoiceOrder";
 import { isDatabaseConfigured } from "@/lib/db";
 import { isStripeConfigured, retrieveStripeCheckoutSession } from "@/lib/stripe";
 
@@ -39,7 +40,10 @@ async function updatePaidRecordFromSession(stripeSession: StripeSessionLike) {
         notes: `Stripe confirmed payment. Session: ${stripeSession.id}`,
       },
     }).catch(() => null);
-    if (invoice) return { type: "invoice", reference: invoice.documentNumber };
+    if (invoice) {
+      const order = await ensureOrderForPaidInvoice(invoice.id, `Stripe confirmed payment. Session: ${stripeSession.id}`).catch(() => null);
+      return { type: "invoice", reference: order?.orderNumber || invoice.documentNumber };
+    }
   }
 
   if (orderId || orderNumber) {
