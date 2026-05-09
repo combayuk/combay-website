@@ -91,11 +91,10 @@ function LoginForm({ mode }: { mode: LoginMode }) {
       style={{ backgroundImage: "radial-gradient(ellipse at 60% 40%, rgba(240,165,0,0.07) 0%, transparent 70%)" }}
     >
       <div className="w-full max-w-md">
-        <Link href="/" className="flex items-center gap-2.5 justify-center mb-8">
-          <div className="w-9 h-9 bg-accent rounded-lg flex items-center justify-center">
-            <span className="text-navy-950 font-display font-800 text-sm">CB</span>
-          </div>
-          <span className="font-display font-800 text-white text-2xl tracking-tight">COMBAY</span>
+        <Link href="/" className="mb-8 flex justify-center">
+          <span className="rounded-xl bg-white px-4 py-3 shadow-card">
+            <img src="/images/combay-logo.svg" alt="Combay" className="h-12 w-auto max-w-[230px] object-contain" />
+          </span>
         </Link>
 
         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">

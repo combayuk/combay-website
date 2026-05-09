@@ -1,13 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import { Mail, Phone, ShieldCheck } from "lucide-react";
 
 export default function TopBar() {
-  const { data: session } = useSession();
-  const role = (session?.user as any)?.role;
-  const customerHref = session?.user ? "/portal" : "/portal/login";
-  const adminHref = role === "ADMIN" ? "/admin" : "/admin-login";
+  const customerHref = "/portal/login";
 
   return (
     <div className="bg-[#06101F] text-white text-xs border-b border-white/10">
@@ -29,8 +25,6 @@ export default function TopBar() {
         </div>
         <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
           <Link href={customerHref} className="font-800 text-white/80 transition-colors hover:text-white">Customer Portal</Link>
-          <span className="text-white/15">|</span>
-          <Link href={adminHref} className="font-800 text-white/80 transition-colors hover:text-white">Admin Portal</Link>
           <Link href="/contact?type=quote" className="hidden rounded-sm bg-[#D99611] px-3 py-1 font-900 text-[#06101F] transition-colors hover:bg-[#F4B83A] sm:inline-flex">Request quote</Link>
         </div>
       </div>

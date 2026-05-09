@@ -109,6 +109,66 @@ function mergeVisualWidgets(raw:any): Record<string, VisualWidget[]> {
   return out;
 }
 
+
+function containsTestArtifact(value?: string): boolean {
+  const textValue = String(value || "").trim().toLowerCase();
+  if (!textValue) return false;
+  return ["new faq question", "new card", "video placeholder", "add the answer here"].some((needle) => textValue.includes(needle));
+}
+
+function cleanBlocks(page: "home" | "about", pageData: CmsPage): CmsPage {
+  const fallback = defaultSiteContent.pages[page];
+  const expectedHomeTitles = new Set(["Replace or Buy Equipment", "Repair Your Goods", "Sell Your Unwanted Goods"]);
+  const cleaned = (pageData.blocks || []).filter((block) => ![
+    block.title,
+    block.subtitle,
+    block.body,
+    block.linkLabel,
+  ].some(containsTestArtifact));
+  const titles = cleaned.map((block) => String(block.title || "").trim()).filter(Boolean);
+  const uniqueTitles = new Set(titles);
+  const hasDuplicates = titles.length !== uniqueTitles.size;
+  if (page === "home") {
+    const hasExpected = Array.from(expectedHomeTitles).every((title) => uniqueTitles.has(title));
+    if (hasDuplicates || !hasExpected || cleaned.length !== 3) {
+      return { ...pageData, blocks: fallback.blocks };
+    }
+    return { ...pageData, blocks: cleaned };
+  }
+  if (page === "about") {
+    const hasArtifacts = cleaned.length !== (pageData.blocks || []).length;
+    const tooManyCards = cleaned.length > fallback.blocks.length + 1;
+    const missingCoreCards = !["Buy Equipment", "Repair Equipment", "Sell Surplus Stock"].every((title) => uniqueTitles.has(title));
+    if (hasArtifacts || hasDuplicates || tooManyCards || missingCoreCards) {
+      return { ...pageData, blocks: fallback.blocks };
+    }
+    return { ...pageData, blocks: cleaned };
+  }
+  return pageData;
+}
+
+function cleanVisualWidgetsMap(widgets: Record<string, VisualWidget[]>): Record<string, VisualWidget[]> {
+  const out: Record<string, VisualWidget[]> = {};
+  for (const [zone, items] of Object.entries(widgets || {})) {
+    const safe = items.filter((widget) => {
+      const textFields = [widget.title, widget.subtitle, widget.body, widget.text, widget.caption, widget.linkLabel];
+      if (textFields.some(containsTestArtifact)) return false;
+      if (widget.type === "video" && !widget.videoUrl && !widget.thumbnailUrl && !widget.title && !widget.caption) return false;
+      return true;
+    });
+    if (safe.length) out[zone] = safe;
+  }
+  return out;
+}
+
+function cleanFaqItems(items: FaqItem[]): FaqItem[] {
+  return (items || []).filter((item) => !containsTestArtifact(item.question) && !containsTestArtifact(item.answer));
+}
+
+function cleanFaqGroups(groups: FaqGroup[]): FaqGroup[] {
+  return (groups || []).map((group) => ({ ...group, items: cleanFaqItems(group.items) })).filter((group) => group.items.length > 0);
+}
+
 function hiddenSections(raw:any):Record<string,string[]>{
   const out:Record<string,string[]>={};
   if(!raw||typeof raw!=="object") return out;
@@ -122,6 +182,6 @@ export function isSectionHidden(content: SiteContent | undefined, page: string, 
   if (!content?.hiddenSections) return false;
   return Array.isArray(content.hiddenSections[page]) && content.hiddenSections[page].includes(section);
 }
-export function normaliseSiteContent(input: unknown): SiteContent { const raw:any=typeof input==="object"&&input?input:{}; const f=defaultSiteContent; return { hiddenSections:hiddenSections(raw.hiddenSections), visualWidgets:mergeVisualWidgets(raw.visualWidgets), policies:{terms:mergePolicy(raw.policies?.terms,f.policies.terms),privacy:mergePolicy(raw.policies?.privacy,f.policies.privacy),returns:mergePolicy(raw.policies?.returns,f.policies.returns),warranty:mergePolicy(raw.policies?.warranty,f.policies.warranty),payment:mergePolicy(raw.policies?.payment,f.policies.payment)}, heroSlides:f.heroSlides.map((x,i)=>mergeSlide(raw.heroSlides?.[i],x)), trust:{eyebrow:text(raw.trust?.eyebrow,f.trust.eyebrow),heading:text(raw.trust?.heading,f.trust.heading),accent:text(raw.trust?.accent,f.trust.accent),clients:Array.isArray(raw.trust?.clients)?raw.trust.clients.map((x:any)=>String(x||"").trim()).filter(Boolean):f.trust.clients,backgroundImageUrl:opt(raw.trust?.backgroundImageUrl)||f.trust.backgroundImageUrl}, finalCta:{eyebrow:text(raw.finalCta?.eyebrow,f.finalCta.eyebrow),heading:text(raw.finalCta?.heading,f.finalCta.heading),body:text(raw.finalCta?.body,f.finalCta.body),primaryLabel:text(raw.finalCta?.primaryLabel,f.finalCta.primaryLabel),primaryHref:href(raw.finalCta?.primaryHref,f.finalCta.primaryHref),secondaryLabel:text(raw.finalCta?.secondaryLabel,f.finalCta.secondaryLabel),secondaryHref:href(raw.finalCta?.secondaryHref,f.finalCta.secondaryHref),tertiaryLabel:text(raw.finalCta?.tertiaryLabel,f.finalCta.tertiaryLabel),tertiaryHref:href(raw.finalCta?.tertiaryHref,f.finalCta.tertiaryHref),backgroundImageUrl:opt(raw.finalCta?.backgroundImageUrl)||f.finalCta.backgroundImageUrl}, contact:{salesEmail:text(raw.contact?.salesEmail,f.contact.salesEmail),infoEmail:text(raw.contact?.infoEmail,f.contact.infoEmail),phone:text(raw.contact?.phone,f.contact.phone),location:text(raw.contact?.location,f.contact.location),whatsapp:text(raw.contact?.whatsapp,f.contact.whatsapp),businessHours:text(raw.contact?.businessHours,f.contact.businessHours),mapEmbedUrl:text(raw.contact?.mapEmbedUrl,f.contact.mapEmbedUrl)}, footer:{description:text(raw.footer?.description,f.footer.description),backgroundImageUrl:opt(raw.footer?.backgroundImageUrl)||f.footer.backgroundImageUrl}, pages:{home:mergePage(raw.pages?.home,f.pages.home),repair:mergePage(raw.pages?.repair,f.pages.repair),assetRecovery:mergePage(raw.pages?.assetRecovery,f.pages.assetRecovery),about:upgradeAboutPage(mergePage(raw.pages?.about,f.pages.about)),contact:mergePage(raw.pages?.contact,f.pages.contact)}, faq:{eyebrow:text(raw.faq?.eyebrow,f.faq.eyebrow),heading:text(raw.faq?.heading,f.faq.heading),body:text(raw.faq?.body,f.faq.body),backgroundImageUrl:opt(raw.faq?.backgroundImageUrl)||f.faq.backgroundImageUrl,groups:arr(raw.faq?.groups,f.faq.groups,mergeFaqGroup,12),previewItems:arr(raw.faq?.previewItems,f.faq.previewItems,mergeFaqItem,10),ctaHeading:text(raw.faq?.ctaHeading,f.faq.ctaHeading),ctaBody:text(raw.faq?.ctaBody,f.faq.ctaBody),ctaLabel:text(raw.faq?.ctaLabel,f.faq.ctaLabel),ctaHref:href(raw.faq?.ctaHref,f.faq.ctaHref)} } }
+export function normaliseSiteContent(input: unknown): SiteContent { const raw:any=typeof input==="object"&&input?input:{}; const f=defaultSiteContent; return { hiddenSections:hiddenSections(raw.hiddenSections), visualWidgets:cleanVisualWidgetsMap(mergeVisualWidgets(raw.visualWidgets)), policies:{terms:mergePolicy(raw.policies?.terms,f.policies.terms),privacy:mergePolicy(raw.policies?.privacy,f.policies.privacy),returns:mergePolicy(raw.policies?.returns,f.policies.returns),warranty:mergePolicy(raw.policies?.warranty,f.policies.warranty),payment:mergePolicy(raw.policies?.payment,f.policies.payment)}, heroSlides:f.heroSlides.map((x,i)=>mergeSlide(raw.heroSlides?.[i],x)), trust:{eyebrow:text(raw.trust?.eyebrow,f.trust.eyebrow),heading:text(raw.trust?.heading,f.trust.heading),accent:text(raw.trust?.accent,f.trust.accent),clients:Array.isArray(raw.trust?.clients)?raw.trust.clients.map((x:any)=>String(x||"").trim()).filter(Boolean):f.trust.clients,backgroundImageUrl:opt(raw.trust?.backgroundImageUrl)||f.trust.backgroundImageUrl}, finalCta:{eyebrow:text(raw.finalCta?.eyebrow,f.finalCta.eyebrow),heading:text(raw.finalCta?.heading,f.finalCta.heading),body:text(raw.finalCta?.body,f.finalCta.body),primaryLabel:text(raw.finalCta?.primaryLabel,f.finalCta.primaryLabel),primaryHref:href(raw.finalCta?.primaryHref,f.finalCta.primaryHref),secondaryLabel:text(raw.finalCta?.secondaryLabel,f.finalCta.secondaryLabel),secondaryHref:href(raw.finalCta?.secondaryHref,f.finalCta.secondaryHref),tertiaryLabel:text(raw.finalCta?.tertiaryLabel,f.finalCta.tertiaryLabel),tertiaryHref:href(raw.finalCta?.tertiaryHref,f.finalCta.tertiaryHref),backgroundImageUrl:opt(raw.finalCta?.backgroundImageUrl)||f.finalCta.backgroundImageUrl}, contact:{salesEmail:text(raw.contact?.salesEmail,f.contact.salesEmail),infoEmail:text(raw.contact?.infoEmail,f.contact.infoEmail),phone:text(raw.contact?.phone,f.contact.phone),location:text(raw.contact?.location,f.contact.location),whatsapp:text(raw.contact?.whatsapp,f.contact.whatsapp),businessHours:text(raw.contact?.businessHours,f.contact.businessHours),mapEmbedUrl:text(raw.contact?.mapEmbedUrl,f.contact.mapEmbedUrl)}, footer:{description:text(raw.footer?.description,f.footer.description),backgroundImageUrl:opt(raw.footer?.backgroundImageUrl)||f.footer.backgroundImageUrl}, pages:{home:cleanBlocks("home", mergePage(raw.pages?.home,f.pages.home)),repair:mergePage(raw.pages?.repair,f.pages.repair),assetRecovery:mergePage(raw.pages?.assetRecovery,f.pages.assetRecovery),about:cleanBlocks("about", upgradeAboutPage(mergePage(raw.pages?.about,f.pages.about))),contact:mergePage(raw.pages?.contact,f.pages.contact)}, faq:{eyebrow:text(raw.faq?.eyebrow,f.faq.eyebrow),heading:text(raw.faq?.heading,f.faq.heading),body:text(raw.faq?.body,f.faq.body),backgroundImageUrl:opt(raw.faq?.backgroundImageUrl)||f.faq.backgroundImageUrl,groups:cleanFaqGroups(arr(raw.faq?.groups,f.faq.groups,mergeFaqGroup,12)),previewItems:cleanFaqItems(arr(raw.faq?.previewItems,f.faq.previewItems,mergeFaqItem,10)),ctaHeading:text(raw.faq?.ctaHeading,f.faq.ctaHeading),ctaBody:text(raw.faq?.ctaBody,f.faq.ctaBody),ctaLabel:text(raw.faq?.ctaLabel,f.faq.ctaLabel),ctaHref:href(raw.faq?.ctaHref,f.faq.ctaHref)} } }
 export async function getSiteContent(): Promise<SiteContent> { const dbResult=await withDatabase(async()=>{ const row=await prisma.siteSetting.findUnique({where:{key:SITE_CONTENT_KEY}}); if(!row?.value) return defaultSiteContent; try{return normaliseSiteContent(JSON.parse(row.value))}catch{return defaultSiteContent} }); return dbResult.ok?dbResult.data:defaultSiteContent }
 export async function saveSiteContent(content: SiteContent): Promise<SiteContent> { const safe=normaliseSiteContent(content); await prisma.siteSetting.upsert({where:{key:SITE_CONTENT_KEY},update:{value:JSON.stringify(safe)},create:{key:SITE_CONTENT_KEY,value:JSON.stringify(safe)}}); return safe }

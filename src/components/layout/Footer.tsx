@@ -51,12 +51,10 @@ export default function Footer({ content }: { content?: FooterContent }) {
       <div className="site-shell py-14">
         <div className="grid gap-10 lg:grid-cols-[1.2fr_2fr]">
           <div>
-            <Link href="/" className="inline-flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-white/5"><span className="font-display text-sm font-900 text-[#F4B83A]">CB</span></div>
-              <div>
-                <span className="block font-display text-xl font-900 tracking-[-0.04em] text-white">COMBAY</span>
-                <span className="text-[10px] font-800 uppercase tracking-[0.16em] text-white/35">Industrial supply</span>
-              </div>
+            <Link href="/" className="inline-flex items-center">
+              <span className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                <img src="/images/combay-logo.svg" alt="Combay" className="h-11 w-auto max-w-[210px] object-contain" />
+              </span>
             </Link>
             <p className="mt-5 max-w-sm text-sm leading-7 text-white/58">{content?.description || "UK-based industrial and commercial equipment specialists. Buy, repair, or sell surplus stock — backed by engineers."}</p>
             <div className="mt-6 space-y-3 text-sm text-white/65">

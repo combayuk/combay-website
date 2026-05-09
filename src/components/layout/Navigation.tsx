@@ -1,18 +1,20 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronDown, Menu, Search, ShoppingCart, X } from "lucide-react";
 import { readCartLines } from "@/lib/cart";
 
 const SHOP_CATS = [
-  { name: "Lab & Scientific", slug: "lab-scientific", icon: "🔬", items: ["Spectrometers", "Analysers", "Microscopes", "Chromatography", "Centrifuges"] },
-  { name: "Automation & Control", slug: "automation-control", icon: "⚙️", items: ["PLCs", "HMI Panels", "Drives", "Servo Systems", "Sensors"] },
-  { name: "Test & Detection", slug: "test-detection", icon: "📡", items: ["Oscilloscopes", "Power Analysers", "Multimeters", "OTDR", "Signal Generators"] },
-  { name: "IT & Networking", slug: "it-networking", icon: "🖧", items: ["Servers", "Switches", "Storage", "UPS", "Cabling"] },
-  { name: "Display & AV", slug: "display-av", icon: "📺", items: ["Projectors", "Broadcast", "Video Walls", "Lenses", "Audio"] },
-  { name: "Oil & Gas", slug: "oil-gas", icon: "🛢️", items: ["Gas Detection", "Flow Meters", "Pressure", "Valves", "Safety"] },
-  { name: "Manufacturing", slug: "manufacturing", icon: "🏭", items: ["CNC Controls", "Vision", "Motors", "Robots", "Conveyors"] },
-  { name: "Audio & Broadcast", slug: "audio-broadcast", icon: "🎙️", items: ["Mixers", "Amplifiers", "Transmitters", "Recording", "Cabling"] },
+  { name: "Lab & Scientific", slug: "lab-scientific", image: "/images/categories/lab-instrument.svg", items: ["Spectrometers", "Analysers", "Microscopes", "Chromatography", "Centrifuges"] },
+  { name: "Automation & Control", slug: "automation-control", image: "/images/categories/automation-plc.svg", items: ["PLCs", "HMI Panels", "Drives", "Servo Systems", "Sensors"] },
+  { name: "Test & Detection", slug: "test-detection", image: "/images/categories/oscilloscope.svg", items: ["Oscilloscopes", "Power Analysers", "Multimeters", "OTDR", "Signal Generators"] },
+  { name: "IT & Networking", slug: "it-networking", image: "/images/categories/server-switch.svg", items: ["Servers", "Switches", "Storage", "UPS", "Cabling"] },
+  { name: "Display & AV", slug: "display-av", image: "/images/categories/projector.svg", items: ["Projectors", "Broadcast", "Video Walls", "Lenses", "Audio"] },
+  { name: "Oil & Gas", slug: "oil-gas", image: "/images/categories/gas-detector.svg", items: ["Gas Detection", "Flow Meters", "Pressure", "Valves", "Safety"] },
+  { name: "Manufacturing", slug: "manufacturing", image: "/images/categories/robot-arm.svg", items: ["CNC Controls", "Vision", "Motors", "Robots", "Conveyors"] },
+  { name: "Audio & Broadcast", slug: "audio-broadcast", image: "/images/categories/audio-broadcast.svg", items: ["Mixers", "Amplifiers", "Transmitters", "Recording", "Cabling"] },
 ];
 
 const NAV = [
@@ -28,9 +30,11 @@ function WAIcon() {
 }
 
 export default function Navigation() {
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
+  const [megaSearch, setMegaSearch] = useState("");
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -47,18 +51,19 @@ export default function Navigation() {
   const openShop = () => { if (closeTimer.current) clearTimeout(closeTimer.current); setShopOpen(true); };
   const closeShop = () => { closeTimer.current = setTimeout(() => setShopOpen(false), 140); };
 
+  function submitMegaSearch(event: React.FormEvent) {
+    event.preventDefault();
+    const query = megaSearch.trim();
+    setShopOpen(false);
+    router.push(query ? `/shop?q=${encodeURIComponent(query)}` : "/shop");
+  }
+
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/108">
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/95">
       <div className="site-shell">
         <div className="flex h-[68px] items-center justify-between gap-4">
-          <Link href="/" className="group flex flex-shrink-0 items-center gap-3" aria-label="Combay home">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-[#06101F] shadow-sm transition-transform group-hover:-translate-y-0.5">
-              <span className="font-display text-sm font-900 tracking-tight text-[#D99611]">CB</span>
-            </div>
-            <div className="leading-none">
-              <span className="block font-display text-xl font-900 tracking-[-0.04em] text-[#06101F]">COMBAY</span>
-              <span className="hidden text-[10px] font-800 uppercase tracking-[0.16em] text-slate-400 sm:block">Industrial supply</span>
-            </div>
+          <Link href="/" className="group flex flex-shrink-0 items-center" aria-label="Combay home">
+            <img src="/images/combay-logo.svg" alt="Combay" className="h-10 w-auto max-w-[180px] object-contain" />
           </Link>
 
           <nav className="hidden h-full items-center lg:flex">
@@ -67,26 +72,35 @@ export default function Navigation() {
                 Shop <ChevronDown size={14} className={`transition-transform ${shopOpen ? "rotate-180" : ""}`} />
               </button>
               {shopOpen && (
-                <div className="absolute left-0 top-full w-[900px] overflow-hidden rounded-b-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="absolute left-0 top-full w-[960px] overflow-hidden rounded-b-2xl border border-slate-200 bg-white shadow-2xl">
                   <div className="grid grid-cols-4 gap-px bg-slate-100 p-px">
                     {SHOP_CATS.map((cat) => (
-                      <Link key={cat.slug} href={`/shop?category=${cat.slug}`} className="group bg-white p-5 transition-colors hover:bg-slate-50">
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className="text-lg">{cat.icon}</span>
+                      <Link key={cat.slug} href={`/shop?category=${cat.slug}`} className="group bg-white p-4 transition-colors hover:bg-slate-50">
+                        <div className="mb-2 flex items-center gap-3">
+                          <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-slate-50">
+                            <img src={cat.image} alt="" className="h-10 w-10 object-contain" />
+                          </span>
                           <span className="font-display text-sm font-900 text-[#06101F] group-hover:text-[#B87908]">{cat.name}</span>
                         </div>
-                        <ul className="space-y-1">
+                        <ul className="space-y-1 pl-[60px]">
                           {cat.items.map((item) => <li key={item} className="text-xs text-slate-500">{item}</li>)}
                         </ul>
                       </Link>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between bg-slate-50 px-6 py-4">
-                    <div className="flex items-center gap-2 text-xs font-800 text-slate-500">
-                      <Search size={14} /> Search by SKU, MPN, model or manufacturer
-                    </div>
-                    <Link href="/shop" className="btn-primary py-2 text-xs">Browse stock →</Link>
-                  </div>
+                  <form onSubmit={submitMegaSearch} className="flex items-center justify-between gap-3 bg-slate-50 px-6 py-4">
+                    <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-800 text-slate-500 shadow-sm focus-within:border-[#D99611]">
+                      <Search size={15} className="flex-shrink-0 text-[#B87908]" />
+                      <input
+                        value={megaSearch}
+                        onChange={(event) => setMegaSearch(event.target.value)}
+                        placeholder="Search by SKU, MPN, model or manufacturer"
+                        className="min-w-0 flex-1 bg-transparent text-sm font-600 text-[#06101F] outline-none placeholder:text-slate-400"
+                      />
+                    </label>
+                    <button type="submit" className="btn-primary py-2 text-xs">Search stock →</button>
+                    <Link href="/shop" className="btn-secondary py-2 text-xs">Browse all</Link>
+                  </form>
                 </div>
               )}
             </div>

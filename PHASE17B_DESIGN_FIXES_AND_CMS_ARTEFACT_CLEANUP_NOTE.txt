@@ -1,0 +1,15 @@
+Phase 17B — Design fixes and Visual CMS artefact cleanup
+
+Scope:
+- Removed the public-facing Admin Portal button from the top bar.
+- Added support for admin.* host root rewrite to /admin-login, ready for admin.combay.co.uk once DNS/domain is mapped in Vercel.
+- Added the supplied Combay SVG logo to public/images/combay-logo.svg and used it in navigation, footer, and login screen.
+- Rebuilt the shop mega-menu search into a working form that routes to /shop?q=...
+- Reduced homepage hero height so the whole hero fits within the first viewport on desktop.
+- Added industrial automation hero background artwork.
+- Replaced emoji category icons on homepage category cards and shop mega-menu with transparent-background industrial equipment SVG illustrations.
+- Added CMS-content cleanup safeguards to remove Visual CMS test artefacts from public pages: duplicate What We Do cards, New FAQ question, New card, Video placeholder, and empty placeholder videos.
+- Restores homepage What We Do cards to the three original service cards when CMS test edits have duplicated/corrupted the card collection.
+- Restores About page story cards to the default intended set when CMS test edits have added unnecessary cards or removed core cards.
+
+No Prisma schema change required.

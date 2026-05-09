@@ -2,14 +2,14 @@
 import Link from "next/link";
 
 const INDUSTRIES = [
-  { label: "Scientific Research", slug: "lab-scientific", icon: "🔬", count: "1,200+" },
-  { label: "Automation & Control", slug: "automation-control", icon: "⚙️", count: "2,400+" },
-  { label: "Manufacturing", slug: "manufacturing", icon: "🏭", count: "890+" },
-  { label: "Display & Projectors", slug: "display-av", icon: "📺", count: "340+" },
-  { label: "Oil & Gas", slug: "oil-gas", icon: "🛢️", count: "520+" },
-  { label: "Audio & Broadcast", slug: "audio-broadcast", icon: "🎙️", count: "280+" },
-  { label: "IT & Networking", slug: "it-networking", icon: "🖧", count: "1,100+" },
-  { label: "Test & Detection", slug: "test-detection", icon: "🔭", count: "1,650+" },
+  { label: "Scientific Research", slug: "lab-scientific", image: "/images/categories/lab-instrument.svg", count: "1,200+" },
+  { label: "Automation & Control", slug: "automation-control", image: "/images/categories/automation-plc.svg", count: "2,400+" },
+  { label: "Manufacturing", slug: "manufacturing", image: "/images/categories/robot-arm.svg", count: "890+" },
+  { label: "Display & Projectors", slug: "display-av", image: "/images/categories/projector.svg", count: "340+" },
+  { label: "Oil & Gas", slug: "oil-gas", image: "/images/categories/gas-detector.svg", count: "520+" },
+  { label: "Audio & Broadcast", slug: "audio-broadcast", image: "/images/categories/audio-broadcast.svg", count: "280+" },
+  { label: "IT & Networking", slug: "it-networking", image: "/images/categories/server-switch.svg", count: "1,100+" },
+  { label: "Test & Detection", slug: "test-detection", image: "/images/categories/oscilloscope.svg", count: "1,650+" },
 ];
 
 export default function IndustryStrip() {
@@ -24,7 +24,9 @@ export default function IndustryStrip() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
           {INDUSTRIES.map((industry) => (
             <Link key={industry.slug} href={`/shop?category=${industry.slug}`} className="group rounded-xl border border-slate-200 bg-white p-3.5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D99611]/45 hover:shadow-md">
-              <span className="mb-2 block text-2xl transition-transform group-hover:scale-110">{industry.icon}</span>
+              <span className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-xl bg-slate-50 transition-colors group-hover:bg-[#FFF8E8]">
+                <img src={industry.image} alt="" className="h-12 w-12 object-contain" />
+              </span>
               <span className="block text-[11px] font-900 leading-tight text-[#06101F]">{industry.label}</span>
               <span className="mt-1 block font-mono text-[10px] text-slate-400">{industry.count}</span>
             </Link>
