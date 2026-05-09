@@ -4,7 +4,11 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { isDatabaseConfigured } from "@/lib/db";
 
-const MOCK_AUTH_ENABLED = process.env.MOCK_AUTH_ENABLED !== "false";
+export type AuthRole = "ADMIN" | "CUSTOMER";
+
+export const MOCK_AUTH_ENABLED =
+  process.env.MOCK_AUTH_ENABLED === "true" ||
+  (process.env.NODE_ENV !== "production" && process.env.MOCK_AUTH_ENABLED !== "false");
 
 const CUSTOMER_EMAIL =
   process.env.MOCK_CUSTOMER_EMAIL ??
@@ -28,6 +32,26 @@ const ADMIN_LOGIN_PASSWORD =
   process.env.ADMIN_LOGIN_PASSWORD ??
   "Admin12345";
 
+function normaliseEmail(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normaliseLoginMode(value?: string | null): "admin" | "customer" | "generic" {
+  if (value === "admin") return "admin";
+  if (value === "customer") return "customer";
+  return "generic";
+}
+
+function roleAllowedForMode(role: AuthRole, mode: "admin" | "customer" | "generic") {
+  if (mode === "admin") return role === "ADMIN";
+  if (mode === "customer") return role === "CUSTOMER";
+  return true;
+}
+
+function routeForRole(role: AuthRole) {
+  return role === "ADMIN" ? "/admin" : "/portal";
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -35,18 +59,24 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        loginMode: { label: "Login mode", type: "text" },
       },
       async authorize(credentials) {
-        const email = credentials?.email?.trim().toLowerCase();
+        const email = normaliseEmail(credentials?.email);
         const password = credentials?.password || "";
+        const loginMode = normaliseLoginMode((credentials as any)?.loginMode);
         if (!email || !password) return null;
 
         if (MOCK_AUTH_ENABLED) {
-          if (email === ADMIN_LOGIN_EMAIL.toLowerCase() && password === ADMIN_LOGIN_PASSWORD) {
-            return { id: "admin-001", email: ADMIN_LOGIN_EMAIL, name: "Combay Admin", role: "ADMIN" };
+          if (email === normaliseEmail(ADMIN_LOGIN_EMAIL) && password === ADMIN_LOGIN_PASSWORD) {
+            const role: AuthRole = "ADMIN";
+            if (!roleAllowedForMode(role, loginMode)) throw new Error("WRONG_PORTAL");
+            return { id: "admin-001", email: ADMIN_LOGIN_EMAIL, name: "Combay Admin", role, defaultRoute: routeForRole(role) } as any;
           }
-          if (email === CUSTOMER_EMAIL.toLowerCase() && password === CUSTOMER_PASSWORD) {
-            return { id: "user-001", email: CUSTOMER_EMAIL, name: "Test Customer", role: "CUSTOMER" };
+          if (email === normaliseEmail(CUSTOMER_EMAIL) && password === CUSTOMER_PASSWORD) {
+            const role: AuthRole = "CUSTOMER";
+            if (!roleAllowedForMode(role, loginMode)) throw new Error("WRONG_PORTAL");
+            return { id: "user-001", email: CUSTOMER_EMAIL, name: "Test Customer", role, defaultRoute: routeForRole(role) } as any;
           }
         }
 
@@ -58,7 +88,9 @@ export const authOptions: NextAuthOptions = {
           }
           const valid = await bcrypt.compare(password, user.passwordHash);
           if (!valid) return null;
-          return { id: user.id, email: user.email, name: user.name || user.email, role: user.role };
+          const role = (user.role === "ADMIN" ? "ADMIN" : "CUSTOMER") as AuthRole;
+          if (!roleAllowedForMode(role, loginMode)) throw new Error("WRONG_PORTAL");
+          return { id: user.id, email: user.email, name: user.name || user.email, role, defaultRoute: routeForRole(role) } as any;
         }
 
         return null;
@@ -71,6 +103,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role;
         token.id = user.id;
+        token.defaultRoute = (user as any).defaultRoute;
       }
       return token;
     },
@@ -78,8 +111,17 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;
+        (session.user as any).defaultRoute = token.defaultRoute || routeForRole(token.role === "ADMIN" ? "ADMIN" : "CUSTOMER");
       }
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      try {
+        const parsed = new URL(url);
+        if (parsed.origin === baseUrl) return url;
+      } catch {}
+      return baseUrl;
     },
   },
   pages: {

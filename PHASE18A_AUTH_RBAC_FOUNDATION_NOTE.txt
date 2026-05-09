@@ -1,0 +1,21 @@
+Phase 18A — Real auth/RBAC foundation and route hardening
+
+Summary:
+- Keeps mock auth only when MOCK_AUTH_ENABLED=true. In production, mock auth no longer silently defaults on.
+- Adds login-mode enforcement so admin login only accepts ADMIN accounts and portal login only accepts CUSTOMER accounts.
+- Adds middleware route guards for /admin and /portal.
+- Adds middleware protection for /api/admin, admin-only AI/eBay/marketing/upload APIs, and non-GET product mutations.
+- Adds safe callback URL handling in LoginScreen to avoid redirecting to arbitrary external URLs.
+- Hides preview/test-account panels unless MOCK_AUTH_ENABLED=true.
+- Adds /api/auth/bootstrap-admin endpoint guarded by ADMIN_BOOTSTRAP_TOKEN for creating/promoting the first DB-backed admin account.
+- Adds NextAuth type augmentation for session.user.role and session.user.defaultRoute.
+
+No Prisma schema change was required because Role, passwordHash, emailVerified and user fields already exist in prisma/schema.prisma.
+
+Recommended production transition:
+1. Set ADMIN_BOOTSTRAP_TOKEN, ADMIN_LOGIN_EMAIL and ADMIN_LOGIN_PASSWORD in Vercel temporarily.
+2. POST to /api/auth/bootstrap-admin with header x-bootstrap-token to create/promote the admin.
+3. Set MOCK_AUTH_ENABLED=false.
+4. Redeploy.
+5. Verify /admin-login accepts the real admin and /portal/login accepts customer accounts only.
+6. Remove ADMIN_BOOTSTRAP_TOKEN from Vercel after the admin is created.

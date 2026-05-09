@@ -31,11 +31,19 @@ const ADMIN_PRESET: LoginPreset = {
   helper: "Open admin dashboard",
 };
 
-function LoginForm({ mode }: { mode: LoginMode }) {
+function safeCallbackUrl(value: string | null, fallback: string) {
+  if (!value) return fallback;
+  if (!value.startsWith("/")) return fallback;
+  if (value.startsWith("//")) return fallback;
+  if (value.startsWith("/admin") || value.startsWith("/portal")) return value;
+  return fallback;
+}
+
+function LoginForm({ mode, showPreviewAccounts }: { mode: LoginMode; showPreviewAccounts: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const defaultCallback = mode === "admin" ? "/admin" : "/portal";
-  const callbackUrl = params.get("callbackUrl") ?? defaultCallback;
+  const callbackUrl = safeCallbackUrl(params.get("callbackUrl"), defaultCallback);
   const verified = params.get("verified") === "1";
 
   const [email, setEmail] = useState("");
@@ -51,6 +59,7 @@ function LoginForm({ mode }: { mode: LoginMode }) {
     const res = await signIn("credentials", {
       email,
       password,
+      loginMode: mode,
       redirect: false,
     });
 
@@ -67,10 +76,15 @@ function LoginForm({ mode }: { mode: LoginMode }) {
       return;
     }
 
+    if (res?.error === "WRONG_PORTAL" || String(res?.error || "").includes("WRONG_PORTAL")) {
+      setError(mode === "admin" ? "This account is not authorised for the admin portal." : "This account is not a customer portal account.");
+      return;
+    }
+
     setError(
       mode === "admin"
-        ? "Incorrect admin credentials. Use the authorised admin test account."
-        : "Incorrect credentials. Check your email/password or use the customer test account below."
+        ? "Incorrect admin credentials or the account is not authorised for admin access."
+        : "Incorrect credentials. Check your email/password or register for a customer account."
     );
   }
 
@@ -88,7 +102,7 @@ function LoginForm({ mode }: { mode: LoginMode }) {
   return (
     <div
       className="min-h-screen bg-navy-950 flex items-center justify-center p-4"
-      style={{ backgroundImage: "radial-gradient(ellipse at 60% 40%, rgba(240,165,0,0.07) 0%, transparent 70%)" }}
+      style={{ backgroundImage: "radial-gradient(ellipse at 60% 40%, rgba(232,164,74,0.09) 0%, transparent 70%)" }}
     >
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex justify-center">
@@ -97,31 +111,33 @@ function LoginForm({ mode }: { mode: LoginMode }) {
           </span>
         </Link>
 
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">
-          <p className="font-display font-700 text-white text-xs mb-3 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-accent rounded-full inline-block" />
-            Preview Mode — Test Account{presets.length > 1 ? "s" : ""}
-          </p>
-          <div className={presets.length > 1 ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
-            {presets.map((preset) => (
-              <button
-                key={preset.badge}
-                type="button"
-                onClick={() => fill(preset)}
-                className="bg-white/8 border border-white/10 rounded-xl px-3 py-3 text-left hover:border-accent/50 hover:bg-white/12 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-display font-700 text-white text-xs">{preset.label}</span>
-                  <span className={`text-[9px] rounded px-1.5 py-0.5 font-mono border ${preset.badge === "ADMIN" ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"}`}>
-                    {preset.badge}
-                  </span>
-                </div>
-                <p className="font-mono text-[10px] text-white/40">{preset.email}</p>
-                <p className="font-mono text-[10px] text-accent/60 mt-0.5 group-hover:text-accent transition-colors">Click to fill →</p>
-              </button>
-            ))}
+        {showPreviewAccounts ? (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">
+            <p className="font-display font-700 text-white text-xs mb-3 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-accent rounded-full inline-block" />
+              Preview Mode — Test Account{presets.length > 1 ? "s" : ""}
+            </p>
+            <div className={presets.length > 1 ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
+              {presets.map((preset) => (
+                <button
+                  key={preset.badge}
+                  type="button"
+                  onClick={() => fill(preset)}
+                  className="bg-white/8 border border-white/10 rounded-xl px-3 py-3 text-left hover:border-accent/50 hover:bg-white/12 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-display font-700 text-white text-xs">{preset.label}</span>
+                    <span className={`text-[9px] rounded px-1.5 py-0.5 font-mono border ${preset.badge === "ADMIN" ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"}`}>
+                      {preset.badge}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[10px] text-white/40">{preset.email}</p>
+                  <p className="font-mono text-[10px] text-accent/60 mt-0.5 group-hover:text-accent transition-colors">Click to fill →</p>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="bg-white rounded-2xl p-6 shadow-card-lg">
           <h1 className="font-display font-800 text-navy-950 text-xl mb-0.5">{title}</h1>
@@ -162,7 +178,7 @@ function LoginForm({ mode }: { mode: LoginMode }) {
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs text-gray-400 mt-5">
             <Link href="/" className="hover:text-navy-950 transition-colors">← Back to website</Link>
             {mode !== "customer" && <Link href="/portal/login" className="hover:text-navy-950 transition-colors">Customer portal</Link>}
-            {mode !== "admin" && <Link href="/admin-login" className="hover:text-navy-950 transition-colors">Admin portal</Link>}
+            {mode !== "admin" && showPreviewAccounts ? <Link href="/admin-login" className="hover:text-navy-950 transition-colors">Admin portal</Link> : null}
           </div>
         </div>
       </div>
@@ -170,10 +186,10 @@ function LoginForm({ mode }: { mode: LoginMode }) {
   );
 }
 
-export default function LoginScreen({ mode = "generic" }: { mode?: LoginMode }) {
+export default function LoginScreen({ mode = "generic", showPreviewAccounts = false }: { mode?: LoginMode; showPreviewAccounts?: boolean }) {
   return (
     <Suspense>
-      <LoginForm mode={mode} />
+      <LoginForm mode={mode} showPreviewAccounts={showPreviewAccounts} />
     </Suspense>
   );
 }

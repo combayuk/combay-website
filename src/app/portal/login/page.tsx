@@ -4,5 +4,5 @@ import LoginScreen from "@/components/auth/LoginScreen";
 export const metadata: Metadata = { title: "Customer Portal Login — Combay" };
 
 export default function PortalLoginPage() {
-  return <LoginScreen mode="customer" />;
+  return <LoginScreen mode="customer" showPreviewAccounts={process.env.MOCK_AUTH_ENABLED === "true"} />;
 }
