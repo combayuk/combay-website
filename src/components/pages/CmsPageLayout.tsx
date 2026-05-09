@@ -37,29 +37,55 @@ function AssetStocklistDownload() {
   );
 }
 
+function limitedParagraphs(text?: string, limit = 2) {
+  return String(text || "")
+    .split(/\n{1,}/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 function AboutFounderSection({ page }: { page: CmsPage }) {
+  const paragraphs = limitedParagraphs(page.sectionBody, 2);
+  const proofPoints = (page.proofPoints && page.proofPoints.length ? page.proofPoints : ["Tested stock", "Warranty-backed supply", "Repair-led asset recovery"]).slice(0, 4);
   return (
-    <section className="border-y border-slate-200 bg-white py-14 lg:py-18">
+    <section className="border-y border-slate-200 bg-white py-14 lg:py-16">
       <div className="site-shell">
-        <div className="grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-center">
-          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-[#F8FAFC]">
-            <img
-              src={page.quoteImageUrl || "/images/about/industrial-supply-desk.svg"}
-              alt="Combay industrial supply desk"
-              className="h-[240px] w-full object-cover sm:h-[280px] lg:h-[360px]"
-            />
-            <div className="absolute inset-x-0 bottom-0 border-t border-white/15 bg-[#2D4F7A]/92 p-4 text-white backdrop-blur-sm">
-              <p className="font-display text-base font-900">{page.quoteName || "Combay Team"}</p>
-              <p className="mt-1 text-xs font-800 uppercase tracking-[0.16em] text-[#E8A44A]">{page.quoteDesignation || "Industrial equipment supply, repair and asset recovery"}</p>
+        <div className="grid gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-stretch xl:gap-12">
+          <div className="order-2 lg:order-1">
+            <div className="h-full rounded-xl border border-slate-200 bg-white shadow-sm">
+              <img
+                src={page.quoteImageUrl || "/images/about/industrial-supply-desk.svg"}
+                alt={page.quoteName || "Combay industrial supply desk"}
+                className="h-[300px] w-full rounded-t-xl object-cover sm:h-[340px] lg:h-[380px]"
+              />
+              <div className="border-t border-slate-200 p-5 lg:p-6">
+                <p className="font-display text-lg font-900 text-[#2D4F7A]">{page.quoteName || "Combay Team"}</p>
+                <p className="mt-1 text-[11px] font-900 uppercase tracking-[0.18em] text-[#C9872F]">{page.quoteDesignation || "Industrial equipment supply, repair and asset recovery"}</p>
+                <blockquote className="mt-4 border-l-2 border-[#E8A44A] pl-4 text-sm font-800 leading-7 text-slate-700">
+                  “{page.quoteText || "Combay was built for maintenance and procurement teams who need practical answers before spending money."}”
+                </blockquote>
+              </div>
             </div>
           </div>
-          <div className="flex flex-col justify-center border-l-4 border-[#E8A44A] bg-[#F8FAFC] p-6 lg:p-9">
-            <p className="section-label">Built to solve a real problem</p>
-            <h2 className="mt-2 font-display text-3xl font-900 tracking-[-0.04em] text-[#2D4F7A] lg:text-4xl">Industrial equipment decisions need practical proof, not sales theatre.</h2>
-            <Paragraphs text={page.sectionBody} className="mt-5 space-y-4 text-sm leading-8 text-slate-600" />
-            <blockquote className="mt-7 border-t border-slate-200 pt-6 text-base font-800 leading-8 text-[#2D4F7A]">
-              “{page.quoteText || "Combay was built for maintenance and procurement teams who need practical answers: is the item available, what condition is it in, can it be repaired, and how quickly can it move?"}”
-            </blockquote>
+
+          <div className="order-1 flex flex-col justify-center lg:order-2">
+            <div className="max-w-[680px]">
+              <p className="section-label">{page.sectionEyebrow || "Built to solve a real problem"}</p>
+              <h2 className="mt-3 max-w-[640px] font-display text-3xl font-900 leading-[1.08] tracking-[-0.035em] text-[#2D4F7A] lg:text-[2.45rem]">
+                {page.sectionHeading || "Industrial equipment decisions need practical proof, not sales theatre."}
+              </h2>
+              <div className="mt-5 space-y-3 text-sm leading-7 text-slate-600">
+                {paragraphs.map((part, index) => <p key={index}>{part}</p>)}
+              </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                {proofPoints.map((point) => (
+                  <div key={point} className="rounded-lg border border-[#2D4F7A]/14 bg-[#F8FAFC] px-4 py-3 text-sm font-900 text-[#2D4F7A]">
+                    <span className="mr-2 text-[#E8A44A]">■</span>{point}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -119,7 +145,7 @@ function CmsBlockCard({ block, index, count }: { block: CmsBlock; index: number;
   return (
     <article data-vcms-item="page.blocks" data-vcms-index={index} className={`${blockBg(block.background)} flex min-h-[250px] flex-col rounded-2xl border p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#E8A44A]/50 hover:shadow-lg`}>
       {block.imageUrl ? <img src={block.imageUrl} alt={block.title} className="mb-5 h-36 w-full rounded-xl object-cover" /> : <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-current/10 bg-current/5 text-2xl">{block.icon || "•"}</div>}
-      <p className="mb-2 font-mono text-[10px] font-800 uppercase tracking-[0.18em] text-[#C9872F]">{block.blockType || "service"}</p>
+      {block.blockType && !["icon", "service"].includes(String(block.blockType).toLowerCase()) ? <p className="mb-2 font-mono text-[10px] font-800 uppercase tracking-[0.18em] text-[#C9872F]">{block.blockType}</p> : null}
       <h3 className={`font-display text-xl font-900 tracking-[-0.02em] ${isDark ? "text-white" : "text-[#2D4F7A]"}`}>{block.title}</h3>
       {block.subtitle ? <p className="mt-1 text-sm font-900 text-[#C9872F]">{block.subtitle}</p> : null}
       <Paragraphs text={block.body} className={`mt-4 flex-1 space-y-2 text-sm leading-7 ${isDark ? "text-white/64" : "text-slate-600"}`} />

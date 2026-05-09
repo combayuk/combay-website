@@ -1,0 +1,19 @@
+Phase 17H — About page editorial redesign refinements
+
+Changes:
+- Removed the visible “ICON” label from service cards where blockType is the default internal value.
+- Reworked About page “Built to solve a real problem” into a compact editorial two-column layout.
+- Desktop: balanced image/staff/quote card on the left and concise text/proof-points on the right.
+- Mobile: text content appears first, followed by the image/staff/quote card.
+- Quote now belongs to the image/staff credibility card rather than sitting at the bottom of the main text panel.
+- Added admin-editable proof points for the About editorial section.
+- Admin can now edit: section label, heading, body text, proof points, image, name, designation and quote.
+- Default About section copy has been tightened to 2 concise paragraphs plus proof points.
+- Footer logo increased slightly again.
+
+No Prisma schema change. No prisma db push required.
+
+Validation:
+- npm install completed in sandbox.
+- next build compiled the React/Next app successfully.
+- Full build stopped at the existing Prisma Client generation/type issue in prisma/seed.ts because prisma generate could not download engines from binaries.prisma.sh in this environment.
