@@ -1,0 +1,76 @@
+Phase 26.2R — Customer Portal compact cards and support ticket thread view
+
+Context:
+User confirmed the portal works but flagged that data is still not compact enough, specifically:
+- order item cards are too large
+- tracking item cards are too large
+- support does not give customers a clear way to view the thread of an existing ticket
+
+Implemented:
+1. Compact order item cards
+   File: src/components/portal/PortalClient.tsx
+   - Reworked OrdersPanel cards into a compact grid row layout.
+   - Reduced padding and spacing.
+   - Combined order number/status/title/SKU/date into a tighter information block.
+   - Added compact amount/courier block.
+   - Added compact tracking pill.
+   - Added compact actions:
+     - Return
+     - Support
+   - Kept return eligibility, pending/approved/rejected return indicators, support jump and tracking link behaviour.
+
+2. Compact tracking cards
+   File: src/components/portal/PortalClient.tsx
+   - Reworked TrackingPanel cards into compact grid rows.
+   - Reduced vertical card height.
+   - Kept order title, order number, courier, tracking number, status and track link.
+   - Track action now appears as a compact button.
+
+3. Support ticket thread view
+   File: src/components/portal/PortalClient.tsx
+   - Reworked SupportPanel into a two-column layout:
+     - left: new support ticket form
+     - right: compact list of existing support tickets
+   - Each existing support ticket is now shown as a compact clickable row/card.
+   - Added “View thread →” action.
+   - Added SupportThreadDrawer component.
+   - The drawer shows:
+     - ticket reference
+     - subject
+     - status
+     - linked order where present
+     - updated timestamp
+     - original customer message
+     - full customer-visible ticket thread
+     - Combay/admin replies and customer messages
+     - Reply by email CTA with ticket reference in subject
+   - Refresh keeps selected ticket updated if the matching ticket still exists.
+
+Preserved:
+- portal authentication
+- order loading
+- return eligibility and request flow
+- tracking links
+- support ticket creation
+- support ticket loading from /api/support?portal=1
+- customer-visible message filtering
+- existing Support API behaviour
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Portal > Orders:
+   - confirm order rows are compact
+   - confirm tracking link still works
+   - confirm Return and Support buttons still work
+2. Portal > Tracking:
+   - confirm tracking cards are compact
+   - confirm Track opens courier URL
+3. Portal > Support:
+   - submit new support ticket
+   - confirm existing tickets appear as compact rows
+   - click View thread
+   - confirm drawer opens and shows original message + visible thread
+   - confirm Reply by email opens mail client
+   - refresh tickets and confirm list updates

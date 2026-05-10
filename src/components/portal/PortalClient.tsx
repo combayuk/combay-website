@@ -417,7 +417,7 @@ function OrdersPanel({ orders, returns, loading, onReturn, onSupport }: { orders
   return (
     <section>
       <SectionHeader title="Your Orders" subtitle="Track purchases, request support, and check return eligibility." />
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {loading && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">Loading orders…</div>}
         {!loading && orders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">No orders found yet.</div>}
         {!loading && orders.map((order) => {
@@ -427,43 +427,48 @@ function OrdersPanel({ orders, returns, loading, onReturn, onSupport }: { orders
           const rejectedReturn = returnRecord && returnRecord.status === "REJECTED";
           const eligible = canReturn(order) && !pendingReturn && !approvedReturn;
           return (
-            <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
-                <div>
-                  <p className="font-display font-700 text-navy-950 text-sm">Order #{order.id}</p>
-                  <p className="text-gray-400 text-xs">Placed {formatDate(order.date)} · {order.sku}</p>
+            <article key={order.id} className="rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_145px_190px] md:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-mono text-[11px] font-900 text-accent">#{order.id}</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-900 ${STATUS_STYLE[order.status] || "text-gray-700 bg-gray-50 border-gray-100"}`}>{order.status.replace(/_/g, " ")}</span>
+                  </div>
+                  <p className="mt-1 truncate font-display text-sm font-900 text-navy-950">{order.item}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-gray-400">Placed {formatDate(order.date)} · SKU {order.sku}</p>
                 </div>
-                <div className="text-right">
-                  <span className={`badge border ${STATUS_STYLE[order.status] || "text-gray-700 bg-gray-50 border-gray-100"}`}>{order.status.replace(/_/g, " ")}</span>
-                  <p className="font-display font-700 text-navy-950 text-sm mt-1">{order.total}</p>
+
+                <div className="text-xs">
+                  <p className="font-display font-900 text-navy-950">{order.total}</p>
+                  <p className="mt-0.5 text-[11px] text-gray-400">{order.courier || "Courier TBC"}</p>
+                </div>
+
+                <div className="text-xs">
+                  {order.tracking ? (
+                    <a href={trackingUrl(order)} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 truncate rounded-md border border-accent/20 bg-accent/10 px-2 py-1 font-mono text-[11px] font-900 text-accent hover:bg-accent/20">
+                      {order.tracking} <ExternalLink size={10} className="shrink-0" />
+                    </a>
+                  ) : (
+                    <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-800 text-gray-500">Tracking pending</span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap justify-start gap-1 md:justify-end">
+                  {pendingReturn ? (
+                    <span className="rounded-md border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] font-900 text-amber-700">Return pending</span>
+                  ) : approvedReturn ? (
+                    <span className="rounded-md border border-green-100 bg-green-50 px-2 py-1 text-[11px] font-900 text-green-700">Return: {returnRecord?.statusLabel || returnRecord?.status?.replace(/_/g, " ")}</span>
+                  ) : rejectedReturn ? (
+                    <span className="rounded-md border border-red-100 bg-red-50 px-2 py-1 text-[11px] font-900 text-red-700">Return rejected</span>
+                  ) : eligible ? (
+                    <button onClick={() => onReturn(order)} className="rounded-md border border-accent/20 bg-accent/10 px-2 py-1 text-[11px] font-display font-900 text-accent hover:bg-accent/20">Return</button>
+                  ) : null}
+                  <button onClick={() => onSupport(order.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-display font-900 text-slate-600 hover:bg-slate-50 hover:text-navy-950">Support</button>
                 </div>
               </div>
-              <p className="text-gray-600 text-sm mb-4">{order.item}</p>
-              <div className="flex flex-wrap items-center gap-3 text-xs">
-                {order.tracking ? (
-                  <a href={trackingUrl(order)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-mono text-accent hover:text-accent-dark transition-colors">
-                    {order.tracking} <ExternalLink size={10} />
-                  </a>
-                ) : (
-                  <span className="text-gray-400 font-display font-600">Tracking not uploaded yet</span>
-                )}
-                {pendingReturn ? (
-                  <span className="text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-1 font-display font-600">Return awaiting approval</span>
-                ) : approvedReturn ? (
-                  <span className="text-green-700 bg-green-50 border border-green-100 rounded-full px-2.5 py-1 font-display font-600">Return: {returnRecord?.statusLabel || returnRecord?.status?.replace(/_/g, " ")}</span>
-                ) : rejectedReturn ? (
-                  <span className="text-red-700 bg-red-50 border border-red-100 rounded-full px-2.5 py-1 font-display font-600">Return rejected</span>
-                ) : eligible ? (
-                  <button onClick={() => onReturn(order)} className="rounded-md border border-accent/20 bg-accent/10 px-2 py-1 text-[11px] font-display font-900 text-accent hover:bg-accent/20 transition-colors">Request return approval</button>
-                ) : order.status === "DELIVERED" ? (
-                  <span className="text-gray-400 font-display font-600">Return window expired</span>
-                ) : (
-                  <span className="text-gray-400 font-display font-600">Return available after delivery</span>
-                )}
-                <button onClick={() => onSupport(order.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-display font-900 text-slate-600 hover:bg-slate-50 hover:text-navy-950 transition-colors">Report a problem</button>
-              </div>
-              {eligible && <p className="text-[11px] text-gray-400 mt-3">{daysUntilReturnDeadline(order)} days left to request a return.</p>}
-            </div>
+              {eligible && <p className="mt-2 text-[11px] text-gray-400">{daysUntilReturnDeadline(order)} days left to request a return.</p>}
+              {!eligible && !pendingReturn && !approvedReturn && !rejectedReturn ? <p className="mt-2 text-[11px] text-gray-400">{order.status === "DELIVERED" ? "Return window expired." : "Returns become available after delivery."}</p> : null}
+            </article>
           );
         })}
       </div>
@@ -610,22 +615,23 @@ function TrackingPanel({ orders, loading }: { orders: PortalOrder[]; loading: bo
   return (
     <section>
       <SectionHeader title="Tracking" subtitle="Tracking details appear here once admin adds a courier and tracking number to the order." />
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {loading && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">Loading tracking details…</div>}
         {!loading && trackedOrders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">No tracking has been uploaded yet.</div>}
         {!loading && trackedOrders.map((order) => (
-          <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-              <div>
-                <p className="font-display font-700 text-sm text-navy-950">{order.item}</p>
-                <p className="text-gray-400 text-xs">Order #{order.id} · {order.courier}</p>
+          <article key={order.id} className="rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px_180px_110px] md:items-center">
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-900 text-navy-950">{order.item}</p>
+                <p className="mt-0.5 truncate text-[11px] text-gray-400">Order #{order.id} · {order.courier || "Courier TBC"}</p>
               </div>
-              <span className={`badge border ${STATUS_STYLE[order.status] || "text-gray-700 bg-gray-50 border-gray-100"}`}>{order.status.replace(/_/g, " ")}</span>
+              <span className={`w-fit rounded-full border px-2 py-0.5 text-[10px] font-900 ${STATUS_STYLE[order.status] || "text-gray-700 bg-gray-50 border-gray-100"}`}>{order.status.replace(/_/g, " ")}</span>
+              <p className="truncate font-mono text-[11px] text-gray-500">{order.tracking}</p>
+              <a href={trackingUrl(order)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 rounded-md border border-accent/20 bg-accent/10 px-2 py-1 text-[11px] font-900 text-accent hover:bg-accent/20">
+                Track <ExternalLink size={10} />
+              </a>
             </div>
-            <a href={trackingUrl(order)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent font-mono text-xs px-3 py-2 rounded-lg hover:bg-accent/20 transition-colors font-600">
-              Track: {order.tracking} <ExternalLink size={11} />
-            </a>
-          </div>
+          </article>
         ))}
       </div>
     </section>
@@ -639,6 +645,7 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
   const [error, setError] = useState("");
   const [tickets, setTickets] = useState<PortalSupportTicket[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<PortalSupportTicket | null>(null);
 
   function loadTickets() {
     const email = session?.user?.email || "";
@@ -646,7 +653,11 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
     setTicketsLoading(true);
     fetch(`/api/support?portal=1&email=${encodeURIComponent(email)}`, { cache: "no-store" })
       .then((response) => response.json())
-      .then((data) => setTickets(Array.isArray(data.tickets) ? data.tickets : Array.isArray(data.data) ? data.data : []))
+      .then((data) => {
+        const nextTickets = Array.isArray(data.tickets) ? data.tickets : Array.isArray(data.data) ? data.data : [];
+        setTickets(nextTickets);
+        setSelectedTicket((current) => current ? nextTickets.find((ticket: PortalSupportTicket) => ticket.id === current.id) || current : current);
+      })
       .catch(() => setTickets([]))
       .finally(() => setTicketsLoading(false));
   }
@@ -679,78 +690,126 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
   return (
     <section>
       <SectionHeader title="Support" subtitle="Send a message linked to an order, return or repair request and view ticket updates." />
-      {sent ? (
-        <div className="mb-5">
-          <SuccessBox title="Ticket submitted" reference={sent.reference} message={sent.message} />
-          <button type="button" onClick={() => setSent(null)} className="btn-secondary text-xs py-2 mt-3">Open another ticket</button>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 mb-4 shadow-sm">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Subject">
-              <select name="subject" required className="input py-2 text-sm">
-                <option value="">Select...</option>
-                <option value="Order query">Order query</option>
-                <option value="Delivery issue">Delivery issue</option>
-                <option value="Return / refund">Return / refund</option>
-                <option value="Technical question">Technical question</option>
-                <option value="Other">Other</option>
-              </select>
-            </Field>
-            <Field label="Related order">
-              <select name="orderId" className="input py-2 text-sm" value={orderId} onChange={(event) => onOrderChange(event.target.value)}>
-                <option value="">Optional</option>
-                {orders.map((order) => <option key={order.id} value={order.id}>#{order.id} — {order.sku}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-3">
-            <Field label="Name"><input name="name" required className="input py-2 text-sm" placeholder="Your full name" defaultValue={session?.user?.name || ""} /></Field>
-            <Field label="Email"><input name="email" required type="email" className="input py-2 text-sm" placeholder="you@company.com" defaultValue={session?.user?.email || ""} /></Field>
-            <Field label="Country"><select name="country" required className="input py-2 text-sm">{COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}</select></Field>
-          </div>
-          <Field label="Message"><textarea name="message" required className="input min-h-[110px] py-2 text-sm" placeholder="Describe your issue in detail..." /></Field>
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-          <button disabled={loading} type="submit" className="btn-primary py-2 text-xs">{loading ? "Submitting..." : "Submit ticket →"}</button>
-        </form>
-      )}
-
-      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        {sent ? (
           <div>
-            <h3 className="font-display font-900 text-base text-navy-950">Your support tickets</h3>
-            <p className="text-xs text-gray-500">Customer-visible replies from Combay appear here.</p>
+            <SuccessBox title="Ticket submitted" reference={sent.reference} message={sent.message} />
+            <button type="button" onClick={() => setSent(null)} className="btn-secondary text-xs py-2 mt-3">Open another ticket</button>
           </div>
-          <button type="button" onClick={loadTickets} className="btn-secondary text-sm py-2">Refresh</button>
-        </div>
-        {ticketsLoading ? <p className="text-xs text-gray-500">Loading tickets…</p> : tickets.length === 0 ? <p className="text-xs text-gray-500">No support tickets found.</p> : (
-          <div className="space-y-2.5">
-            {tickets.map((ticket) => (
-              <div key={ticket.id} className="border border-gray-200 rounded-xl p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                  <div>
-                    <p className="font-display font-800 text-sm text-navy-950">{ticket.subject}</p>
-                    <p className="text-xs text-gray-400">{ticket.id}{ticket.orderId ? ` · Order ${ticket.orderId}` : ""}</p>
-                  </div>
-                  <span className="badge bg-gray-50 text-gray-700 border-gray-200">{ticket.status.replace(/_/g, " ")}</span>
-                </div>
-                <div className="space-y-2">
-                  {(ticket.messages || []).filter((item) => item.isCustomerVisible !== false).map((item) => (
-                    <div key={item.id} className={`rounded-lg border px-3 py-2 ${item.authorType === "ADMIN" ? "bg-blue-50 border-blue-100" : "bg-gray-50 border-gray-100"}`}>
-                      <div className="flex justify-between gap-2 mb-1">
-                        <span className="text-[11px] font-display font-800 text-navy-950">{item.authorType === "ADMIN" ? "Combay" : item.authorName || "You"}</span>
-                        <span className="text-[11px] text-gray-400">{new Date(item.createdAt).toLocaleString("en-GB")}</span>
+        ) : (
+          <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Subject">
+                <select name="subject" required className="input py-2 text-sm">
+                  <option value="">Select...</option>
+                  <option value="Order query">Order query</option>
+                  <option value="Delivery issue">Delivery issue</option>
+                  <option value="Return / refund">Return / refund</option>
+                  <option value="Technical question">Technical question</option>
+                  <option value="Other">Other</option>
+                </select>
+              </Field>
+              <Field label="Related order">
+                <select name="orderId" className="input py-2 text-sm" value={orderId} onChange={(event) => onOrderChange(event.target.value)}>
+                  <option value="">Optional</option>
+                  {orders.map((order) => <option key={order.id} value={order.id}>#{order.id} — {order.sku}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field label="Name"><input name="name" required className="input py-2 text-sm" placeholder="Your full name" defaultValue={session?.user?.name || ""} /></Field>
+              <Field label="Email"><input name="email" required type="email" className="input py-2 text-sm" placeholder="you@company.com" defaultValue={session?.user?.email || ""} /></Field>
+              <Field label="Country"><select name="country" required className="input py-2 text-sm">{COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}</select></Field>
+            </div>
+            <Field label="Message"><textarea name="message" required className="input min-h-[96px] py-2 text-sm" placeholder="Describe your issue in detail..." /></Field>
+            {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+            <button disabled={loading} type="submit" className="btn-primary py-2 text-xs">{loading ? "Submitting..." : "Submit ticket →"}</button>
+          </form>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="font-display font-900 text-base text-navy-950">Your support tickets</h3>
+              <p className="text-xs text-gray-500">Open a ticket to view the customer-visible thread.</p>
+            </div>
+            <button type="button" onClick={loadTickets} className="btn-secondary text-xs py-2">Refresh</button>
+          </div>
+          {ticketsLoading ? <p className="text-xs text-gray-500">Loading tickets…</p> : tickets.length === 0 ? <p className="text-xs text-gray-500">No support tickets found.</p> : (
+            <div className="space-y-2">
+              {tickets.map((ticket) => {
+                const visibleMessages = (ticket.messages || []).filter((item) => item.isCustomerVisible !== false);
+                const latest = visibleMessages[visibleMessages.length - 1];
+                return (
+                  <button key={ticket.id} type="button" onClick={() => setSelectedTicket(ticket)} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-left transition-colors hover:border-accent/50 hover:bg-accent/5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-display text-sm font-900 text-navy-950">{ticket.subject}</p>
+                        <p className="truncate text-[11px] text-gray-400">{ticket.id}{ticket.orderId ? ` · Order ${ticket.orderId}` : ""}</p>
                       </div>
-                      <p className="text-sm text-gray-700 whitespace-pre-line">{item.message}</p>
+                      <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-900 text-gray-700">{ticket.status.replace(/_/g, " ")}</span>
                     </div>
-                  ))}
+                    <p className="mt-2 max-h-8 overflow-hidden text-xs leading-4 text-gray-600">{latest?.message || ticket.message || "No visible replies yet."}</p>
+                    <p className="mt-1 text-[11px] font-900 text-accent">View thread →</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {selectedTicket ? <SupportThreadDrawer ticket={selectedTicket} onClose={() => setSelectedTicket(null)} /> : null}
+    </section>
+  );
+}
+
+function SupportThreadDrawer({ ticket, onClose }: { ticket: PortalSupportTicket; onClose: () => void }) {
+  const visibleMessages = (ticket.messages || []).filter((item) => item.isCustomerVisible !== false);
+  const mailto = `mailto:sales@combay.co.uk?subject=${encodeURIComponent(`Re: ${ticket.id} ${ticket.subject}`)}`;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50">
+      <aside className="absolute right-0 top-0 h-full w-full max-w-[560px] overflow-y-auto bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 border-b border-gray-200 bg-white px-5 py-4">
+          <button onClick={onClose} className="absolute right-4 top-4 text-gray-400 hover:text-gray-700"><X size={18} /></button>
+          <p className="font-mono text-[11px] uppercase tracking-widest text-accent">{ticket.id}</p>
+          <h3 className="mt-1 pr-8 font-display text-lg font-900 text-navy-950">{ticket.subject}</h3>
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 font-900 text-gray-700">{ticket.status.replace(/_/g, " ")}</span>
+            {ticket.orderId ? <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 font-900 text-blue-700">Order {ticket.orderId}</span> : null}
+            {ticket.updatedAt || ticket.createdAt ? <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-gray-500">Updated {new Date(ticket.updatedAt || ticket.createdAt || "").toLocaleString("en-GB")}</span> : null}
+          </div>
+        </div>
+
+        <div className="space-y-3 p-5">
+          <div className="rounded-xl border border-gray-200 bg-slate-50 px-3 py-2">
+            <p className="text-[11px] font-900 uppercase tracking-wide text-gray-400">Original message</p>
+            <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{ticket.message || "No original message available."}</p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-900 uppercase tracking-wide text-gray-400">Ticket thread</p>
+            {visibleMessages.length === 0 ? (
+              <p className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-500">No customer-visible replies have been added yet.</p>
+            ) : visibleMessages.map((message) => (
+              <div key={message.id} className={`rounded-xl border px-3 py-2 ${message.authorType === "ADMIN" ? "border-blue-100 bg-blue-50" : "border-gray-100 bg-gray-50"}`}>
+                <div className="mb-1 flex justify-between gap-2">
+                  <span className="text-[11px] font-display font-900 text-navy-950">{message.authorType === "ADMIN" ? "Combay" : message.authorName || "You"}</span>
+                  <span className="shrink-0 text-[11px] text-gray-400">{new Date(message.createdAt).toLocaleString("en-GB")}</span>
                 </div>
+                <p className="whitespace-pre-line text-sm text-gray-700">{message.message}</p>
               </div>
             ))}
           </div>
-        )}
-      </div>
-    </section>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900">
+            Need to add more information? Reply by email and include this ticket reference.
+          </div>
+          <a href={mailto} className="btn-primary inline-flex py-2 text-xs">Reply by email</a>
+        </div>
+      </aside>
+    </div>
   );
 }
 
