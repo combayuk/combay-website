@@ -164,8 +164,8 @@ export default function CheckoutClient() {
 
   if (result) {
     return (
-      <div className="bg-gray-50 min-h-screen py-14">
-        <div className="max-w-2xl mx-auto px-4 bg-white border border-gray-200 rounded-2xl p-8 text-center">
+      <div className="min-h-screen bg-gray-50 py-10">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
           <CheckCircle2 size={42} className="text-green-600 mx-auto mb-4" />
           <h1 className="font-display font-900 text-2xl text-navy-950 mb-2">Checkout request created</h1>
           <p className="text-sm text-gray-600 mb-4">Reference: <span className="font-mono text-navy-950">{result.reference}</span></p>
@@ -174,7 +174,7 @@ export default function CheckoutClient() {
               Stripe is not connected yet, so no payment was taken. This has been recorded as an unpaid checkout request for Phase 3 testing.
             </div>
           ) : null}
-          <Link href="/shop" className="btn-primary">Back to shop</Link>
+          <Link href="/shop" className="btn-primary py-2 text-xs">Back to shop</Link>
         </div>
       </div>
     );
@@ -182,11 +182,11 @@ export default function CheckoutClient() {
 
   if (summary.lines.length === 0) {
     return (
-      <div className="bg-gray-50 min-h-screen py-14">
-        <div className="max-w-2xl mx-auto px-4 text-center bg-white border border-gray-200 rounded-2xl p-8">
+      <div className="min-h-screen bg-gray-50 py-10">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
           <h1 className="font-display font-900 text-2xl text-navy-950 mb-2">No items to checkout</h1>
           <p className="text-sm text-gray-500 mb-5">Add stocked products to your cart before starting checkout.</p>
-          <Link href="/shop" className="btn-primary">Browse inventory</Link>
+          <Link href="/shop" className="btn-primary py-2 text-xs">Browse inventory</Link>
         </div>
       </div>
     );
@@ -194,81 +194,86 @@ export default function CheckoutClient() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <div className="bg-navy-950 text-white py-10">
-        <div className="max-w-7xl mx-auto px-4">
-          <p className="font-mono text-xs tracking-widest uppercase text-accent mb-2">Secure checkout</p>
-          <h1 className="font-display font-900 text-3xl lg:text-4xl">Delivery and payment</h1>
-          <p className="text-gray-400 text-sm mt-2">Enter delivery details and continue to secure Stripe card payment when configured.</p>
+      <div className="bg-navy-950 text-white py-7">
+        <div className="mx-auto max-w-7xl px-4">
+          <p className="mb-2 font-mono text-[11px] uppercase tracking-widest text-accent">Secure checkout</p>
+          <h1 className="font-display text-3xl font-900">Delivery and payment</h1>
+          <p className="mt-1 text-sm text-gray-400">Enter delivery details and continue to secure Stripe card payment when configured.</p>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 font-900">1. Details</span>
+            <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 font-900">2. Review</span>
+            <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 font-900">3. Secure payment</span>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={submit} className="max-w-7xl mx-auto px-4 py-8 grid lg:grid-cols-[1fr_360px] gap-6">
-        <div className="space-y-6">
+      <form onSubmit={submit} className="mx-auto grid max-w-7xl gap-5 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-4">
           <AccountBenefitBanner />
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-2 text-sm text-red-700">
+            <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               <AlertTriangle size={16} className="mt-0.5" /> {error}
             </div>
           )}
 
-          <section className="bg-white border border-gray-200 rounded-2xl p-6">
-            <h2 className="font-display font-800 text-xl text-navy-950 mb-4">Contact details</h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              <label className="block"><span className="label">Full name *</span><input required className="input" value={form.fullName} onChange={(e) => update("fullName", e.target.value)} /></label>
-              <label className="block"><span className="label">Email *</span><input required type="email" className="input" value={form.email} onChange={(e) => update("email", e.target.value)} /></label>
-              <label className="block"><span className="label">Phone</span><input className="input" value={form.phone} onChange={(e) => update("phone", e.target.value)} /></label>
-              <label className="block"><span className="label">Company</span><input className="input" value={form.company} onChange={(e) => update("company", e.target.value)} /></label>
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 font-display text-lg font-900 text-navy-950">Contact details</h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block"><span className="label">Full name *</span><input required className="input py-2 text-sm" value={form.fullName} onChange={(e) => update("fullName", e.target.value)} /></label>
+              <label className="block"><span className="label">Email *</span><input required type="email" className="input py-2 text-sm" value={form.email} onChange={(e) => update("email", e.target.value)} /></label>
+              <label className="block"><span className="label">Phone</span><input className="input py-2 text-sm" value={form.phone} onChange={(e) => update("phone", e.target.value)} /></label>
+              <label className="block"><span className="label">Company</span><input className="input py-2 text-sm" value={form.company} onChange={(e) => update("company", e.target.value)} /></label>
             </div>
           </section>
 
-          <section className="bg-white border border-gray-200 rounded-2xl p-6">
-            <h2 className="font-display font-800 text-xl text-navy-950 mb-4">Delivery address</h2>
-            {savedAddresses.length > 0 ? <label className="block mb-4"><span className="label">Use saved address</span><select className="input" value={selectedAddressId} onChange={(e) => useSavedAddress(e.target.value)}><option value="">Enter a different address</option>{savedAddresses.map((address) => <option key={address.id} value={address.id}>{address.isPrimary ? "Primary — " : ""}{address.label || address.address1}, {address.city}, {address.postcode}</option>)}</select></label> : null}
-            <div className="grid md:grid-cols-2 gap-4">
-              <label className="block md:col-span-2"><span className="label">Address line 1 *</span><input required className="input" value={form.address1} onChange={(e) => update("address1", e.target.value)} /></label>
-              <label className="block md:col-span-2"><span className="label">Address line 2</span><input className="input" value={form.address2} onChange={(e) => update("address2", e.target.value)} /></label>
-              <label className="block"><span className="label">Town / city *</span><input required className="input" value={form.city} onChange={(e) => update("city", e.target.value)} /></label>
-              <label className="block"><span className="label">Postcode *</span><input required className="input" value={form.postcode} onChange={(e) => update("postcode", e.target.value)} /></label>
-              <label className="block md:col-span-2"><span className="label">Country *</span><input required className="input" value={form.country} onChange={(e) => update("country", e.target.value)} /></label>
-              <label className="block md:col-span-2"><span className="label">Delivery notes</span><textarea className="textarea min-h-[100px]" value={form.notes} onChange={(e) => update("notes", e.target.value)} /></label>
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 font-display text-lg font-900 text-navy-950">Delivery address</h2>
+            {savedAddresses.length > 0 ? <label className="mb-3 block"><span className="label">Use saved address</span><p className="mb-1.5 text-xs text-gray-400">Primary address is selected automatically when available.</p><select className="input py-2 text-sm" value={selectedAddressId} onChange={(e) => useSavedAddress(e.target.value)}><option value="">Enter a different address</option>{savedAddresses.map((address) => <option key={address.id} value={address.id}>{address.isPrimary ? "Primary — " : ""}{address.label || address.address1}, {address.city}, {address.postcode}</option>)}</select></label> : null}
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block md:col-span-2"><span className="label">Address line 1 *</span><input required className="input py-2 text-sm" value={form.address1} onChange={(e) => update("address1", e.target.value)} /></label>
+              <label className="block md:col-span-2"><span className="label">Address line 2</span><input className="input py-2 text-sm" value={form.address2} onChange={(e) => update("address2", e.target.value)} /></label>
+              <label className="block"><span className="label">Town / city *</span><input required className="input py-2 text-sm" value={form.city} onChange={(e) => update("city", e.target.value)} /></label>
+              <label className="block"><span className="label">Postcode *</span><input required className="input py-2 text-sm" value={form.postcode} onChange={(e) => update("postcode", e.target.value)} /></label>
+              <label className="block md:col-span-2"><span className="label">Country *</span><input required className="input py-2 text-sm" value={form.country} onChange={(e) => update("country", e.target.value)} /></label>
+              <label className="block md:col-span-2"><span className="label">Delivery notes</span><textarea className="textarea min-h-[90px] py-2 text-sm" value={form.notes} onChange={(e) => update("notes", e.target.value)} /></label>
             </div>
           </section>
         </div>
 
-        <aside className="bg-white border border-gray-200 rounded-2xl p-5 h-fit sticky top-24">
-          <h2 className="font-display font-800 text-xl text-navy-950 mb-4">Summary</h2>
-          <div className="space-y-3 mb-4">
+        <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-24">
+          <h2 className="mb-3 font-display text-lg font-900 text-navy-950">Summary</h2>
+          <div className="mb-4 space-y-2.5">
             {summary.lines.map(({ product, variant, qty, lineTotal }) => (
               <div key={`${product.sku}-${variant?.id || variant?.sku || "base"}`} className="flex justify-between gap-3 text-sm">
-                <div><p className="font-display font-700 text-navy-950 leading-snug">{product.sku}</p><p className="text-xs text-gray-500">Qty {qty}{variant ? ` · ${variant.label}` : ""}</p></div>
-                <span className="font-display font-700 text-navy-950">{formatCurrency(lineTotal)}</span>
+                <div className="min-w-0"><p className="truncate font-display font-900 text-navy-950 leading-snug">{product.sku}</p><p className="truncate text-xs text-gray-500">Qty {qty}{variant ? ` · ${variant.label}` : ""}</p></div>
+                <span className="shrink-0 font-display font-800 text-navy-950">{formatCurrency(lineTotal)}</span>
               </div>
             ))}
           </div>
-          <div className="space-y-2 text-sm border-t border-gray-200 pt-3 mb-4">
+          <div className="mb-4 space-y-2 border-t border-gray-200 pt-3 text-sm">
             <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{formatCurrency(summary.subtotal)}</span></div>
             {displayDiscount > 0 ? <div className="flex justify-between text-green-700"><span>Promotion discount</span><span>-{formatCurrency(displayDiscount)}</span></div> : null}
             <div className="flex justify-between"><span className="text-gray-500">VAT estimate</span><span>{formatCurrency(displayVat)}</span></div>
-            <div className="flex justify-between font-display font-900 text-lg text-navy-950"><span>Total</span><span>{formatCurrency(displayTotal)}</span></div>
+            <div className="flex justify-between font-display text-lg font-900 text-navy-950"><span>Total</span><span>{formatCurrency(displayTotal)}</span></div>
           </div>
 
-          <div className="border-t border-gray-200 pt-3 mb-4">
+          <div className="mb-4 border-t border-gray-200 pt-3">
             <label className="block"><span className="label">Promotion code</span>
               <div className="flex gap-2">
-                <input className="input uppercase" value={promoCode} onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromo(null); }} placeholder="ENTER CODE" />
-                <button type="button" onClick={applyPromotion} disabled={promoLoading} className="btn-secondary whitespace-nowrap">{promoLoading ? "Checking..." : "Apply"}</button>
+                <input className="input py-2 text-sm uppercase" value={promoCode} onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromo(null); }} placeholder="ENTER CODE" />
+                <button type="button" onClick={applyPromotion} disabled={promoLoading} className="btn-secondary whitespace-nowrap py-2 text-xs">{promoLoading ? "Checking..." : "Apply"}</button>
               </div>
             </label>
             {promoMessage ? <p className={`text-xs mt-2 ${promo ? "text-green-700" : "text-red-600"}`}>{promoMessage}</p> : null}
           </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 mb-4 flex gap-2">
+          <div className="mb-4 flex gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
             <Lock size={14} className="text-gray-400 mt-0.5" />
             {stripeConfigured ? "Stripe card checkout is enabled. You will be redirected to Stripe to complete payment." : "Stripe key not configured. This submit will create an unpaid checkout request only."}
           </div>
-          <button disabled={loading || summary.hasUnavailableItems} type="submit" className="btn-primary w-full py-3">
+          <button disabled={loading || summary.hasUnavailableItems} type="submit" className="btn-primary w-full py-2.5 text-sm">
             {loading ? "Submitting..." : stripeConfigured ? "Continue to secure card payment" : "Create unpaid checkout request"}
           </button>
-          <Link href="/cart" className="btn-secondary w-full mt-2">Back to cart</Link>
+          <Link href="/cart" className="btn-secondary mt-2 w-full py-2 text-xs">Back to cart</Link>
         </aside>
       </form>
     </div>

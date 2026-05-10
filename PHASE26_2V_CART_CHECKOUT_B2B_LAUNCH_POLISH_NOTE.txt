@@ -1,0 +1,91 @@
+Phase 26.2V — Cart and checkout B2B launch polish
+
+Context:
+After the shop catalogue and product detail page passed, the next conversion-critical stage is cart and checkout. This phase improves the cart/checkout journey for B2B buyers without changing Stripe, checkout API, cart storage, order creation, or promotion logic.
+
+Implemented:
+1. Cart page redesign
+   File: src/components/cart/CartClient.tsx
+   - Reworked cart into a compact B2B review layout.
+   - Reduced hero height and added item/line count chips.
+   - Rebuilt cart item rows:
+     - smaller image thumbnail
+     - contained SKU/variant/title
+     - compact brand/MPN/stock/unit price metadata
+     - compact quantity stepper
+     - compact remove button
+     - availability/action-needed status pill
+   - Added compact trust chips in the summary:
+     - secure card payment
+     - business invoice
+     - tracked dispatch
+     - support after sale
+   - Kept unavailable-item logic and checkout blocking.
+
+2. Cart order summary
+   File: src/components/cart/CartClient.tsx
+   - More compact order summary panel.
+   - Cleaner subtotal / VAT / total rows.
+   - More concise export/VAT/delivery note.
+   - Proceed and continue-shopping buttons are smaller and cleaner.
+   - Sticky summary preserved on desktop.
+
+3. Checkout page polish
+   File: src/components/cart/CheckoutClient.tsx
+   - Reduced checkout hero height.
+   - Added compact 3-step progress strip:
+     - Details
+     - Review
+     - Secure payment
+   - Reduced form card padding and spacing.
+   - Reduced input heights.
+   - Added helper text explaining that the primary saved address is selected automatically.
+   - Made checkout summary more compact.
+   - Contained long variation labels/SKUs in summary rows.
+   - Promotion-code controls are smaller.
+   - Stripe/security note preserved.
+
+4. Checkout success page polish
+   File: src/components/cart/CheckoutSuccessClient.tsx
+   - Added a professional confirmation note:
+     - confirmation email will be sent
+     - tracking follows once dispatch is arranged
+   - Kept payment verification behaviour and cart clearing logic.
+   - Kept View orders / Continue shopping CTAs.
+
+Preserved:
+- local cart storage
+- cart update/remove logic
+- cart summary calculations
+- unavailable/POA checkout blocking
+- checkout form submission API
+- logged-in saved-address autofill
+- promotion code apply logic
+- Stripe checkout redirect
+- unpaid checkout fallback if Stripe not configured
+- checkout success session verification
+- cart clear after paid Stripe session
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Cart:
+   - add multiple products
+   - update quantities
+   - remove items
+   - unavailable/POA items block checkout
+   - proceed to checkout works
+2. Checkout:
+   - saved address selection/autofill still works for signed-in users
+   - form fields submit
+   - promotion code apply still works
+   - Stripe redirect still works when configured
+   - unpaid fallback still works if Stripe key not configured
+3. Checkout success:
+   - paid session verifies
+   - cart clears
+   - View orders and Continue shopping work
+4. Mobile/desktop:
+   - no horizontal overflow
+   - item rows and summary remain readable

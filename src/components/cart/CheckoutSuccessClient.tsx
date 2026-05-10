@@ -45,8 +45,8 @@ export default function CheckoutSuccessClient() {
 
   if (loading) {
     return (
-      <div className="bg-gray-50 min-h-screen py-10">
-        <div className="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-6 text-center shadow-sm">
+      <div className="min-h-screen bg-gray-50 py-10">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
           <Loader2 size={36} className="animate-spin text-accent mx-auto mb-4" />
           <h1 className="font-display font-900 text-2xl text-navy-950 mb-2">Confirming payment</h1>
           <p className="text-sm text-gray-500">Please wait while we verify the Stripe checkout session.</p>
@@ -57,8 +57,8 @@ export default function CheckoutSuccessClient() {
 
   if (!result?.ok) {
     return (
-      <div className="bg-gray-50 min-h-screen py-10">
-        <div className="max-w-2xl mx-auto bg-white border border-red-200 rounded-2xl p-6 text-center shadow-sm">
+      <div className="min-h-screen bg-gray-50 py-10">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm">
           <AlertTriangle size={38} className="text-red-500 mx-auto mb-4" />
           <h1 className="font-display font-900 text-2xl text-navy-950 mb-2">Payment verification issue</h1>
           <p className="text-sm text-gray-600 mb-5">{result?.error || "Could not verify the payment session."}</p>
@@ -72,20 +72,20 @@ export default function CheckoutSuccessClient() {
   const paid = result.session?.paymentStatus === "paid";
 
   return (
-    <div className="bg-gray-50 min-h-screen py-10">
-      <div className="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-6 text-center shadow-sm">
+    <div className="min-h-screen bg-gray-50 py-10">
+      <div className="mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
         <CheckCircle2 size={44} className={paid ? "text-green-600 mx-auto mb-4" : "text-amber-500 mx-auto mb-4"} />
         <h1 className="font-display font-900 text-2xl text-navy-950 mb-2">{paid ? "Payment successful" : "Checkout session received"}</h1>
         <p className="text-sm text-gray-600 mb-4">
           {paid ? "Thank you for your order. Your payment has been received and our team will start processing it shortly. Tracking details will be sent by email once dispatch is arranged." : "Stripe returned this session, but payment is not marked as paid yet. Please contact Combay if this does not update shortly."}
         </p>
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-left text-sm mb-5 space-y-1">
+        <div className="mb-5 space-y-1 rounded-xl border border-gray-200 bg-gray-50 p-4 text-left text-sm">
           <p><span className="text-gray-500">Order:</span> <span className="font-mono text-navy-950">{result.session?.orderNumber || "—"}</span></p>
           <p><span className="text-gray-500">Amount:</span> <span className="font-display font-700 text-navy-950">{amount}</span></p>
           <p><span className="text-gray-500">Payment status:</span> <span className="font-display font-700 text-navy-950">{result.session?.paymentStatus || "—"}</span></p>
           {result.session?.customerEmail && <p><span className="text-gray-500">Email:</span> {result.session.customerEmail}</p>}
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+        <div className="mb-5 rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-800">A confirmation email will be sent with your order reference. Tracking will follow once dispatch is arranged.</div><div className="flex flex-col justify-center gap-2 sm:flex-row">
           <Link href="/portal/orders" className="btn-primary py-2 text-xs">View orders</Link>
           <Link href="/shop" className="btn-secondary py-2 text-xs">Continue shopping</Link>
         </div>
