@@ -1,0 +1,61 @@
+Phase 26.2O — Visual CMS live-page parity and locked-section coverage
+
+Context:
+After Phase 26.2N added functional text styling, categories and widget persistence, the next Visual CMS requirement was to improve live-page parity and protected/locked section coverage. The Visual CMS should show the live page as closely as possible, including non-editable pages/sections, while clearly locking checkout/cart/catalogue logic.
+
+Implemented:
+1. Stronger locked-section overlay
+   File: src/components/admin/VisualCmsBuilder.tsx
+   - Non-editable pages now add actual visible locked labels to sections/forms/links/buttons, not only hover pseudo text.
+   - Protected elements now get a compact "🚫 locked" label.
+   - Added a compact protected-page guidance strip in the left panel when admin views protected pages.
+   - Preserved the existing locked/non-editable behaviour: checkout/cart/catalogue logic is visible but not editable.
+
+2. Shop page Visual CMS parity
+   File: src/app/shop/page.tsx
+   - Loads CMS content.
+   - Adds VisualWidgetZone above and below the shop client area.
+   - Wraps ShopClient in data-system-protected so Visual CMS shows it as locked.
+   - Footer now receives CMS footer/contact content.
+
+3. Cart page Visual CMS parity
+   File: src/app/cart/page.tsx
+   - Converted to async server component to load CMS content.
+   - Adds VisualWidgetZone above and below cart content.
+   - Wraps CartClient in data-system-protected so Visual CMS shows it as locked.
+   - Footer now receives CMS footer/contact content.
+
+4. Checkout page Visual CMS parity
+   File: src/app/checkout/page.tsx
+   - Converted to async server component to load CMS content.
+   - Adds VisualWidgetZone above and below checkout content.
+   - Wraps CheckoutClient in data-system-protected so Visual CMS shows it as locked.
+   - Footer now receives CMS footer/contact content.
+
+5. Manufacturers page Visual CMS parity
+   File: src/app/manufacturers/page.tsx
+   - Converted to async server component to load CMS content.
+   - Adds VisualWidgetZone above and below manufacturer catalogue content.
+   - Wraps manufacturer catalogue content in data-system-protected.
+   - Footer now receives CMS footer/contact content.
+
+Preserved:
+- all checkout/cart/shop/manufacturer backend/client logic
+- product and promotion display logic
+- footer content rendering
+- Visual CMS page selector
+- non-editable protected state
+- widget zones for safe additions outside protected logic
+- no direct editing of payment/cart/catalogue functionality
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Content > Visual.
+2. Open Shop, Cart, Checkout and Manufacturers pages from the Visual CMS page list.
+3. Confirm the live page content appears rather than a blank/incomplete CMS preview.
+4. Confirm protected functional areas show locked markers.
+5. Confirm widget zones appear above/below protected areas where appropriate.
+6. Confirm checkout/cart/shop logic remains usable on the public live site.
+7. Confirm no protected checkout/cart/payment controls can be directly edited.

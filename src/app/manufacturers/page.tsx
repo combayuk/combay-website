@@ -3,6 +3,8 @@ import TopBar from "@/components/layout/TopBar";
 import Navigation from "@/components/layout/Navigation";
 import Footer from "@/components/layout/Footer";
 import Link from "next/link";
+import { getSiteContent } from "@/lib/siteContent";
+import VisualWidgetZone from "@/components/visual-cms/VisualWidgetZone";
 
 export const metadata: Metadata = {
   title: "Manufacturers",
@@ -54,11 +56,14 @@ const MANUFACTURERS = [
 
 const categories = Array.from(new Set(MANUFACTURERS.map((m) => m.cat)));
 
-export default function ManufacturersPage() {
+export default async function ManufacturersPage() {
+  const content = await getSiteContent();
   return (
     <main>
       <TopBar />
       <Navigation />
+      <VisualWidgetZone pageKey="manufacturers" zone="top" allWidgets={content.visualWidgets} />
+      <div data-system-protected="1" className="relative">
       <section className="bg-navy-950 text-white py-12">
         <div className="max-w-7xl mx-auto px-4">
           <p className="font-mono text-xs tracking-widest uppercase text-accent mb-3">Sourcing</p>
@@ -90,7 +95,9 @@ export default function ManufacturersPage() {
           </div>
         </div>
       </section>
-      <Footer />
+      </div>
+      <VisualWidgetZone pageKey="manufacturers" zone="beforeFooter" allWidgets={content.visualWidgets} />
+      <Footer content={{ description: content.footer.description, backgroundImageUrl: content.footer.backgroundImageUrl, contact: content.contact }} />
     </main>
   );
 }
