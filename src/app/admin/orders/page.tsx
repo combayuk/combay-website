@@ -42,12 +42,25 @@ type Order = {
   customerPhone?: string | null;
   company?: string | null;
   total: number | string;
+  shipping: number | string;
   status: string;
   paymentStatus: string;
   trackingCarrier?: string | null;
   trackingNumber?: string | null;
   trackingUrl?: string | null;
   shippingAddress?: unknown;
+  shippingSnapshot?: {
+    shippingPolicyName?: string | null;
+    shippingZoneName?: string | null;
+    shippingCost?: number | string | null;
+    dispatchMinDays?: number | null;
+    dispatchMaxDays?: number | null;
+    deliveryMinDays?: number | null;
+    deliveryMaxDays?: number | null;
+    manualQuoteRequired?: boolean;
+    collectionOnly?: boolean;
+    calculationMethod?: string | null;
+  } | null;
   items?: { title: string; sku: string; quantity: number; unitPrice?: number; lineTotal?: number }[];
 };
 
@@ -295,6 +308,20 @@ export default function AdminOrders() {
                 <input name="trackingUrl" defaultValue={selected.trackingUrl ?? ""} className="input py-2 text-sm" placeholder="Leave blank to use courier tracking URL" />
               </div>
 
+
+              {selected.shippingSnapshot ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                  <h3 className="mb-2 font-display text-sm font-900 text-navy-950">Shipping snapshot</h3>
+                  <div className="grid gap-2 sm:grid-cols-2 text-xs text-gray-600">
+                    <p><span className="font-900 text-navy-950">Policy:</span> {selected.shippingSnapshot.shippingPolicyName || "—"}</p>
+                    <p><span className="font-900 text-navy-950">Zone:</span> {selected.shippingSnapshot.shippingZoneName || "—"}</p>
+                    <p><span className="font-900 text-navy-950">Cost charged:</span> {selected.shippingSnapshot.manualQuoteRequired ? "Manual quote" : formatMoney(selected.shippingSnapshot.shippingCost ?? selected.shipping)}</p>
+                    <p><span className="font-900 text-navy-950">Method:</span> {label(String(selected.shippingSnapshot.calculationMethod || "snapshot"))}</p>
+                    <p><span className="font-900 text-navy-950">Dispatch:</span> {selected.shippingSnapshot.dispatchMinDays ? `${selected.shippingSnapshot.dispatchMinDays}${selected.shippingSnapshot.dispatchMaxDays && selected.shippingSnapshot.dispatchMaxDays !== selected.shippingSnapshot.dispatchMinDays ? `–${selected.shippingSnapshot.dispatchMaxDays}` : ""} working days` : "—"}</p>
+                    <p><span className="font-900 text-navy-950">Delivery:</span> {selected.shippingSnapshot.deliveryMinDays ? `${selected.shippingSnapshot.deliveryMinDays}${selected.shippingSnapshot.deliveryMaxDays && selected.shippingSnapshot.deliveryMaxDays !== selected.shippingSnapshot.deliveryMinDays ? `–${selected.shippingSnapshot.deliveryMaxDays}` : ""} working days` : "—"}</p>
+                  </div>
+                </div>
+              ) : null}
               <div>
                 <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Items</h3>
                 <div className="border border-gray-200 rounded-xl overflow-hidden">

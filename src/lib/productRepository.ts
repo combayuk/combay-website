@@ -1,6 +1,7 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { CATEGORIES, PRODUCTS, searchProducts, type CatalogProduct, type ConditionCode, type StockStatus } from "@/lib/catalog";
 import { PUBLIC_CATEGORY_LIST, canonicalCategoryForText, isPublicCategoryMatch } from "@/lib/categoryTaxonomy";
+import { buildProductShippingSummary } from "@/lib/shipping";
 
 export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs" | "variants" | "documents"> & {
   id?: string;
@@ -11,6 +12,17 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   hsCode?: string;
   ebayItemId?: string;
   syncExcluded?: boolean;
+  shippingPolicyId?: string | null;
+  packedWeightKg?: string | null;
+  packedLengthCm?: string | null;
+  packedWidthCm?: string | null;
+  packedHeightCm?: string | null;
+  shippingManualQuoteRequired?: boolean;
+  shippingCollectionOnly?: boolean;
+  shippingUkAllowed?: boolean;
+  shippingEuropeAllowed?: boolean;
+  shippingWorldwideAllowed?: boolean;
+  shippingOverrides?: Record<string, unknown> | null;
   rawEbayDescription?: string | null;
   titleLocked?: boolean;
   priceLocked?: boolean;
@@ -35,6 +47,8 @@ type DbProduct = Awaited<ReturnType<typeof prisma.product.findMany>>[number] & {
   specs?: { label: string; value: string; sortOrder: number }[];
   variants?: { id: string; sku: string | null; label: string; optionName: string | null; optionValue: string | null; price: any; stockQty: number; sortOrder: number }[];
   tags?: { name: string }[];
+  shippingPolicy?: any;
+  shippingOverrides?: any[];
 };
 
 function slugify(value: string, fallback = "product") {
@@ -148,6 +162,18 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     descriptionLocked: (product as any).descriptionLocked ?? false,
     dimensionsCm: product.dimensions ?? "",
     weightKg: product.weight === null || product.weight === undefined ? "" : String(product.weight),
+    shippingPolicyId: (product as any).shippingPolicyId ?? null,
+    packedWeightKg: (product as any).packedWeightKg === null || (product as any).packedWeightKg === undefined ? "" : String((product as any).packedWeightKg),
+    packedLengthCm: (product as any).packedLengthCm === null || (product as any).packedLengthCm === undefined ? "" : String((product as any).packedLengthCm),
+    packedWidthCm: (product as any).packedWidthCm === null || (product as any).packedWidthCm === undefined ? "" : String((product as any).packedWidthCm),
+    packedHeightCm: (product as any).packedHeightCm === null || (product as any).packedHeightCm === undefined ? "" : String((product as any).packedHeightCm),
+    shippingManualQuoteRequired: Boolean((product as any).shippingManualQuoteRequired),
+    shippingCollectionOnly: Boolean((product as any).shippingCollectionOnly),
+    shippingUkAllowed: (product as any).shippingUkAllowed ?? true,
+    shippingEuropeAllowed: (product as any).shippingEuropeAllowed ?? true,
+    shippingWorldwideAllowed: (product as any).shippingWorldwideAllowed ?? true,
+    shippingOverrides: ((product as any).shippingOverrides?.[0]?.zoneOverridesJson ?? null) as any,
+    shipping: buildProductShippingSummary(product as any, "United Kingdom"),
   };
 }
 
@@ -272,6 +298,8 @@ export async function getProductsFromRepository(params: {
         specs: { orderBy: { sortOrder: "asc" } },
         variants: { orderBy: { sortOrder: "asc" } },
         tags: true,
+        shippingPolicy: { include: { rates: { include: { zone: true } } } },
+        shippingOverrides: true,
       },
       orderBy: { sku: "asc" },
       take: 5000,
@@ -328,7 +356,7 @@ export async function getProductByIdFromRepository(id: string) {
   const dbResult = await withDatabase(async () => {
     const product = await prisma.product.findFirst({
       where: { OR: [{ id }, { sku: id }, { slug: id }] },
-      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true },
+      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true, shippingPolicy: { include: { rates: { include: { zone: true } } } }, shippingOverrides: true },
     });
     return product ? mapDbProduct(product) : null;
   });
@@ -383,6 +411,16 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       seoKeywords: (input as any).seoKeywords ?? (Array.isArray(input.tags) ? input.tags.join(", ") : null),
       ebayItemId: (input as any).ebayItemId ?? null,
       syncExcluded: Boolean((input as any).syncExcluded),
+      shippingPolicyId: (input as any).shippingPolicyId || null,
+      packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
+      packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,
+      packedWidthCm: (input as any).packedWidthCm ? Number((input as any).packedWidthCm) : null,
+      packedHeightCm: (input as any).packedHeightCm ? Number((input as any).packedHeightCm) : null,
+      shippingManualQuoteRequired: Boolean((input as any).shippingManualQuoteRequired),
+      shippingCollectionOnly: Boolean((input as any).shippingCollectionOnly),
+      shippingUkAllowed: (input as any).shippingUkAllowed !== false,
+      shippingEuropeAllowed: (input as any).shippingEuropeAllowed !== false,
+      shippingWorldwideAllowed: (input as any).shippingWorldwideAllowed !== false,
       rawEbayDescription: (input as any).rawEbayDescription ?? null,
       titleLocked: Boolean((input as any).titleLocked),
       priceLocked: Boolean((input as any).priceLocked),
@@ -415,9 +453,40 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       await prisma.productVariant.createMany({ data: relations.variants.map((variant) => ({ ...variant, productId: product.id })) });
     }
 
+    const shippingOverrides = (input as any).shippingOverrides && typeof (input as any).shippingOverrides === "object" ? (input as any).shippingOverrides : null;
+    const hasShippingOverride = Boolean(shippingOverrides && Object.keys(shippingOverrides).length) || Boolean((input as any).shippingManualQuoteRequired) || Boolean((input as any).shippingCollectionOnly);
+    if (hasShippingOverride) {
+      await prisma.productShippingOverride.upsert({
+        where: { productId: product.id },
+        update: {
+          shippingPolicyId: (input as any).shippingPolicyId || null,
+          zoneOverridesJson: shippingOverrides,
+          packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
+          packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,
+          packedWidthCm: (input as any).packedWidthCm ? Number((input as any).packedWidthCm) : null,
+          packedHeightCm: (input as any).packedHeightCm ? Number((input as any).packedHeightCm) : null,
+          manualQuoteRequired: Boolean((input as any).shippingManualQuoteRequired),
+          collectionOnly: Boolean((input as any).shippingCollectionOnly),
+        },
+        create: {
+          productId: product.id,
+          shippingPolicyId: (input as any).shippingPolicyId || null,
+          zoneOverridesJson: shippingOverrides,
+          packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
+          packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,
+          packedWidthCm: (input as any).packedWidthCm ? Number((input as any).packedWidthCm) : null,
+          packedHeightCm: (input as any).packedHeightCm ? Number((input as any).packedHeightCm) : null,
+          manualQuoteRequired: Boolean((input as any).shippingManualQuoteRequired),
+          collectionOnly: Boolean((input as any).shippingCollectionOnly),
+        },
+      });
+    } else {
+      await prisma.productShippingOverride.deleteMany({ where: { productId: product.id } });
+    }
+
     const saved = await prisma.product.findUnique({
       where: { id: product.id },
-      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true },
+      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true, shippingPolicy: { include: { rates: { include: { zone: true } } } }, shippingOverrides: true },
     });
 
     return saved ? mapDbProduct(saved) : product;

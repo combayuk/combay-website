@@ -17,6 +17,24 @@ export type ProductVariantOption = {
   sortOrder?: number;
 };
 
+export type CatalogShippingSummary = {
+  policyId?: string | null;
+  policyName: string;
+  zoneName: string;
+  cost: number | null;
+  currency: string;
+  dispatchMinDays: number | null;
+  dispatchMaxDays: number | null;
+  deliveryMinDays: number | null;
+  deliveryMaxDays: number | null;
+  manualQuoteRequired: boolean;
+  collectionOnly: boolean;
+  inheritedFromPolicy: boolean;
+  overrideUsed: boolean;
+  calculationMethod: string;
+  publicLabel: string;
+};
+
 export type CatalogProduct = {
   id: string;
   slug: string;
@@ -41,6 +59,16 @@ export type CatalogProduct = {
   image: string | null;
   videoUrl?: string | null;
   itemLocation?: string | null;
+  shippingPolicyId?: string | null;
+  packedWeightKg?: string | null;
+  packedDimensionsCm?: string | null;
+  shippingManualQuoteRequired?: boolean;
+  shippingCollectionOnly?: boolean;
+  shippingUkAllowed?: boolean;
+  shippingEuropeAllowed?: boolean;
+  shippingWorldwideAllowed?: boolean;
+  shipping?: CatalogShippingSummary;
+  shippingOverrides?: Record<string, unknown> | null;
   images?: { url: string; originalUrl?: string | null; alt?: string | null; isPrimary?: boolean; sortOrder?: number; backgroundProcessedAt?: string | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
   variants?: ProductVariantOption[];
   description: string;

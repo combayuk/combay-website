@@ -177,6 +177,19 @@ model Product {
   ebayItemId       String?        @unique
   syncExcluded     Boolean       @default(false)
 
+  // Shipping policy assignment and product-specific shipping controls
+  shippingPolicyId String?
+  shippingPolicy   ShippingPolicy? @relation(fields: [shippingPolicyId], references: [id])
+  packedWeightKg   Decimal?      @db.Decimal(8, 3)
+  packedLengthCm   Decimal?      @db.Decimal(8, 2)
+  packedWidthCm    Decimal?      @db.Decimal(8, 2)
+  packedHeightCm   Decimal?      @db.Decimal(8, 2)
+  shippingManualQuoteRequired Boolean @default(false)
+  shippingCollectionOnly Boolean @default(false)
+  shippingUkAllowed Boolean @default(true)
+  shippingEuropeAllowed Boolean @default(true)
+  shippingWorldwideAllowed Boolean @default(true)
+
   // SEO
   seoTitle         String?
   seoDescription   String?
@@ -196,6 +209,7 @@ model Product {
   orderItems       OrderItem[]
   promotionTargets PromotionProductTarget[]
   tags             Tag[]
+  shippingOverrides ProductShippingOverride[]
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -335,6 +349,124 @@ enum ProductStatus {
   ARCHIVED
 }
 
+
+// ─── SHIPPING POLICIES ────────────────────────────────
+model ShippingPolicy {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?  @db.Text
+  internalNote String? @db.Text
+  maxWeightKg Decimal? @db.Decimal(8, 3)
+  maxLengthCm Decimal? @db.Decimal(8, 2)
+  maxWidthCm  Decimal? @db.Decimal(8, 2)
+  maxHeightCm Decimal? @db.Decimal(8, 2)
+  packagingType String?
+  manualQuoteRequired Boolean @default(false)
+  collectionOnly Boolean @default(false)
+  internationalAllowed Boolean @default(true)
+  isDefault Boolean @default(false)
+  isActive Boolean @default(true)
+  adminOnlyNotes String? @db.Text
+
+  // Future-ready eBay fulfilment mapping fields
+  ebayFulfillmentPolicyId String?
+  ebayMarketplaceId String? @default("EBAY_GB")
+  ebayDomesticShippingServiceCode String?
+  ebayInternationalShippingServiceCode String?
+  ebayExcludedLocationsJson Json?
+  ebayHandlingTimeDays Int?
+  ebayCollectionOnly Boolean @default(false)
+  ebayFreightRequired Boolean @default(false)
+  ebayMappingStatus String? @default("UNMAPPED")
+
+  rates ShippingPolicyRate[]
+  products Product[]
+  overrides ProductShippingOverride[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([isDefault])
+  @@index([ebayMarketplaceId])
+}
+
+model ShippingZone {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  countriesJson Json?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  rates       ShippingPolicyRate[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+model ShippingPolicyRate {
+  id               String   @id @default(cuid())
+  shippingPolicyId String
+  shippingZoneId   String
+  shippingPolicy   ShippingPolicy @relation(fields: [shippingPolicyId], references: [id], onDelete: Cascade)
+  zone             ShippingZone   @relation(fields: [shippingZoneId], references: [id], onDelete: Cascade)
+  cost             Decimal? @db.Decimal(10, 2)
+  currency         String   @default("GBP")
+  dispatchMinDays  Int      @default(2)
+  dispatchMaxDays  Int      @default(2)
+  deliveryMinDays  Int?
+  deliveryMaxDays  Int?
+  manualQuoteRequired Boolean @default(false)
+  isActive         Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shippingPolicyId, shippingZoneId])
+  @@index([shippingZoneId])
+  @@index([isActive])
+}
+
+model ProductShippingOverride {
+  id               String   @id @default(cuid())
+  productId        String
+  shippingPolicyId String?
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shippingPolicy   ShippingPolicy? @relation(fields: [shippingPolicyId], references: [id])
+  zoneOverridesJson Json?
+  packedWeightKg   Decimal? @db.Decimal(8, 3)
+  packedLengthCm   Decimal? @db.Decimal(8, 2)
+  packedWidthCm    Decimal? @db.Decimal(8, 2)
+  packedHeightCm   Decimal? @db.Decimal(8, 2)
+  manualQuoteRequired Boolean @default(false)
+  collectionOnly Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId])
+  @@index([shippingPolicyId])
+}
+
+model OrderShippingSnapshot {
+  id                 String   @id @default(cuid())
+  orderId            String   @unique
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shippingPolicyName String?
+  shippingZoneName   String?
+  shippingCost       Decimal? @db.Decimal(10, 2)
+  currency           String   @default("GBP")
+  dispatchMinDays    Int?
+  dispatchMaxDays    Int?
+  deliveryMinDays    Int?
+  deliveryMaxDays    Int?
+  manualQuoteRequired Boolean @default(false)
+  collectionOnly     Boolean @default(false)
+  calculationMethod  String?
+  detailsJson        Json?
+  createdAt          DateTime @default(now())
+
+  @@index([shippingZoneName])
+  @@index([manualQuoteRequired])
+}
+
 // ─── ORDERS ────────────────────────────────────────────
 model Order {
   id              String      @id @default(cuid())
@@ -364,6 +496,7 @@ model Order {
   items           OrderItem[]
   returns         Return[]
   invoices        Invoice[]
+  shippingSnapshot OrderShippingSnapshot?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 }

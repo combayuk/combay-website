@@ -18,6 +18,17 @@ export type AdminProduct = CatalogProduct & {
   seoKeywords?: string;
   ebayItemId?: string;
   syncExcluded?: boolean;
+  shippingPolicyId?: string | null;
+  packedWeightKg?: string | null;
+  packedLengthCm?: string | null;
+  packedWidthCm?: string | null;
+  packedHeightCm?: string | null;
+  shippingManualQuoteRequired?: boolean;
+  shippingCollectionOnly?: boolean;
+  shippingUkAllowed?: boolean;
+  shippingEuropeAllowed?: boolean;
+  shippingWorldwideAllowed?: boolean;
+  shippingOverrides?: Record<string, unknown> | null;
 };
 
 const STORAGE_KEY = "combay_admin_products_v1";
@@ -36,6 +47,17 @@ export function toAdminProduct(product: CatalogProduct, index = 0): AdminProduct
     seoTitle: "",
     seoDescription: "",
     seoKeywords: "",
+    shippingPolicyId: null,
+    packedWeightKg: "",
+    packedLengthCm: "",
+    packedWidthCm: "",
+    packedHeightCm: "",
+    shippingManualQuoteRequired: false,
+    shippingCollectionOnly: false,
+    shippingUkAllowed: true,
+    shippingEuropeAllowed: true,
+    shippingWorldwideAllowed: true,
+    shippingOverrides: null,
   };
 }
 
@@ -162,6 +184,17 @@ export function createBlankAdminProduct(): AdminProduct {
     seoTitle: "",
     seoDescription: "",
     seoKeywords: "",
+    shippingPolicyId: null,
+    packedWeightKg: "",
+    packedLengthCm: "",
+    packedWidthCm: "",
+    packedHeightCm: "",
+    shippingManualQuoteRequired: false,
+    shippingCollectionOnly: false,
+    shippingUkAllowed: true,
+    shippingEuropeAllowed: true,
+    shippingWorldwideAllowed: true,
+    shippingOverrides: null,
   };
 }
 

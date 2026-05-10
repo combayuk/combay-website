@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, ImagePlus, Plus, Save, Sparkles, Star, Trash2, Video } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, ImagePlus, Plus, RotateCcw, Save, Sparkles, Star, Trash2, Truck, Video } from "lucide-react";
 import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
 import { generateProductContent } from "@/lib/productContentAssistant";
 
 type Props = { mode: "new" | "edit"; productId?: string };
-type Tab = "basic" | "content" | "images" | "logistics" | "variants" | "seo";
+type Tab = "basic" | "content" | "images" | "logistics" | "shipping" | "variants" | "seo";
 type ImageRow = { url: string; alt?: string | null; isPrimary?: boolean; sortOrder?: number };
 type VariantRow = { id?: string; label: string; sku?: string | null; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number };
+type ShippingPolicyOption = { id: string; name: string; packagingType?: string | null; maxWeightKg?: number | string | null; manualQuoteRequired?: boolean; collectionOnly?: boolean; rates?: Array<{ zone?: { name: string }; cost?: number | string | null; dispatchMinDays?: number; dispatchMaxDays?: number; deliveryMinDays?: number | null; deliveryMaxDays?: number | null; manualQuoteRequired?: boolean }> };
+type ShippingOverrideRow = { cost?: string; dispatchMinDays?: string; dispatchMaxDays?: string; deliveryMinDays?: string; deliveryMaxDays?: string; manualQuoteRequired?: boolean; collectionOnly?: boolean };
 const MAX_PRODUCT_IMAGES = 15;
 
 function normaliseImages(product: any): ImageRow[] {
@@ -98,6 +100,17 @@ function dbProductToAdmin(product: any): AdminProduct {
     hsCode: product.hsCode ?? "",
     ebayItemId: product.ebayItemId ?? "",
     syncExcluded: Boolean(product.syncExcluded),
+    shippingPolicyId: product.shippingPolicyId ?? null,
+    packedWeightKg: product.packedWeightKg ?? "",
+    packedLengthCm: product.packedLengthCm ?? "",
+    packedWidthCm: product.packedWidthCm ?? "",
+    packedHeightCm: product.packedHeightCm ?? "",
+    shippingManualQuoteRequired: Boolean(product.shippingManualQuoteRequired),
+    shippingCollectionOnly: Boolean(product.shippingCollectionOnly),
+    shippingUkAllowed: product.shippingUkAllowed !== false,
+    shippingEuropeAllowed: product.shippingEuropeAllowed !== false,
+    shippingWorldwideAllowed: product.shippingWorldwideAllowed !== false,
+    shippingOverrides: product.shippingOverrides ?? null,
   };
 }
 
@@ -116,6 +129,7 @@ export default function ProductEditor({ mode, productId }: Props) {
   const [tagText, setTagText] = useState("");
   const [imageRows, setImageRows] = useState<ImageRow[]>(normaliseImages(blank));
   const [variantRows, setVariantRows] = useState<VariantRow[]>(normaliseVariants((blank as any).variants));
+  const [shippingPolicies, setShippingPolicies] = useState<ShippingPolicyOption[]>([]);
 
   useEffect(() => {
     if (mode !== "edit" || !productId) {
@@ -143,8 +157,42 @@ export default function ProductEditor({ mode, productId }: Props) {
       .finally(() => setLoading(false));
   }, [mode, productId]);
 
+  useEffect(() => {
+    fetch("/api/admin/shipping/policies", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((result) => setShippingPolicies(Array.isArray(result.policies) ? result.policies : []))
+      .catch(() => setShippingPolicies([]));
+  }, []);
+
   function update<K extends keyof AdminProduct>(key: K, value: AdminProduct[K]) {
     setProduct((current) => ({ ...current, [key]: value }));
+  }
+
+  function shippingOverrides(): Record<string, ShippingOverrideRow> {
+    const value = (product as any).shippingOverrides;
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, ShippingOverrideRow> : {};
+  }
+
+  function updateShippingOverride(zone: string, patch: Partial<ShippingOverrideRow>) {
+    const current = shippingOverrides();
+    const next = { ...current, [zone]: { ...(current[zone] ?? {}), ...patch } };
+    update("shippingOverrides" as any, next as any);
+  }
+
+  function resetShippingOverride(zone: string) {
+    const current = shippingOverrides();
+    const next = { ...current };
+    delete next[zone];
+    update("shippingOverrides" as any, Object.keys(next).length ? next as any : null as any);
+  }
+
+  function inheritedRate(policy: ShippingPolicyOption | undefined, zone: string) {
+    return policy?.rates?.find((rate) => rate.zone?.name === zone) ?? null;
+  }
+
+  function rateMoney(value: unknown) {
+    if (value === null || value === undefined || value === "") return "Manual quote";
+    return `£${Number(value).toFixed(2)}`;
   }
 
   function updateCategory(categoryLabel: string) {
@@ -299,6 +347,7 @@ export default function ProductEditor({ mode, productId }: Props) {
     { id: "content", label: "Content & specs" },
     { id: "images", label: "Images & docs" },
     { id: "logistics", label: "Stock & logistics" },
+    { id: "shipping", label: "Shipping" },
     { id: "variants", label: "Variations" },
     { id: "seo", label: "SEO & tags" },
   ];
@@ -309,6 +358,7 @@ export default function ProductEditor({ mode, productId }: Props) {
     { label: "Category", ok: Boolean(product.category) },
     { label: "Image", ok: imageRows.length > 0 },
     { label: "Price/POA", ok: product.priceOnRequest || product.price !== null },
+    { label: "Shipping", ok: Boolean((product as any).shippingPolicyId) || Boolean((product as any).shippingManualQuoteRequired) || Boolean((product as any).shippingCollectionOnly) },
   ];
   const readyCount = editorChecks.filter((item) => item.ok).length;
 
@@ -405,6 +455,53 @@ export default function ProductEditor({ mode, productId }: Props) {
 
         {tab === "logistics" && <div className="grid lg:grid-cols-2 gap-5"><div><label className="label">Price excluding VAT</label><input type="number" value={product.price ?? ""} disabled={product.priceOnRequest} onChange={(e) => update("price", e.target.value ? Number(e.target.value) : null)} className="input py-2 text-sm" /></div><div><label className="label">Stock quantity</label><input type="number" value={product.stockQty} onChange={(e) => update("stockQty", Number(e.target.value || 0))} className="input py-2 text-sm" /></div><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={product.priceOnRequest} onChange={(e) => update("priceOnRequest", e.target.checked)} /> Price on request / POA</label><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={Boolean(product.syncExcluded)} onChange={(e) => update("syncExcluded", e.target.checked as any)} /> Exclude from eBay sync updates</label><div><label className="label">Warehouse location / bin</label><input value={product.locationBin ?? ""} onChange={(e) => update("locationBin", e.target.value)} className="input py-2 text-sm" placeholder="WH-A-03" /></div><div><label className="label">Public item location</label><input value={(product as any).itemLocation ?? "United Kingdom"} onChange={(e) => update("itemLocation" as any, e.target.value as any)} className="input py-2 text-sm" placeholder="United Kingdom" /><p className="text-xs text-gray-400 mt-1">Shown on the public product page below SKU/brand details.</p></div><div><label className="label">eBay item / listing ID</label><input value={(product as any).ebayItemId ?? ""} onChange={(e) => update("ebayItemId", e.target.value as any)} className="input py-2 text-sm" /></div><div><label className="label">Weight (kg)</label><input value={product.weightKg ?? ""} onChange={(e) => update("weightKg", e.target.value)} className="input py-2 text-sm" /></div><div><label className="label">Dimensions (cm)</label><input value={product.dimensionsCm ?? ""} onChange={(e) => update("dimensionsCm", e.target.value)} className="input py-2 text-sm" placeholder="40 x 30 x 20" /></div><div><label className="label">HS code</label><input value={product.hsCode ?? ""} onChange={(e) => update("hsCode", e.target.value)} className="input py-2 text-sm" /></div><div><label className="label">Lead time</label><input value={product.leadTime} onChange={(e) => update("leadTime", e.target.value)} className="input py-2 text-sm" /></div><div className="lg:col-span-2"><label className="label">Dispatch note</label><textarea value={product.dispatchNote} onChange={(e) => update("dispatchNote", e.target.value)} className="input min-h-[90px]" /></div><div className="lg:col-span-2"><label className="label">Warranty statement</label><textarea value={product.warranty} onChange={(e) => update("warranty", e.target.value)} className="input min-h-[90px]" /></div></div>}
 
+        {tab === "shipping" && (() => {
+          const selectedPolicy = shippingPolicies.find((policy) => policy.id === (product as any).shippingPolicyId);
+          const overrides = shippingOverrides();
+          const zones = ["UK", "Europe", "Worldwide"];
+          return (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                <div className="flex items-start gap-2"><Truck size={16} className="mt-0.5" /><div><p className="font-display font-900">Product shipping assignment</p><p className="mt-1 text-xs leading-5">Select an inherited policy first. Override only where this specific item needs a different cost, timing, manual quote or collection setting. Overrides do not change the parent policy.</p></div></div>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <label><span className="label">Shipping policy</span><select value={(product as any).shippingPolicyId ?? ""} onChange={(e) => update("shippingPolicyId" as any, (e.target.value || null) as any)} className="input py-2 text-sm"><option value="">Use default policy until assigned</option>{shippingPolicies.map((policy) => <option key={policy.id} value={policy.id}>{policy.name}{policy.manualQuoteRequired ? " — manual quote" : ""}</option>)}</select></label>
+                <label><span className="label">Packed weight kg</span><input value={(product as any).packedWeightKg ?? ""} onChange={(e) => update("packedWeightKg" as any, e.target.value as any)} className="input py-2 text-sm" placeholder="e.g. 4.5" /></label>
+                <label><span className="label">Packed length cm</span><input value={(product as any).packedLengthCm ?? ""} onChange={(e) => update("packedLengthCm" as any, e.target.value as any)} className="input py-2 text-sm" /></label>
+                <label><span className="label">Packed width cm</span><input value={(product as any).packedWidthCm ?? ""} onChange={(e) => update("packedWidthCm" as any, e.target.value as any)} className="input py-2 text-sm" /></label>
+                <label><span className="label">Packed height cm</span><input value={(product as any).packedHeightCm ?? ""} onChange={(e) => update("packedHeightCm" as any, e.target.value as any)} className="input py-2 text-sm" /></label>
+              </div>
+              <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 font-display font-800 text-navy-950"><input type="checkbox" checked={Boolean((product as any).shippingManualQuoteRequired)} onChange={(e) => update("shippingManualQuoteRequired" as any, e.target.checked as any)} /> Manual quote required</label>
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 font-display font-800 text-navy-950"><input type="checkbox" checked={Boolean((product as any).shippingCollectionOnly)} onChange={(e) => update("shippingCollectionOnly" as any, e.target.checked as any)} /> Collection only</label>
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 font-display font-800 text-navy-950"><input type="checkbox" checked={(product as any).shippingUkAllowed !== false} onChange={(e) => update("shippingUkAllowed" as any, e.target.checked as any)} /> UK allowed</label>
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 font-display font-800 text-navy-950"><input type="checkbox" checked={(product as any).shippingEuropeAllowed !== false} onChange={(e) => update("shippingEuropeAllowed" as any, e.target.checked as any)} /> Europe allowed</label>
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 font-display font-800 text-navy-950"><input type="checkbox" checked={(product as any).shippingWorldwideAllowed !== false} onChange={(e) => update("shippingWorldwideAllowed" as any, e.target.checked as any)} /> Worldwide allowed</label>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <table className="w-full table-fixed text-xs">
+                  <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="w-[18%] px-3 py-2">Zone</th><th className="w-[20%] px-3 py-2">Inherited</th><th className="w-[18%] px-3 py-2">Override cost</th><th className="w-[20%] px-3 py-2">Delivery override</th><th className="w-[14%] px-3 py-2">Manual</th><th className="w-[10%] px-3 py-2 text-right">Reset</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {zones.map((zone) => {
+                      const inherited = inheritedRate(selectedPolicy, zone);
+                      const override = overrides[zone] ?? {};
+                      const used = Boolean(overrides[zone]);
+                      return <tr key={zone} className={used ? "bg-amber-50/40" : "bg-white"}>
+                        <td className="px-3 py-3 font-display font-900 text-navy-950">{zone}</td>
+                        <td className="px-3 py-3 text-gray-600">{inherited ? `${rateMoney(inherited.cost)} · ${inherited.deliveryMinDays || "?"}–${inherited.deliveryMaxDays || "?"} days` : "Policy not selected"}</td>
+                        <td className="px-3 py-3"><input value={override.cost ?? ""} onChange={(e) => updateShippingOverride(zone, { cost: e.target.value })} className="input py-1.5 text-xs" placeholder="Inherited" /></td>
+                        <td className="px-3 py-3"><div className="grid grid-cols-2 gap-1"><input value={override.deliveryMinDays ?? ""} onChange={(e) => updateShippingOverride(zone, { deliveryMinDays: e.target.value })} className="input py-1.5 text-xs" placeholder="Min" /><input value={override.deliveryMaxDays ?? ""} onChange={(e) => updateShippingOverride(zone, { deliveryMaxDays: e.target.value })} className="input py-1.5 text-xs" placeholder="Max" /></div></td>
+                        <td className="px-3 py-3"><input type="checkbox" checked={Boolean(override.manualQuoteRequired)} onChange={(e) => updateShippingOverride(zone, { manualQuoteRequired: e.target.checked })} /></td>
+                        <td className="px-3 py-3 text-right"><button type="button" onClick={() => resetShippingOverride(zone)} className="text-gray-400 hover:text-navy-950" title="Reset to policy default"><RotateCcw size={14} /></button></td>
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-gray-600">Current display: {(product as any).shipping?.publicLabel || (selectedPolicy ? `${selectedPolicy.name} selected` : "Default policy until assigned")}</div>
+            </div>
+          );
+        })()}
 
         {tab === "variants" && (
           <div className="space-y-5">

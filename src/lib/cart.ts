@@ -22,9 +22,21 @@ export type CartProductLine = {
   lineTotal: number;
 };
 
+export type CartShippingSummary = {
+  cost: number | null;
+  label: string;
+  dispatchLabel: string;
+  deliveryLabel: string;
+  manualQuoteRequired: boolean;
+  collectionOnly: boolean;
+  policyName: string;
+  zoneName: string;
+};
+
 export type CartSummary = {
   lines: CartProductLine[];
   subtotal: number;
+  shipping: CartShippingSummary;
   vat: number;
   total: number;
   hasUnavailableItems: boolean;
@@ -120,6 +132,43 @@ export function clearCart() {
   writeCartLines([]);
 }
 
+function daysLabel(min?: number | null, max?: number | null) {
+  if (!min && !max) return "Manual quote required";
+  if (min && max && min !== max) return `${min}–${max} working days`;
+  return `${min || max} working days`;
+}
+
+function getClientShipping(lines: CartProductLine[]): CartShippingSummary {
+  const summaries = lines.map((line) => line.product.shipping).filter(Boolean) as NonNullable<CatalogProduct["shipping"]>[];
+  const manual = summaries.find((summary) => summary.manualQuoteRequired || summary.collectionOnly || summary.cost === null);
+  if (manual) {
+    return {
+      cost: null,
+      label: manual.collectionOnly ? "Collection only / manual confirmation" : "Shipping quote required",
+      dispatchLabel: daysLabel(manual.dispatchMinDays, manual.dispatchMaxDays),
+      deliveryLabel: daysLabel(manual.deliveryMinDays, manual.deliveryMaxDays),
+      manualQuoteRequired: true,
+      collectionOnly: Boolean(manual.collectionOnly),
+      policyName: manual.policyName,
+      zoneName: manual.zoneName || "UK",
+    };
+  }
+  const highest = summaries.reduce((best, current) => Number(current.cost || 0) > Number(best.cost || 0) ? current : best, summaries[0]);
+  if (!highest) {
+    return { cost: 0, label: "Shipping calculated at checkout", dispatchLabel: "2 working days", deliveryLabel: "2–3 working days", manualQuoteRequired: false, collectionOnly: false, policyName: "Default", zoneName: "UK" };
+  }
+  return {
+    cost: Number(highest.cost || 0),
+    label: `${highest.policyName} · ${formatCurrency(Number(highest.cost || 0))}`,
+    dispatchLabel: daysLabel(highest.dispatchMinDays, highest.dispatchMaxDays),
+    deliveryLabel: daysLabel(highest.deliveryMinDays, highest.deliveryMaxDays),
+    manualQuoteRequired: false,
+    collectionOnly: false,
+    policyName: highest.policyName,
+    zoneName: highest.zoneName || "UK",
+  };
+}
+
 export function getCartSummary(lines: CartLine[]): CartSummary {
   const productLines = lines
     .map((line) => {
@@ -140,13 +189,15 @@ export function getCartSummary(lines: CartLine[]): CartSummary {
     .filter((line): line is CartProductLine => Boolean(line));
 
   const subtotal = productLines.reduce((sum, line) => sum + line.lineTotal, 0);
-  const vat = subtotal * 0.2;
-  const total = subtotal + vat;
+  const shipping = getClientShipping(productLines);
+  const shippingCost = shipping.manualQuoteRequired || shipping.cost === null ? 0 : Number(shipping.cost || 0);
+  const vat = (subtotal + shippingCost) * 0.2;
+  const total = subtotal + shippingCost + vat;
   const hasUnavailableItems = productLines.some(
     (line) => line.availableQty <= 0 || line.product.priceOnRequest || line.unitPrice <= 0 || line.qty > line.availableQty
-  );
+  ) || shipping.manualQuoteRequired;
 
-  return { lines: productLines, subtotal, vat, total, hasUnavailableItems };
+  return { lines: productLines, subtotal, shipping, vat, total, hasUnavailableItems };
 }
 
 export function formatCurrency(value: number) {

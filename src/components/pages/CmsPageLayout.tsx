@@ -181,8 +181,8 @@ function HeroSection({ page }: { page: CmsPage }) {
 function ContactBar({ contact }: { contact?: SiteContent["contact"] }) {
   if (!contact) return null;
   const cards = [
-    ["Order’s/Quotes", contact.salesEmail, `mailto:${contact.salesEmail}`],
-    ["General/Media Inquiries", contact.infoEmail, `mailto:${contact.infoEmail}`],
+    ["Orders / Quotes", contact.salesEmail, `mailto:${contact.salesEmail}`],
+    ["General / Media Inquiries", contact.infoEmail, `mailto:${contact.infoEmail}`],
     ["Phone", contact.phone, `tel:${contact.phone}`],
     ["Location", contact.location, "#"],
   ];

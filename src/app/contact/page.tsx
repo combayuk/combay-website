@@ -34,11 +34,11 @@ export default async function ContactPage() {
       <section className="py-10 bg-gray-50 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
           <a className="bg-white border border-gray-200 rounded-xl p-4 hover:border-accent" href={`mailto:${c.contact.salesEmail}`}>
-            <strong className="block text-navy-900">Order’s/Quotes</strong>
+            <strong className="block text-navy-900">Orders / Quotes</strong>
             <span className="text-gray-500">{c.contact.salesEmail}</span>
           </a>
           <a className="bg-white border border-gray-200 rounded-xl p-4 hover:border-accent" href={`mailto:${c.contact.infoEmail}`}>
-            <strong className="block text-navy-900">General/Media Inquiries</strong>
+            <strong className="block text-navy-900">General / Media Inquiries</strong>
             <span className="text-gray-500">{c.contact.infoEmail}</span>
           </a>
           <a className="bg-white border border-gray-200 rounded-xl p-4 hover:border-accent" href={`tel:${c.contact.phone}`}>

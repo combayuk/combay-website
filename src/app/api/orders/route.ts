@@ -46,6 +46,7 @@ function normalizeAdminOrder(order: any) {
       lineTotal: money(item.lineTotal),
     })),
     returns: order.returns ?? [],
+    shippingSnapshot: order.shippingSnapshot ?? null,
   };
 }
 
@@ -77,6 +78,14 @@ function normalizePortalOrder(order: any) {
     tracking: order.trackingNumber ?? undefined,
     trackingUrl: order.trackingUrl ?? undefined,
     paymentStatus: order.paymentStatus,
+    shipping: order.shippingSnapshot ? {
+      cost: formatCurrency(order.shippingSnapshot.shippingCost ?? order.shipping),
+      policy: order.shippingSnapshot.shippingPolicyName,
+      zone: order.shippingSnapshot.shippingZoneName,
+      manualQuoteRequired: order.shippingSnapshot.manualQuoteRequired,
+      dispatchEstimate: order.shippingSnapshot.dispatchMinDays ? `${order.shippingSnapshot.dispatchMinDays}${order.shippingSnapshot.dispatchMaxDays && order.shippingSnapshot.dispatchMaxDays !== order.shippingSnapshot.dispatchMinDays ? `–${order.shippingSnapshot.dispatchMaxDays}` : ""} working days` : undefined,
+      deliveryEstimate: order.shippingSnapshot.deliveryMinDays ? `${order.shippingSnapshot.deliveryMinDays}${order.shippingSnapshot.deliveryMaxDays && order.shippingSnapshot.deliveryMaxDays !== order.shippingSnapshot.deliveryMinDays ? `–${order.shippingSnapshot.deliveryMaxDays}` : ""} working days` : undefined,
+    } : undefined,
   };
 }
 
@@ -95,7 +104,7 @@ export async function GET(request: NextRequest) {
       where: { customerEmail: { equals: email, mode: "insensitive" as const } },
       orderBy: { createdAt: "desc" },
       take: 100,
-      include: { items: true, returns: true },
+      include: { items: true, returns: true, shippingSnapshot: true },
     }));
 
     if (dbResult.ok) {
@@ -117,7 +126,7 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: { createdAt: "desc" },
       take: 100,
-      include: { items: true, returns: true },
+      include: { items: true, returns: true, shippingSnapshot: true },
     });
   });
 
@@ -186,7 +195,7 @@ export async function PATCH(request: NextRequest) {
     const updated = await prisma.order.update({
       where: id ? { id } : { orderNumber },
       data,
-      include: { items: true, returns: true },
+      include: { items: true, returns: true, shippingSnapshot: true },
     });
     return updated;
   });

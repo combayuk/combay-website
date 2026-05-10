@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { createStripeCheckoutSession, isStripeConfigured } from "@/lib/stripe";
 import { calculatePromotionTotals, checkPromotionProductTargets, findPromotionByCode } from "@/lib/promotions";
 import { customerPaymentCancelUrl, customerPaymentSuccessUrl } from "@/lib/paymentReturn";
+import { calculateOrderShipping, snapshotFromShipping } from "@/lib/shipping";
 
 type CheckoutLine = {
   sku: string;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
     const requestedSkus = lines.map((line) => String(line.sku)).filter(Boolean);
     const products = await prisma.product.findMany({
       where: { sku: { in: requestedSkus }, status: "PUBLISHED" },
-      include: { category: true, images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, variants: { orderBy: { sortOrder: "asc" } } },
+      include: { category: true, images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, variants: { orderBy: { sortOrder: "asc" } }, shippingPolicy: { include: { rates: { include: { zone: true } } } }, shippingOverrides: true },
     });
 
     const productBySku = new Map(products.map((product) => [product.sku, product]));
@@ -88,12 +89,17 @@ export async function POST(request: Request) {
     }
 
     const subtotal = Number(orderItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2));
-    const shipping = 0;
+    const country = String(body.customer.country ?? body.address?.country ?? "United Kingdom");
+    const shippingResult = await calculateOrderShipping(orderItems.map((item) => ({ sku: item.sku, quantity: item.quantity })), country);
+    if (shippingResult.manualQuoteRequired || shippingResult.cost === null) {
+      throw new Error("Manual shipping quote required. Please request a shipping quote before payment.");
+    }
+    const shipping = Number(Number(shippingResult.cost || 0).toFixed(2));
     let discount = 0;
     let promotionCode: string | null = null;
     let promotionName: string | null = null;
-    let tax = Number((subtotal * 0.2).toFixed(2));
-    let total = Number((subtotal + tax + shipping).toFixed(2));
+    let tax = Number(((subtotal + shipping) * 0.2).toFixed(2));
+    let total = Number((subtotal + shipping + tax).toFixed(2));
 
     const requestedPromotionCode = String(body.promotionCode || "").trim();
     if (requestedPromotionCode) {
@@ -145,6 +151,7 @@ export async function POST(request: Request) {
           country: body.customer.country ?? body.address?.country ?? "United Kingdom",
         },
         notes: body.customer.notes ? String(body.customer.notes) : null,
+        shippingSnapshot: { create: snapshotFromShipping(shippingResult) as any },
         items: {
           create: orderItems.map((item) => ({
             productId: item.productId,
@@ -161,12 +168,12 @@ export async function POST(request: Request) {
       include: { items: true },
     });
 
-    return { order, orderItems, subtotal, tax, shipping, total };
+    return { order, orderItems, subtotal, tax, shipping, total, shippingResult };
   });
 
   if (!dbResult.ok) return NextResponse.json({ ok: false, error: dbResult.reason }, { status: 400 });
 
-  const { order, orderItems, tax, total } = dbResult.data;
+  const { order, orderItems, tax, total, shipping } = dbResult.data;
 
   if (!stripeConfigured) {
     return NextResponse.json({
@@ -190,10 +197,12 @@ export async function POST(request: Request) {
     lines: Number(order.discount) > 0
       ? [
           { name: `Combay order ${order.orderNumber}${order.promotionCode ? ` after promotion ${order.promotionCode}` : ""}`, quantity: 1, unitAmountPence: Math.round((Number(order.subtotal) - Number(order.discount)) * 100) },
+          ...(shipping > 0 ? [{ name: "Shipping", quantity: 1, unitAmountPence: Math.round(shipping * 100) }] : []),
           ...(tax > 0 ? [{ name: "VAT estimate", quantity: 1, unitAmountPence: Math.round(tax * 100) }] : []),
         ]
       : [
           ...orderItems.map((item) => ({ name: `${item.variationSku || item.sku} — ${item.title}`, quantity: item.quantity, unitAmountPence: Math.round(item.unitPrice * 100) })),
+          ...(shipping > 0 ? [{ name: "Shipping", quantity: 1, unitAmountPence: Math.round(shipping * 100) }] : []),
           ...(tax > 0 ? [{ name: "VAT estimate", quantity: 1, unitAmountPence: Math.round(tax * 100) }] : []),
         ],
   });

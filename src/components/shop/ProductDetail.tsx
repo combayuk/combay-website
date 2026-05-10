@@ -187,7 +187,7 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
 
               <div className="mb-4 grid grid-cols-3 gap-2">
                 <InfoPill icon={<ShieldCheck size={14} />} title="Warranty" detail={shortText(product.warranty, 34) || "30-day RTB"} />
-                <InfoPill icon={<Truck size={14} />} title="Dispatch" detail={availableQty > 0 ? "Ready to quote/ship" : "Confirm first"} />
+                <InfoPill icon={<Truck size={14} />} title="Shipping" detail={(product as any).shipping?.manualQuoteRequired ? "Quote required" : ((product as any).shipping?.cost !== null && (product as any).shipping?.cost !== undefined ? `From £${Number((product as any).shipping.cost).toFixed(2)}` : "Confirm")} />
                 <InfoPill icon={<PackageCheck size={14} />} title="Condition" detail={condition.label} />
               </div>
 
@@ -216,6 +216,7 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
               </div>
 
               <div className="mb-4 space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-gray-600">
+                <p><span className="font-display font-900 text-navy-950">Shipping:</span> {(product as any).shipping?.publicLabel || "Shipping calculated at checkout"}</p>
                 <p><span className="font-display font-900 text-navy-950">Lead time:</span> {product.leadTime}</p>
                 <p><span className="font-display font-900 text-navy-950">Condition note:</span> {condition.description}</p>
               </div>

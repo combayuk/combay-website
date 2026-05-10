@@ -466,6 +466,14 @@ function OrdersPanel({ orders, returns, loading, onReturn, onSupport }: { orders
                   <button onClick={() => onSupport(order.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-display font-900 text-slate-600 hover:bg-slate-50 hover:text-navy-950">Support</button>
                 </div>
               </div>
+              {order.shipping ? (
+                <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5 text-[11px] text-gray-500">
+                  <span className="font-900 text-navy-950">Shipping:</span> {order.shipping.manualQuoteRequired ? "Shipping quote pending" : order.shipping.cost || "Included/confirmed"}
+                  {order.shipping.policy ? ` · ${order.shipping.policy}` : ""}
+                  {order.shipping.dispatchEstimate ? ` · Dispatch ${order.shipping.dispatchEstimate}` : ""}
+                  {order.shipping.deliveryEstimate ? ` · Delivery ${order.shipping.deliveryEstimate}` : ""}
+                </div>
+              ) : null}
               {eligible && <p className="mt-2 text-[11px] text-gray-400">{daysUntilReturnDeadline(order)} days left to request a return.</p>}
               {!eligible && !pendingReturn && !approvedReturn && !rejectedReturn ? <p className="mt-2 text-[11px] text-gray-400">{order.status === "DELIVERED" ? "Return window expired." : "Returns become available after delivery."}</p> : null}
             </article>

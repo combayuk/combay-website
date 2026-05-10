@@ -1,0 +1,63 @@
+Phase 26.2W — Shipping Policy Engine
+
+Purpose
+- Adds a real admin-managed shipping policy system behind Combay's product, cart, checkout, order, portal and public shipping-policy flows.
+- Shipping is built as reusable commerce infrastructure, not a static label, so the next eBay push/publishing phase can map Combay policies to eBay fulfilment/shipping policies.
+
+Database changes
+- Added ShippingPolicy, ShippingZone, ShippingPolicyRate, ProductShippingOverride and OrderShippingSnapshot models.
+- Added product-level shipping assignment fields to Product.
+- Added Order.shippingSnapshot relation to preserve shipping cost/timing at order creation.
+- Added future eBay mapping fields on ShippingPolicy:
+  ebayFulfillmentPolicyId, ebayMarketplaceId, ebayDomesticShippingServiceCode, ebayInternationalShippingServiceCode, ebayExcludedLocationsJson, ebayHandlingTimeDays, ebayCollectionOnly, ebayFreightRequired, ebayMappingStatus.
+
+Default policies seeded
+- Letter / Large Packing Bag up to 2kg.
+- Shoebox up to 5kg.
+- Medium Sized Box up to 15kg.
+- Medium-Large Box up to 25kg.
+- Large Heavy Box up to 50kg.
+- Pallet.
+- Heavy / Specialist Order manual quote.
+
+Important seeding rule
+- Defaults are created only when missing. Existing/default policies and rates are not overwritten on every page load, so admin edits are preserved.
+
+Admin changes
+- Added Admin → Shipping in the admin sidebar.
+- Added /admin/shipping compact management screen.
+- Admin can create/edit/delete policies, manage rates by destination zone, add destination zones, set manual quote/collection/default/active flags, and fill future eBay mapping fields.
+- Product editor now has a Shipping tab for assigning a policy, packed weight/dimensions, manual quote/collection flags, allowed zones and product-specific zone overrides.
+
+Commerce changes
+- Cart shows shipping cost/dispatch/delivery estimate using the current product shipping summaries.
+- Checkout calls /api/shipping/estimate when the delivery country changes, so the customer-facing estimate follows destination-zone logic instead of always showing the UK rate.
+- Server-side checkout recalculates shipping from the selected delivery country before creating an order.
+- Manual quote, collection-only or missing fixed shipping blocks card checkout and asks for shipping quote confirmation.
+- Order creation snapshots shipping policy, zone, cost, dispatch and delivery estimates.
+- Admin order drawer displays the shipping snapshot.
+- Customer portal order cards can show shipping cost/policy/dispatch/delivery once the order has a snapshot.
+
+Public page
+- /shipping-policy now reads active shipping policies and presents public UK, Europe, Worldwide, heavy/specialist, collection and quote-led delivery wording.
+
+Deployment notes
+- This phase changes Prisma schema and requires database push/generate.
+- Run npx prisma generate and npx prisma db push against the deployed database before/with the production deployment.
+
+Recommended tests
+1. Visit /admin/shipping and confirm default policies appear.
+2. Edit a policy cost and reload to confirm it persists.
+3. Add a new destination zone.
+4. Edit a product and assign a shipping policy in the Shipping tab.
+5. Add a product-specific override and confirm it saves without changing the parent policy.
+6. Open product page and confirm shipping summary appears.
+7. Add fixed-shipping item to cart and confirm shipping/VAT/total include shipping.
+8. Go to checkout, change country and confirm shipping estimate updates.
+9. Try a Heavy / Specialist or manual-quote product and confirm checkout payment is blocked.
+10. Complete a normal checkout and confirm admin order shows the shipping snapshot.
+11. Confirm customer portal order card displays shipping information for snapshot orders.
+12. Confirm /shipping-policy shows policy-driven public information.
+
+Known boundary
+- Phase 26.2X eBay outbound publishing is not included here. This phase only prepares the shipping-policy model for future eBay fulfilment-policy mapping.

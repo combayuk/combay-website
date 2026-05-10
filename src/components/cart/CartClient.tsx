@@ -133,6 +133,7 @@ export default function CartClient() {
           <h2 className="mb-3 font-display text-lg font-900 text-navy-950">Order summary</h2>
           <div className="mb-4 space-y-2 text-sm">
             <SummaryRow label="Subtotal" value={formatCurrency(summary.subtotal)} />
+            <SummaryRow label="Shipping" value={summary.shipping.manualQuoteRequired ? "Quote required" : formatCurrency(Number(summary.shipping.cost || 0))} />
             <SummaryRow label="VAT estimate" value={formatCurrency(summary.vat)} />
             <div className="flex justify-between border-t border-gray-200 pt-2 text-base">
               <span className="font-display font-900 text-navy-950">Total</span>
@@ -141,11 +142,13 @@ export default function CartClient() {
           </div>
 
           <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-gray-600">
-            Final delivery cost and VAT treatment are confirmed at checkout. Export orders may require manual confirmation before dispatch.
+            <p className="font-display font-900 text-navy-950">{summary.shipping.label}</p>
+            <p>Dispatch: {summary.shipping.dispatchLabel} · Estimated delivery: {summary.shipping.deliveryLabel}</p>
+            <p className="mt-1 text-gray-500">Shipping uses the highest applicable item policy. Export or specialist orders may require manual confirmation.</p>
           </div>
 
           {summary.hasUnavailableItems ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">One or more items require quote confirmation before checkout.</div>
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">One or more items require stock, price or manual shipping quote confirmation before checkout.</div>
           ) : null}
 
           <Link href="/checkout" className={`btn-primary w-full py-2.5 text-sm ${summary.hasUnavailableItems ? "pointer-events-none opacity-50" : ""}`}>Proceed to checkout <ArrowRight size={14} /></Link>

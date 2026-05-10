@@ -8,6 +8,8 @@ import { clearCart, formatCurrency, getCartSummary, readCartLines, type CartLine
 
 type SavedAddress = { id: string; label?: string | null; fullName?: string | null; company?: string | null; phone?: string | null; address1: string; address2?: string | null; city: string; postcode: string; country: string; isPrimary: boolean; };
 
+type LiveShippingEstimate = { cost: number | null; label: string; dispatchLabel: string; deliveryLabel: string; manualQuoteRequired: boolean; collectionOnly: boolean; policyName: string; zoneName: string; };
+
 type CheckoutForm = {
   fullName: string;
   email: string;
@@ -46,6 +48,8 @@ export default function CheckoutClient() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [liveShipping, setLiveShipping] = useState<LiveShippingEstimate | null>(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
 
   useEffect(() => {
     setLines(readCartLines());
@@ -60,9 +64,32 @@ export default function CheckoutClient() {
   }, []);
 
   const summary = useMemo(() => getCartSummary(lines), [lines]);
-  const displayVat = promo ? promo.vat : summary.vat;
+
+  useEffect(() => {
+    if (!lines.length) {
+      setLiveShipping(null);
+      return;
+    }
+    let active = true;
+    setShippingLoading(true);
+    setPromo(null);
+    fetch("/api/shipping/estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ country: form.country, lines: lines.map((line) => ({ sku: line.sku, qty: line.qty })) }),
+    })
+      .then((response) => response.json())
+      .then((data) => { if (active && data?.ok && data.shipping) setLiveShipping(data.shipping); })
+      .catch(() => { if (active) setLiveShipping(null); })
+      .finally(() => { if (active) setShippingLoading(false); });
+    return () => { active = false; };
+  }, [form.country, lines]);
+
+  const activeShipping = liveShipping || summary.shipping;
+  const displayShipping = activeShipping.manualQuoteRequired ? 0 : Number(activeShipping.cost || 0);
+  const displayVat = promo ? promo.vat : Number(((summary.subtotal + displayShipping) * 0.2).toFixed(2));
   const displayDiscount = promo ? promo.discount + promo.shippingDiscount : 0;
-  const displayTotal = promo ? promo.total : summary.total;
+  const displayTotal = promo ? promo.total : Number((summary.subtotal + displayShipping + displayVat).toFixed(2));
   const stripeConfigured = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
   function update<K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) { setForm((current) => ({ ...current, [key]: value })); }
@@ -81,7 +108,7 @@ export default function CheckoutClient() {
       const response = await fetch("/api/promotions/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoCode, subtotal: summary.subtotal, shipping: 0, productIds: summary.lines.map(({ product }) => product.id).filter(Boolean) }),
+        body: JSON.stringify({ code: promoCode, subtotal: summary.subtotal, shipping: displayShipping, productIds: summary.lines.map(({ product }) => product.id).filter(Boolean) }),
       });
       const data = await response.json();
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Promotion code could not be applied.");
@@ -110,8 +137,8 @@ export default function CheckoutClient() {
       return;
     }
 
-    if (summary.hasUnavailableItems) {
-      setError("One or more items require quote confirmation before checkout.");
+    if (summary.hasUnavailableItems || activeShipping.manualQuoteRequired) {
+      setError("One or more items require stock, price or manual shipping quote confirmation before checkout.");
       return;
     }
 
@@ -137,6 +164,7 @@ export default function CheckoutClient() {
           totals: {
             subtotal: summary.subtotal,
             discount: displayDiscount,
+            shipping: displayShipping,
             vat: displayVat,
             total: displayTotal,
           },
@@ -171,7 +199,7 @@ export default function CheckoutClient() {
           <p className="text-sm text-gray-600 mb-4">Reference: <span className="font-mono text-navy-950">{result.reference}</span></p>
           {result.paymentMode === "stripe-not-configured" ? (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-5">
-              Stripe is not connected yet, so no payment was taken. This has been recorded as an unpaid checkout request for Phase 3 testing.
+              Stripe is not connected yet, so no payment has been taken. Your checkout request has been recorded and Combay will confirm payment or proforma details separately.
             </div>
           ) : null}
           <Link href="/shop" className="btn-primary py-2 text-xs">Back to shop</Link>
@@ -252,6 +280,7 @@ export default function CheckoutClient() {
           </div>
           <div className="mb-4 space-y-2 border-t border-gray-200 pt-3 text-sm">
             <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{formatCurrency(summary.subtotal)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span>{activeShipping.manualQuoteRequired ? "Quote required" : formatCurrency(displayShipping)}</span></div>
             {displayDiscount > 0 ? <div className="flex justify-between text-green-700"><span>Promotion discount</span><span>-{formatCurrency(displayDiscount)}</span></div> : null}
             <div className="flex justify-between"><span className="text-gray-500">VAT estimate</span><span>{formatCurrency(displayVat)}</span></div>
             <div className="flex justify-between font-display text-lg font-900 text-navy-950"><span>Total</span><span>{formatCurrency(displayTotal)}</span></div>
@@ -266,11 +295,12 @@ export default function CheckoutClient() {
             </label>
             {promoMessage ? <p className={`text-xs mt-2 ${promo ? "text-green-700" : "text-red-600"}`}>{promoMessage}</p> : null}
           </div>
-          <div className="mb-4 flex gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-            <Lock size={14} className="text-gray-400 mt-0.5" />
-            {stripeConfigured ? "Stripe card checkout is enabled. You will be redirected to Stripe to complete payment." : "Stripe key not configured. This submit will create an unpaid checkout request only."}
+          <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+            <div className="mb-2 flex gap-2"><Lock size={14} className="mt-0.5 text-gray-400" /><span>{stripeConfigured ? "Stripe card checkout is enabled. You will be redirected to Stripe to complete payment." : "Stripe key not configured. This submit will create an unpaid checkout request only."}</span></div>
+            <p className="font-display font-900 text-navy-950">{shippingLoading ? "Updating shipping estimate…" : activeShipping.label}</p>
+            <p>Destination zone: {activeShipping.zoneName || "UK"} · Dispatch: {activeShipping.dispatchLabel} · Estimated delivery: {activeShipping.deliveryLabel}</p>
           </div>
-          <button disabled={loading || summary.hasUnavailableItems} type="submit" className="btn-primary w-full py-2.5 text-sm">
+          <button disabled={loading || summary.hasUnavailableItems || activeShipping.manualQuoteRequired} type="submit" className="btn-primary w-full py-2.5 text-sm">
             {loading ? "Submitting..." : stripeConfigured ? "Continue to secure card payment" : "Create unpaid checkout request"}
           </button>
           <Link href="/cart" className="btn-secondary mt-2 w-full py-2 text-xs">Back to cart</Link>

@@ -8,8 +8,18 @@ export type PortalOrder = {
   sku: string;
   total: string;
   status: OrderStatus;
+  paymentStatus?: string;
   courier?: string;
   tracking?: string;
+  trackingUrl?: string;
+  shipping?: {
+    cost?: string;
+    policy?: string | null;
+    zone?: string | null;
+    manualQuoteRequired?: boolean;
+    dispatchEstimate?: string;
+    deliveryEstimate?: string;
+  };
 };
 
 export type ReturnStage = "REQUEST_SUBMITTED" | "COLLECTION_BOOKED" | "IN_TRANSIT" | "INSPECTING" | "REFUND_APPROVED";
