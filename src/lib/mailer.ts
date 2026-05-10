@@ -113,8 +113,6 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
 }
 
 export function emailButton(url: string, label: string, variant: "primary" | "secondary" = "primary") {
-  // Essential payment/document links should remain as professional buttons.
-  // General customer-portal / marketing CTA buttons remain disabled in their callers.
   const isPrimary = variant === "primary";
   const bg = isPrimary ? "#f2a900" : "#ffffff";
   const color = isPrimary ? "#0f172a" : "#0f172a";
@@ -166,7 +164,7 @@ export async function sendAdminNotification(args: { subject: string; title: stri
 }
 
 export async function sendCustomerAcknowledgement(args: { to: string; name?: string; subject: string; title: string; reference?: string; body: string; ctaUrl?: string; ctaLabel?: string; }) {
-  const cta = ""; // Customer email action buttons are temporarily disabled.
+  const cta = args.ctaUrl && args.ctaLabel ? emailButton(args.ctaUrl, args.ctaLabel, "secondary") : "";
   const ref = args.reference ? `<div style="margin:18px 0;padding:12px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Reference</div><strong style="font-size:16px;color:#111827;">${escapeHtml(args.reference)}</strong></div>` : "";
   const html = htmlShell(
     args.title,

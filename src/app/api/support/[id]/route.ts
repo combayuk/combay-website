@@ -1,6 +1,7 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { readJsonBody } from "@/lib/requests";
-import { sendEmail, htmlShell, escapeHtml } from "@/lib/mailer";
+import { sendEmail, htmlShell, escapeHtml, emailButton } from "@/lib/mailer";
+import { requireAdminApiSession, requireApiSession, isAdmin, sameEmail } from "@/lib/apiAccess";
 
 const STATUSES = ["NEW", "IN_PROGRESS", "AWAITING_CUSTOMER", "RESOLVED", "CLOSED"] as const;
 type Status = (typeof STATUSES)[number];
@@ -53,13 +54,24 @@ async function findTicket(id: string) {
 }
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const dbResult = await withDatabase(async () => findTicket(params.id));
+  const access = await requireApiSession();
+  if (!access.ok) return access.response;
+
+  const dbResult = await withDatabase(async () => {
+    const ticket = await findTicket(params.id);
+    if (!ticket) return null;
+    if (!isAdmin(access.access) && !sameEmail(ticket.email, access.access.email)) return null;
+    return ticket;
+  });
   if (!dbResult.ok) return Response.json({ ok: false, error: dbResult.reason }, { status: 503 });
   if (!dbResult.data) return Response.json({ ok: false, error: "Support ticket not found." }, { status: 404 });
   return Response.json({ ok: true, ticket: serialiseTicket(dbResult.data) });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const body = await readJsonBody(req);
   const status = normaliseStatus(body.status);
   const adminNotes = typeof body.adminNotes === "string" ? body.adminNotes : undefined;
@@ -82,6 +94,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const body = await readJsonBody(req);
   const message = String(body.message || "").trim();
   const status = normaliseStatus(body.status);
@@ -103,7 +118,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         subject: `Update on your Combay support ticket ${existing.reference || existing.id}`,
         html: htmlShell(
           "Support ticket update",
-          `<p style="margin-top:0;">Dear ${escapeHtml(existing.name || "Customer")},</p><p>We have added an update to your Combay support ticket <strong>${escapeHtml(existing.reference || existing.id)}</strong>.</p><div style="margin:16px 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;white-space:pre-line;">${escapeHtml(message)}</div><p>You can continue the conversation by replying to this email or by using your customer portal.</p><p style="margin:22px 0 0;"><a href="${escapeHtml(portalUrl)}" style="display:inline-block;background:#f59e0b;color:#111827;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:700;font-size:14px;">View support portal</a></p><p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>`,
+          `<p style="margin-top:0;">Dear ${escapeHtml(existing.name || "Customer")},</p><p>We have added an update to your Combay support ticket <strong>${escapeHtml(existing.reference || existing.id)}</strong>.</p><div style="margin:16px 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;white-space:pre-line;">${escapeHtml(message)}</div><p>You can continue the conversation by replying to this email or by using your customer portal.</p>${emailButton(portalUrl, "View support portal", "secondary")}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>`,
           `Support ticket update ${existing.reference || existing.id}`,
         ),
       });

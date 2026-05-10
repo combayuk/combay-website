@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 import { emailButton, escapeHtml, htmlShell, sendEmail, siteUrl } from "@/lib/mailer";
+import { invoiceHtmlAccessToken, requireAdminApiSession } from "@/lib/apiAccess";
 
 function label(value: string) {
   return value.replace(/_/g, " ").toLowerCase();
@@ -16,6 +17,9 @@ function title(value: string) {
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const origin = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || request.nextUrl.origin || siteUrl();
   const result = await withDatabase(async () => prisma.invoice.findUnique({ where: { id: params.id }, include: { order: true } }));
 
@@ -23,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const doc: any = result.data;
   if (!doc) return NextResponse.json({ ok: false, error: "Document not found" }, { status: 404 });
 
-  const url = `${origin}/api/invoices/${doc.id}/html`;
+  const url = `${origin}/api/invoices/${doc.id}/html?token=${invoiceHtmlAccessToken(doc.id)}`;
   const docTitle = title(doc.type);
   const subject = `Combay ${docTitle} ${doc.documentNumber}`;
   const introByType = doc.type === "QUOTE"

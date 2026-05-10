@@ -1,7 +1,6 @@
-import { getServerSession } from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
-import { authOptions } from "@/lib/auth";
+import { requireAdminApiSession, requireCustomerApiSession } from "@/lib/apiAccess";
 
 const DEMO_ORDERS = [
   { id: "demo-1", orderNumber: "CB1ACB2F", status: "DELIVERED", paymentStatus: "PAID", total: 1240, subtotal: 1033.33, tax: 206.67, shipping: 0, createdAt: "2026-04-28", customerName: "Demo Customer", customerEmail: "demo@combay.co.uk", items: [] },
@@ -84,13 +83,33 @@ function normalizePortalOrder(order: any) {
 export async function GET(request: NextRequest) {
   const requestedEmail = request.nextUrl.searchParams.get("email");
   const portal = request.nextUrl.searchParams.get("portal") === "1";
-  const session = portal ? await getServerSession(authOptions).catch(() => null) : null;
-  const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
-  const email = portal ? sessionEmail : requestedEmail;
 
-  if (portal && !sessionEmail) {
-    return NextResponse.json({ ok: true, mode: "database", data: [], orders: [], portalOrders: [] });
+  if (portal) {
+    const access = await requireCustomerApiSession();
+    if (!access.ok) return access.response;
+    const sessionEmail = access.access.email;
+    const email = sessionEmail;
+
+
+    const dbResult = await withDatabase(async () => prisma.order.findMany({
+      where: { customerEmail: { equals: email, mode: "insensitive" as const } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { items: true, returns: true },
+    }));
+
+    if (dbResult.ok) {
+      const orders = dbResult.data.map(normalizeAdminOrder);
+      const portalOrders = dbResult.data.map(normalizePortalOrder);
+      return NextResponse.json({ ok: true, mode: "database", data: orders, orders, portalOrders });
+    }
+
+    return NextResponse.json({ ok: true, mode: "preview", reason: dbResult.reason, data: [], orders: [], portalOrders: [] });
   }
+
+  const adminAccess = await requireAdminApiSession();
+  if (!adminAccess.ok) return adminAccess.response;
+  const email = requestedEmail;
 
   const dbResult = await withDatabase(async () => {
     const where = email ? { customerEmail: { equals: email, mode: "insensitive" as const } } : undefined;
@@ -125,6 +144,9 @@ export async function GET(request: NextRequest) {
 
 
 export async function PATCH(request: NextRequest) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const body = await request.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
 

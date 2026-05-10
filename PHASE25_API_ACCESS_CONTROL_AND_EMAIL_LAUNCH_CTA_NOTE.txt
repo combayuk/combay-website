@@ -1,0 +1,92 @@
+Phase 25 — API access control and production safety hotfix
+
+Context:
+The user confirmed the live homepage service-card duplicate was not a real issue and asked for the remaining valid audit findings to be implemented. The user also approved re-adding CTA/buttons in customer emails for launch.
+
+Implemented:
+1. Added shared API auth helper:
+   src/lib/apiAccess.ts
+   - requireApiSession()
+   - requireAdminApiSession()
+   - requireCustomerApiSession()
+   - owner email comparison helper
+   - signed invoice HTML token helper
+
+2. Protected operational APIs:
+   - /api/orders
+     * portal=1 requires customer session and is scoped to session email
+     * admin list/filter requires admin session
+     * PATCH requires admin session
+   - /api/invoices
+     * GET and POST require admin session
+   - /api/invoices/[id]
+     * GET and PATCH require admin session
+   - /api/invoices/[id]/send
+     * POST requires admin session
+   - /api/invoices/[id]/html
+     * admin session OR signed token required
+     * send route now emails document links with a signed token so customer document buttons work
+   - /api/returns
+     * portal GET requires customer session and is scoped to session email
+     * admin GET requires admin session
+     * POST requires signed-in user; customer submissions are ownership-checked against order email
+   - /api/returns/[id]
+     * GET requires admin or owning customer
+     * PATCH requires admin
+   - /api/support
+     * admin list requires admin
+     * portal list requires customer and is scoped to session email
+     * public support creation remains public
+     * customer-portal support creation requires customer session
+   - /api/support/[id]
+     * GET requires admin or owning customer
+     * PATCH/POST admin-only
+
+3. Cron safety:
+   - /api/cron/email-automations no longer fails open in production if CRON_SECRET is missing.
+   - Production requests now require CRON_SECRET bearer auth or Vercel cron header.
+
+4. Mock auth consistency:
+   - /api/account/settings now uses shared MOCK_AUTH_ENABLED from src/lib/auth instead of treating mock mode as enabled by default.
+
+5. Two-step verification:
+   - Portal UI now displays a static parked notice instead of allowing users to enable unenforced 2FA.
+   - Account settings API forces two-step fields off until a real login challenge flow is implemented.
+
+6. Customer email CTA/buttons:
+   - sendCustomerAcknowledgement() now restores CTA buttons when ctaUrl/ctaLabel are supplied.
+   - Support ticket update emails use the shared emailButton() for “View support portal”.
+   - Invoice/document/payment buttons remain active and now use signed invoice document links.
+
+No Prisma schema change.
+No db push required.
+
+Important production env:
+- CRON_SECRET should be set in Vercel Production before relying on scheduled automations.
+- NEXTAUTH_SECRET must remain set. It is used for sessions and invoice HTML signed document links unless INVOICE_PUBLIC_TOKEN_SECRET is set.
+- Optional: INVOICE_PUBLIC_TOKEN_SECRET can be set if you want invoice HTML public-link tokens to use a separate secret.
+
+Testing after deploy:
+1. Admin signed in:
+   - /admin/orders loads.
+   - /admin/invoices loads and can view/edit/send a document.
+   - emailed document link opens from the email without admin login.
+   - /admin/returns loads and can update a return.
+   - /admin/support loads, can open ticket, update status, send reply.
+2. Customer signed in:
+   - /portal loads own orders only.
+   - /portal returns shows own returns only.
+   - customer cannot access another support/return id.
+3. Anonymous:
+   - GET /api/orders returns 401.
+   - GET /api/invoices returns 401.
+   - GET /api/returns returns 401 unless through allowed public creation path.
+   - GET /api/support returns 401.
+   - Product question/support POST still works from public product page.
+4. Cron:
+   - /api/cron/email-automations without auth returns 401 in production.
+5. Account settings:
+   - Two-step verification appears as parked and cannot be enabled.
+6. Emails:
+   - Support update email includes a View support portal button.
+   - Document/payment emails include Open / print document and Pay securely by card buttons where relevant.

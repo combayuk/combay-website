@@ -860,8 +860,8 @@ function AccountPanel({
           vatNumber: accountType === "company" ? form.vatNumber : "",
           currentPassword: form.currentPassword,
           newPassword: form.newPassword,
-          twoStepEnabled: form.twoStepEnabled,
-          twoStepMethod: form.twoStepMethod,
+          twoStepEnabled: false,
+          twoStepMethod: null,
           changedFields: fieldsToSave,
         }),
       });
@@ -944,20 +944,13 @@ function AccountPanel({
           )}
         </div>
 
-        <div className="border-t border-gray-100 pt-5 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-display font-700 text-sm text-navy-950">Two-step verification</p>
-              <p className="text-xs text-gray-500 mt-1">Add an extra verification step by email or phone. This stores your preference; enforcement will be enabled in the real-auth security phase.</p>
-            </div>
-            <div className="flex items-center gap-3"><label className="flex items-center gap-2 text-sm font-display font-600 text-gray-600"><input type="checkbox" checked={form.twoStepEnabled} onChange={(event) => { enable("twoStep"); updateField("twoStepEnabled", event.target.checked); }} className="w-4 h-4 accent-accent" /> Enable</label>{editable.twoStep && <button type="button" onClick={() => cancelField("twoStep")} className="text-gray-400 hover:text-red-600"><X size={14} /></button>}</div>
+        <div className="border-t border-gray-100 pt-5">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="font-display font-700 text-sm text-navy-950">Two-step verification</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Two-step verification is parked until the real login challenge flow is implemented. It is not active yet, so no preference can be enabled from this screen.
+            </p>
           </div>
-          {form.twoStepEnabled && (
-            <div className="grid sm:grid-cols-2 gap-3 max-w-lg">
-              <label className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm"><input type="radio" name="twoStepMethod" checked={form.twoStepMethod === "email"} onChange={() => { enable("twoStep"); updateField("twoStepMethod", "email"); }} /> Email code</label>
-              <label className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm"><input type="radio" name="twoStepMethod" checked={form.twoStepMethod === "phone"} onChange={() => { enable("twoStep"); updateField("twoStepMethod", "phone"); }} /> Phone/SMS code</label>
-            </div>
-          )}
         </div>
 
         {hasChanges && (

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 import { customerPaymentCancelUrl, customerPaymentSuccessUrl } from "@/lib/paymentReturn";
+import { requireAdminApiSession } from "@/lib/apiAccess";
 
 const ALLOWED_TYPES = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "PAID_INVOICE", "PACKING_LIST", "INVOICE"] as const;
 type InvoiceType = (typeof ALLOWED_TYPES)[number];
@@ -153,6 +154,9 @@ async function createStripeCheckoutLink(args: { documentId: string; documentNumb
 }
 
 export async function GET(request: NextRequest) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const type = request.nextUrl.searchParams.get("type");
   const status = request.nextUrl.searchParams.get("status");
   const area = request.nextUrl.searchParams.get("area");
@@ -177,6 +181,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const body = await request.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
 

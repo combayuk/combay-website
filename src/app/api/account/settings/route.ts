@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
-import { authOptions } from "@/lib/auth";
+import { authOptions, MOCK_AUTH_ENABLED } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isDatabaseConfigured } from "@/lib/db";
 
@@ -30,8 +30,9 @@ export async function PATCH(req: Request) {
   const accountType = body.accountType === "company" ? "company" : "individual";
   const currentPassword = String(body.currentPassword || "");
   const newPassword = String(body.newPassword || "");
-  const twoStepEnabled = Boolean(body.twoStepEnabled);
-  const twoStepMethod = ["email", "phone"].includes(String(body.twoStepMethod)) ? String(body.twoStepMethod) : null;
+  // Two-step settings remain parked until the login challenge flow is fully implemented.
+  const twoStepEnabled = false;
+  const twoStepMethod = null;
   const changedFields = Array.isArray(body.changedFields) ? body.changedFields.map(String) : [];
   const role = (session.user as any).role as string | undefined;
 
@@ -40,14 +41,12 @@ export async function PATCH(req: Request) {
   if (!phone) return NextResponse.json({ ok: false, error: "Phone number is required." }, { status: 400 });
   if (accountType === "company" && !company) return NextResponse.json({ ok: false, error: "Company name is required for company accounts." }, { status: 400 });
   if (newPassword && newPassword.length < 8) return NextResponse.json({ ok: false, error: "New password must be at least 8 characters." }, { status: 400 });
-  if (twoStepEnabled && twoStepMethod === "phone" && !phone) return NextResponse.json({ ok: false, error: "A phone number is required to enable phone two-step verification." }, { status: 400 });
-
   const anyChanges = changedFields.length > 0;
   if (anyChanges && !currentPassword) {
     return NextResponse.json({ ok: false, error: "Enter your current password to save account changes." }, { status: 400 });
   }
 
-  const mockAuthEnabled = process.env.MOCK_AUTH_ENABLED !== "false";
+  const mockAuthEnabled = MOCK_AUTH_ENABLED;
   if (mockAuthEnabled && anyChanges) {
     const expected = mockPasswordForRole(role);
     if (currentPassword !== expected) {

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
+import { requireAdminApiSession, validInvoiceHtmlAccessToken } from "@/lib/apiAccess";
 
 const DEFAULT_BANK_DETAILS = `Combay Limited
 Acc. # 37213788
@@ -59,7 +60,13 @@ function formatAddress(raw: unknown) {
   return esc(text).replace(/\n/g, "<br/>");
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const hasValidToken = validInvoiceHtmlAccessToken(params.id, request.nextUrl.searchParams.get("token"));
+  if (!hasValidToken) {
+    const access = await requireAdminApiSession();
+    if (!access.ok) return new NextResponse("Admin sign-in required", { status: access.response.status || 401 });
+  }
+
   const result = await withDatabase(async () => prisma.invoice.findUnique({ where: { id: params.id }, include: { lines: { orderBy: { sortOrder: "asc" } }, order: { include: { items: true } } } }));
   if (!result.ok) return new NextResponse("Database unavailable", { status: 500 });
   const doc: any = result.data;

@@ -1,6 +1,7 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { readJsonBody } from "@/lib/requests";
 import { findReturnWithOrder, formatReturnRow, sendReturnStatusEmail } from "@/lib/returnUtils";
+import { requireAdminApiSession, requireApiSession, isAdmin, sameEmail } from "@/lib/apiAccess";
 
 const VALID_STATUSES = new Set([
   "AWAITING_APPROVAL",
@@ -17,9 +18,13 @@ const VALID_STATUSES = new Set([
 ]);
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const access = await requireApiSession();
+  if (!access.ok) return access.response;
+
   const dbResult = await withDatabase(async () => {
     const row = await findReturnWithOrder(params.id);
     if (!row) throw new Error("Return not found");
+    if (!isAdmin(access.access) && !sameEmail((row as any).order?.customerEmail, access.access.email)) throw new Error("Return not found");
     return formatReturnRow(row);
   });
   if (!dbResult.ok) return Response.json({ ok: false, error: dbResult.reason }, { status: 404 });
@@ -27,6 +32,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const body = await readJsonBody(req);
   const nextStatus = String(body.status || "").trim();
   if (nextStatus && !VALID_STATUSES.has(nextStatus)) {

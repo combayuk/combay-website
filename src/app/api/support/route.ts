@@ -1,6 +1,5 @@
-import { getServerSession } from "next-auth";
 import { prisma, withDatabase } from "@/lib/db";
-import { authOptions } from "@/lib/auth";
+import { requireAdminApiSession, requireCustomerApiSession } from "@/lib/apiAccess";
 import { captureLead } from "@/lib/leads";
 import { DEMO_REQUESTS, generateReference, readJsonBody, todayLabel } from "@/lib/requests";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
@@ -43,9 +42,9 @@ function serialiseTicket(ticket: any) {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const portal = searchParams.get("portal") === "1";
-  const session = await getServerSession(authOptions).catch(() => null);
-  const sessionEmail = session?.user?.email || "";
-  const email = portal ? sessionEmail : "";
+  const access = portal ? await requireCustomerApiSession() : await requireAdminApiSession();
+  if (!access.ok) return access.response;
+  const email = portal ? access.access.email : "";
 
   const dbResult = await withDatabase(async () => prisma.supportTicket.findMany({
     where: portal ? (email ? { email } : { id: "__no_portal_session__" }) : undefined,
@@ -65,12 +64,17 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await readJsonBody(req);
-  const session = await getServerSession(authOptions).catch(() => null);
   const reference = typeof body.reference === "string" ? body.reference : generateReference("SUP");
   const product = typeof body.product === "object" && body.product !== null ? (body.product as any) : {};
   const source = String(body.source || "website");
-  const sessionEmail = session?.user?.email || "";
-  const sessionName = session?.user?.name || "";
+  let sessionEmail = "";
+  let sessionName = "";
+  if (source === "customer-portal") {
+    const access = await requireCustomerApiSession();
+    if (!access.ok) return access.response;
+    sessionEmail = access.access.email;
+    sessionName = String(access.access.session?.user?.name || "");
+  }
   const submittedEmail = String(body.email || "").trim();
   const canonicalEmail = source === "customer-portal" && sessionEmail ? sessionEmail : submittedEmail;
 

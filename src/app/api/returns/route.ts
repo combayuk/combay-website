@@ -1,6 +1,5 @@
-import { getServerSession } from "next-auth";
 import { prisma, withDatabase } from "@/lib/db";
-import { authOptions } from "@/lib/auth";
+import { requireAdminApiSession, requireApiSession, isAdmin } from "@/lib/apiAccess";
 import { generateReference, readJsonBody, todayLabel } from "@/lib/requests";
 import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer";
 import { formatReturnRow } from "@/lib/returnUtils";
@@ -21,11 +20,11 @@ const DEMO_RETURNS = [
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const portal = url.searchParams.get("portal") === "1";
-  const session = portal ? await getServerSession(authOptions).catch(() => null) : null;
-  const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
-  if (portal && !sessionEmail) {
-    return Response.json({ ok: true, mode: "database", data: [], returns: [], portalReturns: [] });
-  }
+  const access = portal ? await requireApiSession() : await requireAdminApiSession();
+  if (!access.ok) return access.response;
+  if (portal && access.access.role !== "CUSTOMER") return Response.json({ ok: false, error: "Customer portal sign-in required." }, { status: 403 });
+  const sessionEmail = portal ? access.access.email : "";
+
   const dbResult = await withDatabase(async () => {
     const rows = await prisma.return.findMany({
       where: portal ? { order: { customerEmail: { equals: sessionEmail, mode: "insensitive" as const } } } : undefined,
@@ -42,9 +41,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions).catch(() => null);
-  const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
   const body = await readJsonBody(req);
+  const source = String(body.source || "customer-portal");
+  const access = await requireApiSession();
+  if (!access.ok) return access.response;
+  const sessionEmail = access.access.role === "CUSTOMER" ? access.access.email : "";
   const reference = typeof body.reference === "string" ? body.reference : generateReference("RET");
 
   if (!body.orderId && !body.email && !body.reason) {
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
     reason: String(body.reason || "Return request"),
     message: String(body.message || "Return requested from customer portal."),
     status: "AWAITING_APPROVAL" as const,
-    source: String(body.source || "customer-portal"),
+    source,
   };
 
   const dbResult = await withDatabase(async () => {
