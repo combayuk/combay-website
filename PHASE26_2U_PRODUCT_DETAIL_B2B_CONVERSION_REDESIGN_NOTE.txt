@@ -1,0 +1,105 @@
+Phase 26.2U — Product detail B2B conversion redesign
+
+Context:
+After Phase 26.2T redesigned the desktop shop catalogue, the next conversion-critical page is the individual product detail page. The existing page worked, but it needed to feel more like a serious industrial procurement page: clearer product facts, tighter pricing/actions, stronger stock/condition signalling, better quote flow, and faster initial content.
+
+Implemented:
+1. Server-provided initial product content
+   File: src/app/shop/[slug]/page.tsx
+   - Product page now fetches the product on the server using getProductByIdFromRepository.
+   - The server-fetched product is passed into ProductDetail as initialProduct.
+   - ProductDetail still falls back to client fetch if initialProduct is not available.
+   - This improves perceived speed and avoids a product page that starts with only a loading message.
+
+2. Product detail layout redesign
+   File: src/components/shop/ProductDetail.tsx
+   - Rebuilt the product detail layout into a compact B2B conversion layout.
+   - Gallery remains on the left.
+   - Sticky purchase/procurement panel sits on the right on desktop.
+   - Product title, category, condition and stock are clearer.
+   - SKU/brand/MPN/model/manufacturer/location are grouped in a compact facts panel.
+   - Long values are contained/truncated.
+
+3. Better price/stock/action panel
+   File: src/components/shop/ProductDetail.tsx
+   - Price area now shows:
+     - price / price-on-request
+     - VAT/business invoice note
+     - warranty/dispatch/condition pills
+     - variation selector
+     - compact quantity selector
+     - lead time and condition note
+   - Actions are clearer:
+     - Buy now / Add to cart when purchasable
+     - Request quote
+     - Ask a technical question
+   - Copy SKU button added.
+
+4. Compact gallery
+   File: src/components/shop/ProductDetail.tsx
+   - Main gallery now uses a more controlled 4:3 ratio instead of oversized square dominance.
+   - Image padding reduced.
+   - Zoom behaviour preserved.
+   - Video support preserved.
+   - Thumbnail gallery preserved.
+
+5. Tabs and detail panels
+   File: src/components/shop/ProductDetail.tsx
+   - Description / Overview / Specifications / Documents tabs remain.
+   - Tabs are smaller and cleaner.
+   - Detail panels are more compact.
+   - Specifications table is now mobile-safe:
+     - one column on mobile
+     - label/value grid on larger screens
+     - long values break safely
+   - Documents rows are more compact and contain long names.
+
+6. Quote/question drawer
+   File: src/components/shop/ProductDetail.tsx
+   - Replaced the centred enquiry modal with a right-side drawer.
+   - Drawer is more professional and compact.
+   - Form collects name, email, phone, country, quantity and message.
+   - Quote request includes product, active price, selected variation and quantity.
+   - Question request continues to use support route.
+   - Success state remains.
+
+Preserved:
+- product gallery
+- gallery zoom
+- video preview
+- variations
+- quantity selector
+- add to cart
+- request quote
+- ask question
+- product tabs
+- specs/documents
+- metadata generation
+- fallback client product fetch
+- existing quote/support APIs
+- eBay sync/product data model unaffected
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Product page first load:
+   - product content appears quickly from server-provided data
+   - fallback still works if initialProduct is absent
+2. Product page desktop:
+   - sticky purchase panel works
+   - gallery displays
+   - facts panel is compact
+   - no horizontal overflow
+3. Product page mobile:
+   - facts/specs wrap safely
+   - drawer and actions remain usable
+4. Actions:
+   - Copy SKU works
+   - variation selection updates stock/price
+   - quantity selector respects stock
+   - Buy now/Add to cart works
+   - Request quote opens drawer and submits
+   - Ask technical question opens drawer and submits
+5. Tabs:
+   - Description, Overview, Specifications and Documents switch correctly

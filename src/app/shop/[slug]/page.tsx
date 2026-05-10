@@ -29,12 +29,14 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default function ProductPage({ params }: { params: { slug: string } }) {
+export default async function ProductPage({ params }: { params: { slug: string } }) {
+  const result = await getProductByIdFromRepository(params.slug);
+
   return (
     <main>
       <TopBar />
       <Navigation />
-      <ProductDetail slug={params.slug} />
+      <ProductDetail slug={params.slug} initialProduct={result.product} />
       <Footer />
     </main>
   );
