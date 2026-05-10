@@ -1,0 +1,88 @@
+Phase 26.2Q — Customer Portal launch polish
+
+Context:
+After launch email CTAs were restored, the next customer-facing surface to polish was the Customer Portal. This phase keeps backend behaviour unchanged and improves customer-side usability, compactness, and launch-readiness.
+
+Implemented:
+1. Customer portal shell
+   File: src/components/portal/PortalClient.tsx
+   - Reworked the portal header into a compact professional dashboard card.
+   - Added customer portal status strip:
+     - total orders
+     - paid orders
+     - tracking uploaded
+     - awaiting return approval
+     - active returns
+   - Made sign-out a compact outlined button.
+   - Reduced overall top padding and page spacing.
+
+2. Customer portal navigation
+   - Reduced sidebar width.
+   - Reduced nav row height and font size.
+   - Added truncation so long labels do not wrap.
+   - Added subtle shadow to the nav card.
+   - Preserved all sections:
+     - Orders
+     - Returns
+     - Tracking
+     - Support
+     - Account Settings
+     - Addresses
+     - Payment Methods
+     - Marketing Preferences
+
+3. Portal panels and cards
+   - Reduced repeated card padding and grid gaps.
+   - Made forms and inputs more compact.
+   - Reduced support form and ticket-area density.
+   - Made order actions look like compact action chips rather than loose text links.
+   - Kept all existing portal data loading and API calls.
+
+4. Return request workflow
+   - Converted return request modal into a right-side drawer-style panel.
+   - Reduced form spacing and field heights.
+   - Kept existing return request submission behaviour.
+
+5. Checkout success page
+   File: src/components/cart/CheckoutSuccessClient.tsx
+   - Updated post-payment copy to be clearer and launch-ready:
+     - payment received
+     - team will process order
+     - tracking details will be emailed after dispatch
+   - Reduced success/error panel density.
+   - Made CTA buttons more compact.
+
+Preserved:
+- portal authentication requirement
+- orders loading
+- returns loading
+- support ticket creation and history
+- tracking links
+- account settings logic
+- address CRUD
+- payment method preview
+- marketing preference section
+- return request submission
+- checkout session verification
+- cart clearing after paid Stripe session
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Customer portal login.
+2. Confirm header/stats show correctly.
+3. Check Orders tab:
+   - order cards load
+   - request return works
+   - report problem switches to Support
+4. Check Returns tab:
+   - return drawer opens
+   - return request submits
+5. Check Tracking tab:
+   - tracking link opens if present
+6. Check Support tab:
+   - submit ticket
+   - ticket history loads
+7. Check Account/Addresses/Payments/Marketing tabs.
+8. Complete/test checkout success page and confirm improved wording/buttons.

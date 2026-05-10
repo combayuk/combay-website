@@ -208,7 +208,7 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
         <h2 className="font-display font-800 text-navy-950 text-2xl mb-2">Sign in to access your portal</h2>
         <p className="text-gray-500 mb-6 text-sm">View orders, track shipments, manage returns and support requests.</p>
         <div className="flex gap-3">
-          <Link href="/portal/login" className="btn-primary">Customer Sign In →</Link>
+          <Link href="/portal/login" className="btn-primary py-2 text-xs">Customer Sign In →</Link>
           <Link href="/auth/register" className="btn-secondary">Create Account</Link>
         </div>
       </div>
@@ -315,33 +315,47 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
     await loadAddresses();
   }
 
+  const paidOrders = portalOrders.filter((order) => order.paymentStatus === "PAID").length;
+  const trackedOrders = portalOrders.filter((order) => order.tracking).length;
+  const activeReturns = portalReturns.filter((item) => !["REFUNDED", "CLOSED", "REJECTED"].includes(item.status)).length;
+  const openReturnRequests = portalReturns.filter((item) => ["AWAITING_APPROVAL", "REQUESTED"].includes(item.status)).length;
+
   return (
     <div className="bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 py-10">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-          <div>
-            <p className="font-mono text-[10px] text-accent tracking-widest uppercase mb-1">Customer Portal</p>
-            <h1 className="font-display font-800 text-navy-950 text-2xl">Welcome back, {session.user?.name ?? "Combay customer"}</h1>
-            <p className="text-gray-500 text-sm mt-1">Manage orders, returns, support tickets, addresses and account details.</p>
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="font-mono text-[10px] text-accent tracking-widest uppercase mb-1">Customer Portal</p>
+              <h1 className="font-display font-900 text-navy-950 text-2xl">Welcome back, {session.user?.name ?? "Combay customer"}</h1>
+              <p className="text-gray-500 text-xs mt-1">Manage orders, returns, support tickets, addresses and account details.</p>
+            </div>
+            <button onClick={() => signOut({ callbackUrl: "/" })} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors font-display font-800">
+              <LogOut size={13} /> Sign out
+            </button>
           </div>
-          <button onClick={() => signOut({ callbackUrl: "/" })} className="flex items-center gap-1.5 text-gray-400 hover:text-red-500 text-sm transition-colors font-display font-600">
-            <LogOut size={14} /> Sign out
-          </button>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{portalOrders.length} orders</span>
+            <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{paidOrders} paid</span>
+            <span className="rounded-full bg-blue-50 px-3 py-1.5 font-900 text-blue-700">{trackedOrders} tracking uploaded</span>
+            <span className="rounded-full bg-amber-50 px-3 py-1.5 font-900 text-amber-700">{openReturnRequests} awaiting return approval</span>
+            <span className="rounded-full bg-purple-50 px-3 py-1.5 font-900 text-purple-700">{activeReturns} active returns</span>
+          </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6">
-          <aside className="lg:w-60 flex-shrink-0">
-            <nav className="bg-white border border-gray-200 rounded-xl overflow-hidden sticky top-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <aside className="lg:w-56 flex-shrink-0">
+            <nav className="bg-white border border-gray-200 rounded-xl overflow-hidden sticky top-4 shadow-sm">
               {NAV.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setSection(item.id)}
-                  className={`w-full flex items-center gap-2.5 px-4 py-3 text-sm font-display font-600 transition-all border-l-2 ${
+                  className={`w-full flex min-w-0 items-center gap-2.5 px-3 py-2.5 text-xs font-display font-800 transition-all border-l-2 ${
                     section === item.id ? "bg-navy-950 text-white border-accent" : "text-gray-600 border-transparent hover:bg-surface hover:text-navy-950"
                   }`}
                 >
-                  <span className={section === item.id ? "text-accent" : ""}>{item.icon}</span>
-                  {item.label}
+                  <span className={`shrink-0 ${section === item.id ? "text-accent" : ""}`}>{item.icon}</span>
+                  <span className="truncate">{item.label}</span>
                 </button>
               ))}
             </nav>
@@ -403,9 +417,9 @@ function OrdersPanel({ orders, returns, loading, onReturn, onSupport }: { orders
   return (
     <section>
       <SectionHeader title="Your Orders" subtitle="Track purchases, request support, and check return eligibility." />
-      <div className="space-y-3">
-        {loading && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">Loading orders…</div>}
-        {!loading && orders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No orders found yet.</div>}
+      <div className="space-y-2.5">
+        {loading && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">Loading orders…</div>}
+        {!loading && orders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">No orders found yet.</div>}
         {!loading && orders.map((order) => {
           const returnRecord = returns.find((item) => item.orderId === order.id);
           const pendingReturn = returnRecord && ["AWAITING_APPROVAL", "REQUESTED"].includes(returnRecord.status);
@@ -413,7 +427,7 @@ function OrdersPanel({ orders, returns, loading, onReturn, onSupport }: { orders
           const rejectedReturn = returnRecord && returnRecord.status === "REJECTED";
           const eligible = canReturn(order) && !pendingReturn && !approvedReturn;
           return (
-            <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-5">
+            <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
                 <div>
                   <p className="font-display font-700 text-navy-950 text-sm">Order #{order.id}</p>
@@ -440,13 +454,13 @@ function OrdersPanel({ orders, returns, loading, onReturn, onSupport }: { orders
                 ) : rejectedReturn ? (
                   <span className="text-red-700 bg-red-50 border border-red-100 rounded-full px-2.5 py-1 font-display font-600">Return rejected</span>
                 ) : eligible ? (
-                  <button onClick={() => onReturn(order)} className="text-accent hover:text-accent-dark font-display font-600 transition-colors">Request return approval</button>
+                  <button onClick={() => onReturn(order)} className="rounded-md border border-accent/20 bg-accent/10 px-2 py-1 text-[11px] font-display font-900 text-accent hover:bg-accent/20 transition-colors">Request return approval</button>
                 ) : order.status === "DELIVERED" ? (
                   <span className="text-gray-400 font-display font-600">Return window expired</span>
                 ) : (
                   <span className="text-gray-400 font-display font-600">Return available after delivery</span>
                 )}
-                <button onClick={() => onSupport(order.id)} className="text-gray-500 hover:text-navy-950 font-display font-600 transition-colors">Report a problem</button>
+                <button onClick={() => onSupport(order.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-display font-900 text-slate-600 hover:bg-slate-50 hover:text-navy-950 transition-colors">Report a problem</button>
               </div>
               {eligible && <p className="text-[11px] text-gray-400 mt-3">{daysUntilReturnDeadline(order)} days left to request a return.</p>}
             </div>
@@ -476,7 +490,7 @@ function ReturnsPanel({ orders, returns, onReturn }: { orders: PortalOrder[]; re
       {awaiting.length > 0 && (
         <div className="mb-5">
           <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Awaiting approval</h3>
-          <div className="grid lg:grid-cols-2 gap-4">
+          <div className="grid lg:grid-cols-2 gap-3">
             {awaiting.map((pending) => (
               <div key={pending.id} className="bg-white border border-amber-200 rounded-xl p-5">
                 <div className="flex items-start justify-between gap-3 mb-2">
@@ -497,7 +511,7 @@ function ReturnsPanel({ orders, returns, onReturn }: { orders: PortalOrder[]; re
       {rejected.length > 0 && (
         <div className="mb-5">
           <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Rejected returns</h3>
-          <div className="grid lg:grid-cols-2 gap-4">
+          <div className="grid lg:grid-cols-2 gap-3">
             {rejected.map((item) => (
               <div key={item.id} className="bg-white border border-red-200 rounded-xl p-5">
                 <p className="font-display font-700 text-sm text-navy-950">{item.item}</p>
@@ -509,12 +523,12 @@ function ReturnsPanel({ orders, returns, onReturn }: { orders: PortalOrder[]; re
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-4 mb-5">
+      <div className="grid lg:grid-cols-2 gap-3 mb-4">
         {eligibleOrders.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No additional orders are currently eligible for a new return request.</div>
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">No additional orders are currently eligible for a new return request.</div>
         ) : (
           eligibleOrders.map((order) => (
-            <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-5">
+            <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <p className="font-display font-700 text-sm text-navy-950">{order.item}</p>
               <p className="text-gray-400 text-xs mt-1">Order #{order.id} · {daysUntilReturnDeadline(order)} days left</p>
               <button onClick={() => onReturn(order)} className="btn-secondary text-xs py-1.5 px-3 mt-4">Request return approval</button>
@@ -524,11 +538,11 @@ function ReturnsPanel({ orders, returns, onReturn }: { orders: PortalOrder[]; re
       </div>
 
       {active.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No approved/in-progress returns yet.</div>
+        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">No approved/in-progress returns yet.</div>
       ) : active.map((item) => {
         const idx = stageIndex(item.status);
         return (
-          <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+          <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 mb-3 shadow-sm">
             <p className="font-display font-700 text-sm text-navy-950 mb-1">Return {item.reference}</p>
             <p className="text-gray-500 text-sm mb-1">Order #{item.orderId} · {item.item}</p>
             <p className="text-gray-400 text-xs mb-4">Current status: {item.statusLabel || item.status.replace(/_/g, " ")}</p>
@@ -596,11 +610,11 @@ function TrackingPanel({ orders, loading }: { orders: PortalOrder[]; loading: bo
   return (
     <section>
       <SectionHeader title="Tracking" subtitle="Tracking details appear here once admin adds a courier and tracking number to the order." />
-      <div className="space-y-3">
-        {loading && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">Loading tracking details…</div>}
-        {!loading && trackedOrders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl p-6 text-gray-500 text-sm">No tracking has been uploaded yet.</div>}
+      <div className="space-y-2.5">
+        {loading && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">Loading tracking details…</div>}
+        {!loading && trackedOrders.length === 0 && <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-500 text-sm shadow-sm">No tracking has been uploaded yet.</div>}
         {!loading && trackedOrders.map((order) => (
-          <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-5">
+          <div key={order.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
               <div>
                 <p className="font-display font-700 text-sm text-navy-950">{order.item}</p>
@@ -668,13 +682,13 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
       {sent ? (
         <div className="mb-5">
           <SuccessBox title="Ticket submitted" reference={sent.reference} message={sent.message} />
-          <button type="button" onClick={() => setSent(null)} className="btn-secondary text-sm mt-3">Open another ticket</button>
+          <button type="button" onClick={() => setSent(null)} className="btn-secondary text-xs py-2 mt-3">Open another ticket</button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 mb-6">
-          <div className="grid sm:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 mb-4 shadow-sm">
+          <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Subject">
-              <select name="subject" required className="input">
+              <select name="subject" required className="input py-2 text-sm">
                 <option value="">Select...</option>
                 <option value="Order query">Order query</option>
                 <option value="Delivery issue">Delivery issue</option>
@@ -684,33 +698,33 @@ function SupportPanel({ orders, orderId, onOrderChange }: { orders: PortalOrder[
               </select>
             </Field>
             <Field label="Related order">
-              <select name="orderId" className="input" value={orderId} onChange={(event) => onOrderChange(event.target.value)}>
+              <select name="orderId" className="input py-2 text-sm" value={orderId} onChange={(event) => onOrderChange(event.target.value)}>
                 <option value="">Optional</option>
                 {orders.map((order) => <option key={order.id} value={order.id}>#{order.id} — {order.sku}</option>)}
               </select>
             </Field>
           </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <Field label="Name"><input name="name" required className="input" placeholder="Your full name" defaultValue={session?.user?.name || ""} /></Field>
-            <Field label="Email"><input name="email" required type="email" className="input" placeholder="you@company.com" defaultValue={session?.user?.email || ""} /></Field>
-            <Field label="Country"><select name="country" required className="input">{COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}</select></Field>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label="Name"><input name="name" required className="input py-2 text-sm" placeholder="Your full name" defaultValue={session?.user?.name || ""} /></Field>
+            <Field label="Email"><input name="email" required type="email" className="input py-2 text-sm" placeholder="you@company.com" defaultValue={session?.user?.email || ""} /></Field>
+            <Field label="Country"><select name="country" required className="input py-2 text-sm">{COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}</select></Field>
           </div>
-          <Field label="Message"><textarea name="message" required className="input min-h-[120px]" placeholder="Describe your issue in detail..." /></Field>
+          <Field label="Message"><textarea name="message" required className="input min-h-[110px] py-2 text-sm" placeholder="Describe your issue in detail..." /></Field>
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-          <button disabled={loading} type="submit" className="btn-primary">{loading ? "Submitting..." : "Submit ticket →"}</button>
+          <button disabled={loading} type="submit" className="btn-primary py-2 text-xs">{loading ? "Submitting..." : "Submit ticket →"}</button>
         </form>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="font-display font-800 text-lg text-navy-950">Your support tickets</h3>
-            <p className="text-sm text-gray-500">Customer-visible replies from Combay appear here.</p>
+            <h3 className="font-display font-900 text-base text-navy-950">Your support tickets</h3>
+            <p className="text-xs text-gray-500">Customer-visible replies from Combay appear here.</p>
           </div>
           <button type="button" onClick={loadTickets} className="btn-secondary text-sm py-2">Refresh</button>
         </div>
-        {ticketsLoading ? <p className="text-sm text-gray-500">Loading tickets…</p> : tickets.length === 0 ? <p className="text-sm text-gray-500">No support tickets found.</p> : (
-          <div className="space-y-3">
+        {ticketsLoading ? <p className="text-xs text-gray-500">Loading tickets…</p> : tickets.length === 0 ? <p className="text-xs text-gray-500">No support tickets found.</p> : (
+          <div className="space-y-2.5">
             {tickets.map((ticket) => (
               <div key={ticket.id} className="border border-gray-200 rounded-xl p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
@@ -892,7 +906,7 @@ function AccountPanel({
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-3">
           <EditableInput label="Full name" required value={form.name} editable={!!editable.name} onEdit={() => enable("name")} onCancel={() => cancelField("name")} onChange={(value) => updateField("name", value)} />
           <EditableInput label="Email address" required type="email" value={form.email} editable={!!editable.email} onEdit={() => enable("email")} onCancel={() => cancelField("email")} onChange={(value) => updateField("email", value)} />
           <div>
@@ -934,10 +948,10 @@ function AccountPanel({
           {!editable.password ? (
             <div className="relative max-w-md"><input disabled className="input bg-gray-100 text-gray-500 pr-10" type="password" value="********" readOnly /><button type="button" onClick={() => enable("password")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy-950"><Edit3 size={14} /></button></div>
           ) : (
-            <div className="space-y-3">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <Field label="New password"><input className="input" type="password" minLength={8} value={form.newPassword} onChange={(event) => updateField("newPassword", event.target.value)} placeholder="Enter new password" autoComplete="new-password" /></Field>
-                <Field label="Confirm new password"><input className="input" type="password" minLength={8} value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></Field>
+            <div className="space-y-2.5">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="New password"><input className="input py-2 text-sm" type="password" minLength={8} value={form.newPassword} onChange={(event) => updateField("newPassword", event.target.value)} placeholder="Enter new password" autoComplete="new-password" /></Field>
+                <Field label="Confirm new password"><input className="input py-2 text-sm" type="password" minLength={8} value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></Field>
               </div>
               <button type="button" onClick={() => cancelField("password")} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-600"><X size={13} /> Cancel password change</button>
             </div>
@@ -1022,7 +1036,7 @@ function AddressesPanel({
         {addresses.length < 5 && <button onClick={onAdd} className="btn-primary text-sm py-2 flex items-center gap-1.5"><Plus size={14} /> Add address</button>}
       </div>
       {addresses.length >= 5 && <p className="text-sm text-gray-500 mb-3">Maximum 5 addresses reached.</p>}
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {addresses.map((address) => (
           <div key={address.id} className={`bg-white border rounded-xl p-5 ${address.isDefault ? "border-accent" : "border-gray-200"}`}>
             <div className="flex items-start justify-between gap-3">
@@ -1049,13 +1063,13 @@ function AddressesPanel({
         <div className="mt-4 bg-white border border-gray-200 rounded-xl p-5 space-y-3">
           <h3 className="font-display font-700 text-navy-950 mb-2">{editingAddressId ? "Edit address" : "New address"}</h3>
           <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Label"><input className="input" value={draft.label} onChange={(event) => onDraftChange({ ...draft, label: event.target.value })} placeholder="Home / Office" /></Field>
-            <Field label="Address line 1"><input className="input" value={draft.line1} onChange={(event) => onDraftChange({ ...draft, line1: event.target.value })} /></Field>
-            <Field label="Address line 2"><input className="input" value={draft.line2} onChange={(event) => onDraftChange({ ...draft, line2: event.target.value })} /></Field>
-            <Field label="City"><input className="input" value={draft.city} onChange={(event) => onDraftChange({ ...draft, city: event.target.value })} /></Field>
-            <Field label="Postcode"><input className="input" value={draft.postcode} onChange={(event) => onDraftChange({ ...draft, postcode: event.target.value })} /></Field>
+            <Field label="Label"><input className="input py-2 text-sm" value={draft.label} onChange={(event) => onDraftChange({ ...draft, label: event.target.value })} placeholder="Home / Office" /></Field>
+            <Field label="Address line 1"><input className="input py-2 text-sm" value={draft.line1} onChange={(event) => onDraftChange({ ...draft, line1: event.target.value })} /></Field>
+            <Field label="Address line 2"><input className="input py-2 text-sm" value={draft.line2} onChange={(event) => onDraftChange({ ...draft, line2: event.target.value })} /></Field>
+            <Field label="City"><input className="input py-2 text-sm" value={draft.city} onChange={(event) => onDraftChange({ ...draft, city: event.target.value })} /></Field>
+            <Field label="Postcode"><input className="input py-2 text-sm" value={draft.postcode} onChange={(event) => onDraftChange({ ...draft, postcode: event.target.value })} /></Field>
             <Field label="Country">
-              <select className="input" value={draft.country} onChange={(event) => onDraftChange({ ...draft, country: event.target.value })}>
+              <select className="input py-2 text-sm" value={draft.country} onChange={(event) => onDraftChange({ ...draft, country: event.target.value })}>
                 {COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}
               </select>
             </Field>
@@ -1107,7 +1121,7 @@ function PaymentsPanel({ savedCardPreview, onSavePreview }: { savedCardPreview: 
         </div>
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         {methods.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {methods.map((method) => (
               <div key={method.id} className="border border-gray-200 rounded-xl p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1122,9 +1136,9 @@ function PaymentsPanel({ savedCardPreview, onSavePreview }: { savedCardPreview: 
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No saved cards yet.</p>
+          <p className="text-xs text-gray-500">No saved cards yet.</p>
         )}
-        <button onClick={addPaymentMethod} disabled={loading} className="btn-primary">{loading ? "Opening Stripe..." : "Add card securely with Stripe →"}</button>
+        <button onClick={addPaymentMethod} disabled={loading} className="btn-primary py-2 text-xs">{loading ? "Opening Stripe..." : "Add card securely with Stripe →"}</button>
       </div>
     </section>
   );
@@ -1186,7 +1200,7 @@ function MarketingPanel() {
     <section>
       <SectionHeader title="Marketing Preferences" subtitle="Control product alerts, campaign emails and category interest emails." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
-        {loading ? <p className="text-sm text-gray-500">Loading preferences...</p> : null}
+        {loading ? <p className="text-xs text-gray-500">Loading preferences...</p> : null}
         <label className="flex items-start gap-3 cursor-pointer border border-gray-200 rounded-xl p-4 bg-gray-50">
           <input type="checkbox" checked={prefs.allMarketingEmails} onChange={(event) => update("allMarketingEmails", event.target.checked)} className="mt-0.5 w-4 h-4 accent-accent" />
           <div><p className="font-display font-700 text-sm text-navy-950">Allow marketing emails</p><p className="text-gray-500 text-xs">Turn this off to stop all promotional, seasonal, monthly and stock-interest marketing emails.</p></div>
@@ -1215,7 +1229,7 @@ function MarketingPanel() {
         </div>
         {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
         {notice && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">{notice}</p>}
-        <button disabled={saving || loading} onClick={savePreferences} className="btn-primary">{saving ? "Saving..." : "Save preferences →"}</button>
+        <button disabled={saving || loading} onClick={savePreferences} className="btn-primary py-2 text-xs">{saving ? "Saving..." : "Save preferences →"}</button>
         <p className="text-xs text-gray-400">Transactional emails about orders, quotes, returns, support, account security and verification may still be sent even if marketing is disabled.</p>
       </div>
     </section>
@@ -1224,8 +1238,8 @@ function MarketingPanel() {
 
 function ReturnModal({ order, loading, result, onClose, onSubmit }: { order: PortalOrder; loading: boolean; result: SubmitState; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+    <div className="fixed inset-0 bg-black/50 z-50">
+      <div className="absolute right-0 top-0 h-full w-full max-w-[520px] overflow-y-auto bg-white p-5 shadow-2xl">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"><X size={18} /></button>
         {result ? (
           <SuccessBox title="Return request submitted" reference={result.reference} message={result.message} />
@@ -1233,13 +1247,13 @@ function ReturnModal({ order, loading, result, onClose, onSubmit }: { order: Por
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
               <p className="font-mono text-[10px] text-accent tracking-widest uppercase mb-1">Order #{order.id}</p>
-              <h3 className="font-display font-800 text-lg text-navy-950">Request return</h3>
+              <h3 className="font-display font-900 text-base text-navy-950">Request return</h3>
               <p className="text-sm text-gray-500 mt-1">{order.item}</p>
             </div>
-            <Field label="Reason"><select name="reason" required className="input"><option value="">Select...</option><option>Item not as described</option><option>Arrived damaged</option><option>Wrong item received</option><option>Changed mind</option><option>Other</option></select></Field>
-            <Field label="Additional details"><textarea name="message" required className="input min-h-[100px]" placeholder="Please describe the issue and upload photos if requested by our team." /></Field>
+            <Field label="Reason"><select name="reason" required className="input py-2 text-sm"><option value="">Select...</option><option>Item not as described</option><option>Arrived damaged</option><option>Wrong item received</option><option>Changed mind</option><option>Other</option></select></Field>
+            <Field label="Additional details"><textarea name="message" required className="input min-h-[96px] py-2 text-sm" placeholder="Please describe the issue and upload photos if requested by our team." /></Field>
             <div className="bg-surface border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-500">Returns are assessed after inspection. Approved refunds are processed after the item is received in the same condition.</div>
-            <button disabled={loading} type="submit" className="btn-primary w-full">{loading ? "Submitting..." : "Submit return request"}</button>
+            <button disabled={loading} type="submit" className="btn-primary w-full py-2 text-xs">{loading ? "Submitting..." : "Submit return request"}</button>
           </form>
         )}
       </div>
@@ -1248,19 +1262,19 @@ function ReturnModal({ order, loading, result, onClose, onSubmit }: { order: Por
 }
 
 function SectionHeader({ title, subtitle, compact = false }: { title: string; subtitle: string; compact?: boolean }) {
-  return <div className={compact ? "" : "mb-5"}><h2 className="font-display font-700 text-navy-950 text-lg">{title}</h2><p className="text-gray-500 text-sm mt-1">{subtitle}</p></div>;
+  return <div className={compact ? "" : "mb-4"}><h2 className="font-display font-900 text-navy-950 text-lg">{title}</h2><p className="text-gray-500 text-xs mt-1">{subtitle}</p></div>;
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return <div><label className="label">{label}</label>{hint && <p className="text-xs text-gray-400 mb-1.5">{hint}</p>}{children}</div>;
+  return <div><label className="label text-xs">{label}</label>{hint && <p className="text-xs text-gray-400 mb-1.5">{hint}</p>}{children}</div>;
 }
 
 function SuccessBox({ title, reference, message }: { title: string; reference: string; message: string }) {
   return (
-    <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
-      <div className="text-3xl mb-2">✓</div>
-      <h3 className="font-display font-700 text-green-800 text-lg mb-1">{title}</h3>
-      <p className="text-green-700 text-sm mb-2">Reference: <span className="font-mono font-700">{reference}</span></p>
+    <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center">
+      <div className="text-2xl mb-2">✓</div>
+      <h3 className="font-display font-900 text-green-800 text-base mb-1">{title}</h3>
+      <p className="text-green-700 text-xs mb-2">Reference: <span className="font-mono font-900">{reference}</span></p>
       <p className="text-green-700 text-xs">{message}</p>
     </div>
   );
