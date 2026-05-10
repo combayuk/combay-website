@@ -248,7 +248,7 @@ export default function AdminOrders() {
               {!loading && filtered.length === 0 && <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-8">No orders found.</td></tr>}
             </tbody>
           </table>
-        </div>        </div>
+        </div>
       </div>
 
       {selected && (

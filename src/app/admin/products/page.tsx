@@ -207,7 +207,7 @@ export default function AdminProducts() {
               })}
             </tbody>
           </table>
-        </div>        </div>
+        </div>
 
         {loading && <div className="p-10 text-center text-gray-400 text-sm">Loading products…</div>}
         {!loading && filtered.length === 0 && <div className="p-10 text-center text-gray-400 text-sm">No products match that filter.</div>}

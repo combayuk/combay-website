@@ -1,0 +1,30 @@
+Phase 26.2J.1 — Build hotfix for table crop/products no-scroll patch
+
+Context:
+Vercel failed after Phase 26.2J with JSX syntax errors in:
+- src/app/admin/orders/page.tsx
+- src/app/admin/products/page.tsx
+
+Cause:
+The table replacement left duplicated closing </div> tags after the new compact tables:
+- Orders had `</div>        </div>` after the table wrapper, which closed the page container too early before `{selected && (...)}`.
+- Products had the same duplicated closing pattern after the table wrapper, which malformed the JSX return.
+
+Fixed:
+1. src/app/admin/orders/page.tsx
+   - Removed the extra closing div after the compact orders table.
+   - Kept the no-horizontal-scroll table and safe Manage column.
+
+2. src/app/admin/products/page.tsx
+   - Removed the extra closing div after the compact products table.
+   - Kept the no-horizontal-scroll table and safe product action column.
+
+No feature changes.
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Deploy and confirm Vercel build passes.
+2. Admin > Products loads with no horizontal scrolling.
+3. Admin > Orders loads with no horizontal scrolling.
+4. Product and order action/manage buttons remain visible and not cropped.
