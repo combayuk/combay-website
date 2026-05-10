@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { createHash } from "crypto";
 import { prisma } from "@/lib/db";
@@ -19,9 +20,91 @@ function jsonHeaders(status = 200) {
     status,
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   };
+}
+
+function emptyOk() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
+}
+
+function parseEbayDate(value: unknown) {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function readPayloadSafely(req: Request) {
+  const contentType = req.headers.get("content-type") || "";
+  const raw = await req.text().catch(() => "");
+  if (!raw) return { payload: {}, raw };
+  if (contentType.toLowerCase().includes("application/json")) {
+    try {
+      return { payload: JSON.parse(raw), raw };
+    } catch {
+      return { payload: { rawBody: raw }, raw };
+    }
+  }
+  try {
+    return { payload: JSON.parse(raw), raw };
+  } catch {
+    return { payload: { rawBody: raw }, raw };
+  }
+}
+
+async function recordNotification(payload: any, raw: string, req: Request) {
+  const notification = payload?.notification || payload?.event || payload || {};
+  const data = notification?.data || payload?.data || {};
+  const metadata = payload?.metadata || {};
+  const headers = Object.fromEntries(req.headers.entries());
+  const notificationId =
+    notification?.notificationId ||
+    payload?.notificationId ||
+    payload?.notification?.metadata?.notificationId ||
+    req.headers.get("x-ebay-notification-id") ||
+    null;
+
+  const row = {
+    notificationId: notificationId ? String(notificationId) : null,
+    topic: metadata?.topic || payload?.topic || "MARKETPLACE_ACCOUNT_DELETION",
+    username: data?.username || payload?.username || null,
+    ebayUserId: data?.userId || data?.userID || data?.ebayUserId || payload?.userId || null,
+    eventDate: parseEbayDate(notification?.eventDate || payload?.eventDate),
+    publishDate: parseEbayDate(notification?.publishDate || payload?.publishDate),
+    payload: raw ? { ...payload, _rawBodyLength: raw.length } : payload,
+    headers,
+    status: "RECEIVED",
+    notes: "Notification acknowledged to eBay. Database logging is best-effort and must never block the HTTP 200 acknowledgement.",
+  };
+
+  if (row.notificationId) {
+    await prisma.ebayAccountDeletionNotification.upsert({
+      where: { notificationId: row.notificationId },
+      create: row,
+      update: {
+        topic: row.topic ? String(row.topic) : "MARKETPLACE_ACCOUNT_DELETION",
+        username: row.username ? String(row.username) : null,
+        ebayUserId: row.ebayUserId ? String(row.ebayUserId) : null,
+        eventDate: row.eventDate,
+        publishDate: row.publishDate,
+        payload: row.payload,
+        headers: row.headers,
+        status: "RECEIVED",
+        receivedAt: new Date(),
+        notes: row.notes,
+      },
+    });
+  } else {
+    await prisma.ebayAccountDeletionNotification.create({
+      data: row,
+    });
+  }
 }
 
 export async function GET(req: Request) {
@@ -34,7 +117,7 @@ export async function GET(req: Request) {
         ok: true,
         endpoint: endpointUrl(req),
         configured: Boolean(verificationToken()),
-        message: "eBay account deletion endpoint is available. Use this URL in eBay Developer notifications.",
+        message: "eBay account deletion endpoint is available. Use this exact URL in eBay Developer notifications.",
       },
       jsonHeaders(200),
     );
@@ -55,55 +138,29 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  let payload: any = {};
+  const { payload, raw } = await readPayloadSafely(req);
+
   try {
-    payload = await req.json();
-  } catch {
-    payload = {};
+    await recordNotification(payload, raw, req);
+  } catch (error) {
+    console.error("eBay account deletion notification logging failed, but acknowledgement was returned.", error);
   }
 
-  const notification = payload?.notification || {};
-  const data = notification?.data || {};
-  const metadata = payload?.metadata || {};
-  const headers = Object.fromEntries(req.headers.entries());
-  const notificationId = notification?.notificationId ? String(notification.notificationId) : null;
-
-  await prisma.ebayAccountDeletionNotification.upsert({
-    where: { notificationId: notificationId || `missing-${Date.now()}-${Math.random().toString(36).slice(2)}` },
-    create: {
-      notificationId,
-      topic: metadata?.topic ? String(metadata.topic) : "MARKETPLACE_ACCOUNT_DELETION",
-      username: data?.username ? String(data.username) : null,
-      ebayUserId: data?.userId ? String(data.userId) : null,
-      eventDate: notification?.eventDate ? new Date(notification.eventDate) : null,
-      publishDate: notification?.publishDate ? new Date(notification.publishDate) : null,
-      payload,
-      headers,
-      status: "RECEIVED",
-      notes: "Notification acknowledged. Manual review/anonymisation can be performed if relevant eBay user data is stored.",
-    },
-    update: {
-      payload,
-      headers,
-      status: "RECEIVED",
-      receivedAt: new Date(),
-    },
-  }).catch(async () => {
-    await prisma.ebayAccountDeletionNotification.create({
-      data: {
-        notificationId,
-        topic: metadata?.topic ? String(metadata.topic) : "MARKETPLACE_ACCOUNT_DELETION",
-        username: data?.username ? String(data.username) : null,
-        ebayUserId: data?.userId ? String(data.userId) : null,
-        eventDate: notification?.eventDate ? new Date(notification.eventDate) : null,
-        publishDate: notification?.publishDate ? new Date(notification.publishDate) : null,
-        payload,
-        headers,
-        status: "RECEIVED",
-        notes: "Notification acknowledged. Duplicate fallback create used.",
-      },
-    });
-  });
-
+  // eBay compliance depends on this endpoint acknowledging the notification successfully.
+  // Database logging is intentionally best-effort and must not cause a non-200 response.
   return Response.json({ ok: true, acknowledged: true }, jsonHeaders(200));
+}
+
+export async function HEAD() {
+  return emptyOk();
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Allow": "GET,POST,HEAD,OPTIONS",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
 }

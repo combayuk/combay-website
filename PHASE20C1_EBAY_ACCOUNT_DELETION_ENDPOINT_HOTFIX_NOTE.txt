@@ -1,0 +1,29 @@
+Phase 20C.1 — eBay marketplace account deletion endpoint hotfix
+
+Context:
+The user received an eBay Developers Program warning email stating:
+"Your eBay marketplace account deletion/closure notification endpoint is down"
+for:
+https://combay-website-lt8v.vercel.app/api/ebay/account-deletion
+
+Fix:
+- Hardens /api/ebay/account-deletion so POST notifications always return HTTP 200 even if database logging fails.
+- Adds runtime=nodejs.
+- Keeps GET challenge-response support using SHA-256(challenge_code + verification token + endpoint URL).
+- Adds HEAD and OPTIONS handlers.
+- Parses JSON/non-JSON bodies safely.
+- Makes database notification logging best-effort only.
+- Prevents missing Prisma table/logging errors from causing eBay to see the endpoint as non-responsive.
+
+No Prisma schema change in this hotfix.
+However, the table EbayAccountDeletionNotification should already exist from earlier Prisma schema updates. If not, run:
+npx prisma db push
+
+Required Vercel env:
+EBAY_ACCOUNT_DELETION_VERIFICATION_TOKEN=<same 32-80 character token used in eBay Developer Portal>
+EBAY_ACCOUNT_DELETION_ENDPOINT_URL=https://combay-website-lt8v.vercel.app/api/ebay/account-deletion
+
+After deploy:
+1. Open /api/ebay/account-deletion and confirm ok:true.
+2. In eBay Developer Portal, ensure the endpoint URL and verification token exactly match Vercel env.
+3. Use Send Test Notification.
