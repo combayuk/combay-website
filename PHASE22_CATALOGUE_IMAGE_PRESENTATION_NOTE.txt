@@ -1,0 +1,26 @@
+Phase 22 — Catalogue image presentation using original eBay photos
+
+Context:
+Bulk background removal was tested but parked for V2 because output quality was not acceptable for industrial/eBay source photos. This phase improves public catalogue appearance without altering image files or removing backgrounds.
+
+Implemented:
+- Adds shared ProductImageFrame component:
+  src/components/shop/ProductImageFrame.tsx
+- Shop product cards now use a consistent restrained Combay image frame:
+  - pale industrial background
+  - subtle Combay/Sourcing Stock Supply pattern
+  - original image contained inside a white product tray
+  - no cropping, no background removal, no destructive processing
+- Product detail main gallery uses the same frame.
+- Product detail thumbnails use the same frame.
+- Existing zoom behaviour is retained.
+- Original eBay/product images remain the source of truth.
+- No database change.
+- No Prisma push required.
+
+Testing:
+1. Deploy.
+2. Open /shop and check product cards.
+3. Open several product detail pages and check gallery + thumbnails.
+4. Confirm images are not cropped, not stretched, and original product details remain visible.
+5. Confirm Add to cart / Choose option behaviour from Phase 20B still works.
