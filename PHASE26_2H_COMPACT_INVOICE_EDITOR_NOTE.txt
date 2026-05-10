@@ -1,0 +1,69 @@
+Phase 26.2H — Compact Quotes/Invoices document editor
+
+Context:
+After fixing horizontal scrolling on the Invoices & Quotes table, the next admin area to compact was the document create/edit workflow. The existing editor worked, but was bulky and had line-item rows with large minimum widths that could force unnecessary horizontal scrolling.
+
+Implemented:
+1. Admin > Invoices > New document
+   File: src/app/admin/invoices/new/page.tsx
+   - Compact operational header.
+   - Added compact workflow helper strip.
+   - Changed main layout to a tighter editor + sticky summary column.
+   - Reduced card padding, gaps, input heights and button sizes.
+   - Removed line-item horizontal overflow/min-width behaviour.
+   - Made line-item grid columns smaller while preserving:
+     - description
+     - SKU
+     - HS code
+     - quantity
+     - unit price
+     - total
+     - remove action
+   - Kept totals sidebar, save, view/print and payment-link behaviour.
+
+2. Admin > Invoices > Edit document
+   File: src/app/admin/invoices/[id]/edit/page.tsx
+   - Compact operational header.
+   - Added compact workflow helper strip.
+   - Changed main layout to tighter editor + sticky summary column.
+   - Reduced card padding, gaps, input heights and button sizes.
+   - Removed line-item horizontal overflow/min-width behaviour.
+   - Made line-item grid columns smaller while preserving:
+     - description
+     - SKU
+     - quantity
+     - unit price
+     - total
+     - remove action
+   - Kept summary, VAT, discount, shipping, payment terms, notes, save and view/print behaviour.
+
+Preserved:
+- quote/proforma/packing-list creation
+- edit existing document
+- customer fields
+- billing/delivery address
+- line items
+- HS code on new document lines
+- discount handling
+- VAT handling
+- shipping country/cost
+- amount paid/credit
+- Wise/bank details
+- payment terms/notes
+- Stripe payment-link generation
+- save document
+- view/print document
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Invoices > Create Quote / Proforma / Packing List.
+2. Confirm editor feels more compact.
+3. Confirm line item rows no longer force left-right scrolling.
+4. Add multiple line items.
+5. Add discount, VAT, shipping and bank terms.
+6. Save document.
+7. View / Print document.
+8. Edit existing quote/proforma/packing list.
+9. Confirm totals update and save works.
