@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText, ImagePlus, Plus, Save, Sparkles, Star, Trash2, Video } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, ImagePlus, Plus, Save, Sparkles, Star, Trash2, Video } from "lucide-react";
 import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
 import { generateProductContent } from "@/lib/productContentAssistant";
@@ -303,37 +303,62 @@ export default function ProductEditor({ mode, productId }: Props) {
     { id: "seo", label: "SEO & tags" },
   ];
 
+  const editorChecks = [
+    { label: "Title", ok: Boolean(product.title.trim()) },
+    { label: "SKU", ok: Boolean(product.sku.trim()) },
+    { label: "Category", ok: Boolean(product.category) },
+    { label: "Image", ok: imageRows.length > 0 },
+    { label: "Price/POA", ok: product.priceOnRequest || product.price !== null },
+  ];
+  const readyCount = editorChecks.filter((item) => item.ok).length;
+
   if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-8 text-sm text-gray-500">Loading product from database…</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/products" className="text-gray-400 hover:text-navy-950 p-1"><ArrowLeft size={18} /></Link>
-          <div>
-            <h1 className="font-display font-800 text-navy-950 text-2xl">{mode === "new" ? "Add Product" : "Edit Product"}</h1>
-            <p className="text-gray-400 text-xs mt-0.5 font-mono">SKU: {product.sku} · database-backed admin product</p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-3 min-w-0">
+            <Link href="/admin/products" className="mt-1 text-gray-400 hover:text-navy-950 p-1"><ArrowLeft size={18} /></Link>
+            <div className="min-w-0">
+              <p className="font-mono text-xs tracking-widest uppercase text-gray-400 mb-2">Product editor</p>
+              <h1 className="font-display font-900 text-navy-950 text-3xl truncate">{mode === "new" ? "Add product" : "Edit product"}</h1>
+              <p className="text-gray-500 text-sm mt-1 font-mono">SKU: {product.sku || "Not set"} · {product.status}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary text-sm py-2"><Save size={14} /> Save draft</button>
+            <button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary text-sm py-2">Publish product →</button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary text-sm py-2"><Save size={14} /> Save Draft</button>
-          <button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary text-sm py-2">Publish Product →</button>
-        </div>
-      </div>
+      </section>
 
       {message && <div className={`${saved ? "bg-green-50 border-green-200 text-green-700" : "bg-yellow-50 border-yellow-200 text-yellow-900"} border rounded-xl px-4 py-3 text-sm font-display font-700`}>{message}</div>}
 
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
-        Phase 8: product edits now save to Neon/PostgreSQL. File upload API is VPS-ready, but Vercel cannot write directly to the VPS static folder unless a VPS upload receiver/local deployment is configured; image/document URL fields work now.
-      </div>
-
-      <div className="flex border-b border-gray-200 overflow-x-auto">
-        {tabs.map((item) => (
-          <button key={item.id} onClick={() => setTab(item.id)} className={`px-5 py-3 text-sm font-display font-700 whitespace-nowrap border-b-2 ${tab === item.id ? "border-accent text-accent" : "border-transparent text-gray-500 hover:text-navy-950"}`}>{item.label}</button>
+      <section className="grid md:grid-cols-6 gap-3">
+        {editorChecks.map((item) => (
+          <div key={item.label} className={`rounded-xl border p-3 ${item.ok ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+            <div className="flex items-center gap-2">
+              {item.ok ? <CheckCircle2 size={15} className="text-green-700" /> : <AlertTriangle size={15} className="text-amber-700" />}
+              <p className={`font-display font-900 text-xs ${item.ok ? "text-green-800" : "text-amber-800"}`}>{item.label}</p>
+            </div>
+          </div>
         ))}
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[11px] text-gray-400 uppercase tracking-widest">Ready</p>
+          <p className="font-display font-900 text-navy-950 mt-1">{readyCount}/{editorChecks.length}</p>
+        </div>
+      </section>
+
+      <div className="bg-white border border-gray-200 rounded-2xl p-2 overflow-x-auto shadow-sm">
+        <div className="flex gap-1 min-w-max">
+          {tabs.map((item) => (
+            <button key={item.id} onClick={() => setTab(item.id)} className={`px-4 py-2.5 text-sm font-display font-800 whitespace-nowrap rounded-xl transition-colors ${tab === item.id ? "bg-[#2D4F7A] text-white shadow-sm" : "text-gray-500 hover:bg-slate-50 hover:text-navy-950"}`}>{item.label}</button>
+          ))}
+        </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
         {tab === "basic" && (
           <div className="grid lg:grid-cols-2 gap-5">
             <div><label className="label">SKU</label><input value={product.sku} onChange={(e) => update("sku", e.target.value)} className="input font-mono" /></div>
@@ -409,7 +434,10 @@ export default function ProductEditor({ mode, productId }: Props) {
         )}
       </div>
 
-      <div className="flex justify-between items-center"><Link href="/admin/products" className="btn-secondary">Cancel</Link><div className="flex gap-2"><button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary"><Save size={14} /> Save Draft</button><button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary">Save & Publish</button></div></div>
+      <div className="sticky bottom-4 z-20 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur p-3 shadow-2xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs text-gray-500"><span className="font-display font-900 text-navy-950">{readyCount}/{editorChecks.length}</span> launch fields complete · save as draft if still checking images, price or content.</div>
+        <div className="flex flex-wrap gap-2"><Link href="/admin/products" className="btn-secondary">Cancel</Link><button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary"><Save size={14} /> Save draft</button><button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary">Save & publish</button></div>
+      </div>
     </div>
   );
 }

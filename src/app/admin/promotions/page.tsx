@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, CheckCircle2, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, Eye, Pencil, Plus, Trash2 } from "lucide-react";
 
 type ProductOption = { id: string; title: string; sku: string; brand?: string | null; manufacturer?: string | null; category?: string | null; categorySlug?: string | null };
 type CategoryOption = { slug: string; label: string };
@@ -117,6 +117,17 @@ export default function PromotionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const activeCount = useMemo(() => promotions.filter((item) => item.isActive).length, [promotions]);
+  const visibleCount = useMemo(() => promotions.filter((item) => item.showOnHomepage || item.showOnShop).length, [promotions]);
+  const draftStateLabel = form.isActive ? "Active at checkout" : "Draft / inactive";
+  const placementLabel = [form.showOnHomepage ? "Homepage" : "", form.showOnShop ? "Shop" : ""].filter(Boolean).join(" + ") || "Not public";
+  const ruleSummary = [
+    form.includeAllProducts ? "all products" : `${form.includeProductIds.length} product include rule(s)`,
+    form.excludeProductIds.length ? `${form.excludeProductIds.length} product exclusion(s)` : "",
+    form.includeAllCategories ? "all categories" : `${form.includeCategorySlugs.length} category include rule(s)`,
+    form.excludeCategorySlugs.length ? `${form.excludeCategorySlugs.length} category exclusion(s)` : "",
+    form.includeAllBrands ? "all brands" : `${form.includeBrands.length} brand include rule(s)`,
+    form.excludeBrands.length ? `${form.excludeBrands.length} brand exclusion(s)` : "",
+  ].filter(Boolean).join(" · ");
 
   async function load() {
     setLoading(true);
@@ -284,19 +295,49 @@ export default function PromotionsPage() {
           <h1 className="font-display font-900 text-3xl text-navy-950">Promotions</h1>
           <p className="text-sm text-gray-500 mt-1">Create controlled checkout promotion codes. All discounts are recalculated server-side before Stripe checkout.</p>
         </div>
-        <div className="grid grid-cols-2 gap-3 min-w-[260px]">
-          <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Total codes</p><p className="font-display font-900 text-2xl text-navy-950">{promotions.length}</p></div>
+        <div className="grid grid-cols-3 gap-3 min-w-[360px]">
+          <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Total</p><p className="font-display font-900 text-2xl text-navy-950">{promotions.length}</p></div>
           <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Active</p><p className="font-display font-900 text-2xl text-green-700">{activeCount}</p></div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Public banners</p><p className="font-display font-900 text-2xl text-amber-700">{visibleCount}</p></div>
         </div>
       </div>
 
       {message ? <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl p-4 text-sm flex gap-2"><CheckCircle2 size={16} />{message}</div> : null}
       {error ? <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm flex gap-2"><AlertTriangle size={16} />{error}</div> : null}
 
+      <section className="grid md:grid-cols-4 gap-3">
+        {[
+          ["1", "Offer", form.type === "PERCENTAGE" ? `${form.value || 0}% discount` : form.type === "FIXED_AMOUNT" ? `£${form.value || 0} discount` : "Free shipping"],
+          ["2", "Visibility", placementLabel],
+          ["3", "Eligibility", ruleSummary || "All products, categories and brands"],
+          ["4", "Status", draftStateLabel],
+        ].map(([step, label, value]) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-[11px] font-900 uppercase tracking-widest text-accent">Step {step}</p>
+            <p className="font-display font-800 text-sm text-navy-950 mt-1">{label}</p>
+            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{value}</p>
+          </div>
+        ))}
+      </section>
+
       <form onSubmit={save} className="bg-white border border-gray-200 rounded-2xl p-6 space-y-5">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="font-display font-800 text-xl text-navy-950">{form.id ? "Edit promotion" : "Create promotion"}</h2>
-          {form.id ? <button type="button" onClick={() => setForm(emptyForm)} className="btn-secondary">Cancel edit</button> : null}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-display font-800 text-xl text-navy-950">{form.id ? "Edit promotion" : "Create promotion"}</h2>
+            <p className="text-xs text-gray-500 mt-1">Work left to right: offer details, public visibility, then eligibility rules.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {form.code ? <button type="button" onClick={() => navigator.clipboard?.writeText(form.code)} className="btn-secondary text-xs py-2"><Copy size={13} /> Copy code</button> : null}
+            {form.id ? <button type="button" onClick={() => setForm(emptyForm)} className="btn-secondary text-xs py-2">Cancel edit</button> : null}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] font-900 uppercase tracking-widest text-amber-700">Customer-facing preview</p>
+            <p className="font-display font-900 text-lg text-navy-950 mt-1">{form.bannerText || form.name || "Promotion banner text appears here"}</p>
+            <p className="text-sm text-amber-900 mt-1">{form.code ? `Code: ${form.code}` : "Add a checkout code to show the customer what to copy."} · {placementLabel}</p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs font-900 text-navy-950"><Eye size={14} /> {draftStateLabel}</span>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-4">

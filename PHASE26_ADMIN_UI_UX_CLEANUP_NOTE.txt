@@ -1,0 +1,85 @@
+Phase 26 — Admin UI/UX cleanup for Promotions, Custom Email, eBay Sync and Product Editor
+
+Context:
+The user confirmed the remaining audit findings are valid and asked for admin panel UI improvements, specifically:
+- Promotions
+- Custom email
+- eBay sync
+- Product editor
+
+This phase intentionally improves usability/design cleanliness without rebuilding the underlying systems.
+
+Implemented:
+
+1. Custom email broadcast UI
+- Rebuilt /admin/marketing/broadcast layout into a cleaner two-column editor + live preview.
+- Added quick templates:
+  - New stock arrival
+  - Sourcing support
+  - Customer portal reminder
+- Added CTA button label and CTA URL fields.
+- Preview now shows realistic token replacements and a customer-facing CTA button.
+- Updated wording to reflect that CTA buttons are enabled for launch.
+- Broadcast POST payload now sends ctaLabel and ctaUrl.
+
+2. Broadcast email send behaviour
+- /api/marketing/broadcast now renders CTA buttons using shared emailButton() when ctaLabel/ctaUrl are supplied.
+- Keeps unsubscribe footer and List-Unsubscribe headers.
+
+3. Email automation preview/send CTA consistency
+- src/lib/emailAutomations.ts now renders CTA buttons in actual automation emails when rule.ctaLabel and rule.ctaUrl are configured.
+- /admin/marketing preview no longer says email action buttons are disabled; it previews the configured CTA button.
+
+4. Promotions page UI
+- Added workflow step cards for offer, visibility, eligibility and status.
+- Added public/customer-facing preview panel inside the promotion editor.
+- Added visible stats for total, active and public-banner promotions.
+- Added copy-code action for promotion code.
+- Kept existing eligibility targeting logic intact.
+
+5. eBay sync page UI
+- Added clearer marketplace operations heading.
+- Added four-step workflow cards: connect, test, import, clean.
+- Improved sync status cards with purpose labels.
+- Moved parked background-removal controls into a collapsed details section to reduce visual clutter.
+- Simplified sync guidance into smaller operator-guidance cards.
+- Kept all existing eBay sync logic and API routes intact.
+
+6. Product editor UI
+- Replaced stale Phase 8 message with a launch-readiness checklist:
+  - Title
+  - SKU
+  - Category
+  - Image
+  - Price/POA
+- Upgraded the header to a cleaner operational editor card.
+- Reworked tab navigation into rounded pill-style tabs.
+- Added sticky bottom save bar with readiness count.
+- Kept existing product save, image, variant, SEO and AI assistant logic intact.
+
+No Prisma schema changes.
+No db push required.
+
+Testing after deploy:
+1. Admin > Promotions:
+   - create/edit promotion form still saves.
+   - eligibility include/exclude rules still work.
+   - copy code button works.
+   - public preview text updates from form.
+2. Admin > Marketing > Send custom email:
+   - quick templates populate subject/body/CTA.
+   - preview shows CTA button.
+   - broadcast sends with ctaLabel/ctaUrl.
+3. Admin > Marketing:
+   - automation preview shows CTA button when label+URL configured.
+   - automation email send still respects unsubscribe/list headers.
+4. Admin > eBay:
+   - save config still works.
+   - OAuth link still works.
+   - Test 10, First 50, Sync all, Repair, Refresh, Remap buttons still work.
+   - parked image cleanup controls remain available in collapsed section.
+5. Admin > Product editor:
+   - add/edit product page loads.
+   - all tabs switch correctly.
+   - save draft/publish still works.
+   - image/variant/document/content/SEO fields still work.

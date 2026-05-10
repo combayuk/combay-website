@@ -265,8 +265,9 @@ export default function EbayAdminPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display font-800 text-navy-950 text-2xl">eBay Inventory Sync</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Connect eBay and import products using one unified sync. The system tries the Sell Inventory API first, then falls back to active eBay listings where needed.</p>
+          <p className="font-mono text-xs tracking-widest uppercase text-gray-400 mb-2">Marketplace operations</p>
+          <h1 className="font-display font-900 text-navy-950 text-3xl">eBay inventory sync</h1>
+          <p className="text-gray-500 text-sm mt-1 max-w-3xl">Connect eBay, run safe batch imports, repair listing detail gaps and monitor large-inventory progress without leaving the admin panel.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => sync("test10")} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
@@ -295,41 +296,45 @@ export default function EbayAdminPage() {
 
       {message && <div className={`rounded-xl px-4 py-3 text-sm border ${message.toLowerCase().includes("fail") || message.toLowerCase().includes("could not") ? "bg-red-50 border-red-200 text-red-700" : "bg-green-50 border-green-200 text-green-800"}`}>{message}</div>}
 
-      <section className="grid sm:grid-cols-3 gap-3">
+      <section className="grid md:grid-cols-4 gap-3">
         {[
-          ["Test sync 10", passFail("test10")],
-          ["Sync first 50", passFail("first50")],
-          ["Sync all", passFail("all")],
-        ].map(([label, value]) => (
-          <div key={label} className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-400 uppercase tracking-widest">Since speed patch</p>
-            <p className="font-display font-800 text-navy-950 mt-1">{label}</p>
-            <p className="text-sm text-gray-500 mt-1">Pass / fail: <span className="font-display font-800 text-navy-950">{value}</span></p>
+          ["1", "Connect", connected ? "OAuth token saved" : "Save keys + connect OAuth"],
+          ["2", "Test", "Run first 10 before any larger import"],
+          ["3", "Import", "Use first 50, then resumable sync all"],
+          ["4", "Clean", "Repair missing details and remap categories"],
+        ].map(([step, title, copy]) => (
+          <div key={title} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[11px] font-900 uppercase tracking-widest text-accent">Step {step}</p>
+            <p className="font-display font-900 text-sm text-navy-950 mt-1">{title}</p>
+            <p className="text-xs text-gray-500 mt-1">{copy}</p>
           </div>
         ))}
       </section>
 
-      <section className="bg-slate-50 border border-slate-200 rounded-xl p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="font-display font-800 text-navy-950 text-lg">Image background removal parked for V2</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              The bulk background-removal worker remains in the codebase but is intentionally inactive after quality testing. Original eBay images remain live.
-            </p>
-            <p className="text-xs text-gray-500 mt-2">
-              Use Park old V2 jobs to hide low-quality review/failed background-removal jobs. Use Delete parked records after parking to remove those processed-output references from the database. Original product images remain live. Actual generated files on the VPS can be removed with the cleanup script in scripts/image-worker.
-            </p>
+      <section className="grid sm:grid-cols-3 gap-3">
+        {[
+          ["Test sync 10", passFail("test10"), "Quick sanity check"],
+          ["Sync first 50", passFail("first50"), "Mapping/detail review"],
+          ["Sync all", passFail("all"), "Resumable full import"],
+        ].map(([label, value, note]) => (
+          <div key={label} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+            <p className="text-xs text-gray-400 uppercase tracking-widest">{note}</p>
+            <p className="font-display font-900 text-navy-950 mt-1">{label}</p>
+            <p className="text-sm text-gray-500 mt-1">Pass / fail: <span className="font-display font-900 text-navy-950">{value}</span></p>
           </div>
+        ))}
+      </section>
+
+      <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <summary className="cursor-pointer font-display font-900 text-sm text-navy-950">Image background removal is parked for V2</summary>
+        <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-xs text-gray-500 max-w-3xl">The worker remains in the codebase but is inactive after quality testing. Original eBay images remain live. Use these cleanup actions only if old test jobs reappear.</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={parkImageJobsForV2} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
-              <RefreshCw size={14} className={syncing === "backgrounds" ? "animate-spin" : ""} /> Park old V2 jobs
-            </button>
-            <button type="button" onClick={deleteParkedImageRecords} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
-              Delete parked records
-            </button>
+            <button type="button" onClick={parkImageJobsForV2} disabled={!!syncing} className="btn-secondary text-xs py-2 disabled:opacity-50"><RefreshCw size={13} className={syncing === "backgrounds" ? "animate-spin" : ""} /> Park old jobs</button>
+            <button type="button" onClick={deleteParkedImageRecords} disabled={!!syncing} className="btn-secondary text-xs py-2 disabled:opacity-50">Delete parked records</button>
           </div>
         </div>
-      </section>
+      </details>
 
       {syncProgress ? (
         <section className="bg-white border border-gray-200 rounded-xl p-5">
@@ -431,14 +436,20 @@ export default function EbayAdminPage() {
         </section>
 
         <aside className="bg-white border border-gray-200 rounded-xl p-5 h-fit">
-          <h2 className="font-display font-800 text-navy-950 text-lg mb-3">Sync behaviour</h2>
-          <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
-            <p>The sync still uses one unified engine: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
-            <p>Use <strong>Test sync 10</strong> before a full import. Then use <strong>Sync first 50</strong> to check mapping, descriptions and images before running all listings.</p>
-            <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
-            <p><strong>Repair missing details</strong> scans all imported eBay products, then repairs shallow records that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories. It repairs a safe batch at a time; run again if the message says products remain queued.</p><p><strong>Refresh categories/overviews</strong> remaps eBay imports into the closest website category and rebuilds shorter, more precise overview text. It processes a safe batch at a time.</p><p><strong>Remap categories only</strong> does not call eBay. It quickly reassigns products into the public Combay master taxonomy and clears unused noisy marketplace category records.</p>
-            <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
-            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p><p><strong>Image background removal is parked for V2.</strong> The queue/worker infrastructure remains in the codebase, but bulk background removal is disabled in the admin UI because the first quality test was not acceptable for industrial/eBay source photos.</p>
+          <h2 className="font-display font-900 text-navy-950 text-lg mb-3">Operator guidance</h2>
+          <div className="space-y-2 text-sm text-gray-600">
+            {[
+              ["Unified engine", "Sell Inventory API first, Active Listings fallback second."],
+              ["Safe testing", "Run Test sync 10, then first 50, then Sync all."],
+              ["Large inventory", "Sync all runs in safe 50-listing batches and resumes from saved page."],
+              ["Cleanup", "Repair missing details and remap categories are safe maintenance actions."],
+              ["Protection", "Sync-excluded products are skipped; ended stock is kept, not deleted."],
+            ].map(([title, copy]) => (
+              <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="font-display font-900 text-navy-950 text-xs">{title}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{copy}</p>
+              </div>
+            ))}
           </div>
           <div className="border-t border-gray-100 mt-4 pt-4 text-xs text-gray-400 space-y-1">
             <p>Last sync: {config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"}</p>
