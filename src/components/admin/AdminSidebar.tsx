@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound, MessageSquare, RefreshCw, Sparkles, Mail } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound, MessageSquare, RefreshCw, Sparkles, Mail, ClipboardCheck } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 const NAV = [
@@ -20,6 +20,7 @@ const NAV = [
   { href:"/admin/promotions", label:"Promotions",        icon:<Tag size={15}/> },
   { href:"/admin/marketing",  label:"Email automation",   icon:<Mail size={15}/> },
   { href:"/admin/marketing/broadcast", label:"Send custom email", icon:<Mail size={15}/> },
+  { href:"/admin/qa",        label:"Launch QA",          icon:<ClipboardCheck size={15}/> },
 ];
 
 export default function AdminSidebar() {

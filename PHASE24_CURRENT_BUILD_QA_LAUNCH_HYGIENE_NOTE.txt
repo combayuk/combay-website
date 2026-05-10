@@ -1,0 +1,32 @@
+Phase 24 — Current build QA and launch hygiene
+
+Purpose:
+This phase is intentionally not a feature rebuild. It addresses the continuity issue by cleaning stale/demo admin wording and adding an explicit launch QA workflow based on the current codebase.
+
+Implemented:
+- Replaced the old Admin Dashboard content that contained stale/demo copy such as "Phase 3 checkout demo".
+- Removed browser-only demo settings from the dashboard UI. Production secrets/config should be managed through dedicated admin modules and Vercel environment variables.
+- Added Admin > Launch QA page:
+  /admin/qa
+- Added Launch QA link to the admin sidebar.
+- Added docs/launch-smoke-test-checklist.md for repo-level reference.
+- Removed unused legacy component files from the patch archive:
+  src/components/TopBar.tsx
+  src/components/Navigation.tsx
+  These were not referenced by current imports; active components are under src/components/layout/.
+
+No Prisma schema change.
+No db push required.
+
+Important local deletion instruction:
+Tar extraction will not delete tracked files from the local git repo. After extraction, run:
+  git rm -f src/components/TopBar.tsx src/components/Navigation.tsx
+If Git says a file does not exist, continue.
+
+Testing:
+1. Deploy.
+2. Open /admin and confirm no demo/stale settings panels appear.
+3. Open /admin/qa and review the checklist.
+4. Confirm admin sidebar includes Launch QA.
+5. Confirm public TopBar and Navigation still render from src/components/layout/.
+6. Run npm run build or allow Vercel to build.
