@@ -1,0 +1,65 @@
+Phase 26.2K — Admin-wide containment hardening
+
+Context:
+Recent admin UI issues were caused by table/action overflow, cropped manage buttons, long text escaping cells, and repeated horizontal scrolling. This phase adds admin-wide layout guardrails so future pages are less likely to break, while keeping the existing page-specific compact layouts.
+
+Implemented:
+1. Global admin containment CSS
+   File: src/app/globals.css
+   Added admin guardrail classes:
+   - .admin-main
+   - .admin-page
+   - .admin-text-clip
+   - .admin-text-break
+   - .admin-actions
+   - .admin-drawer
+   Also hardened admin-page descendants:
+   - min-width containment
+   - max-width table containment
+   - overflow-wrap for table cells
+   - table-fixed behaviour for admin-table
+   - smaller default admin-table cell padding
+
+2. Admin layout hardening
+   File: src/app/admin/layout.tsx
+   - Added overflow-hidden to root admin shell.
+   - Added admin-main class to the scroll container.
+   - Added admin-page class to the main content wrapper.
+   - Reduced mobile padding while retaining desktop padding.
+
+3. Sidebar containment
+   File: src/components/admin/AdminSidebar.tsx
+   - Fixed sidebar width.
+   - Reduced nav row height/font size slightly.
+   - Made nav labels truncate instead of wrapping into content width.
+   - Kept all navigation links.
+
+4. Remaining admin overflow cleanup
+   Conservative containment pass on:
+   - src/app/admin/requests/page.tsx
+   - src/app/admin/qa/page.tsx
+   - src/app/admin/products/ai/page.tsx
+   - src/app/admin/ebay/page.tsx
+   - src/app/admin/marketing/page.tsx
+   - src/app/admin/promotions/page.tsx
+   Removed remaining overflow-x-auto/min-width markers in admin pages where possible.
+
+Preserved:
+- All admin routes and backend behaviour.
+- Existing compact table work from Products, Orders, Leads, Invoices, Support, Users, Returns.
+- Sidebar navigation.
+- Admin auth guard.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Deploy and confirm build passes.
+2. Admin > Products, Orders, Leads, Invoices, Support, Users, Returns:
+   - confirm no unexpected horizontal scroll
+   - confirm action buttons are not cropped
+   - confirm long text stays inside cells/cards
+3. Admin > eBay, Promotions, Marketing, Product AI, Requests, QA:
+   - confirm pages still render correctly
+   - confirm tabs/action rows remain usable
+4. Confirm sidebar labels do not wrap into the content area.

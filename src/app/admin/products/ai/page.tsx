@@ -107,8 +107,8 @@ export default function ProductAiPage() {
           {result.preview?.length ? (
             <div>
               <h2 className="font-display font-700 text-navy-950 mb-2">Next products in queue</h2>
-              <div className="overflow-x-auto border border-gray-100 rounded-lg">
-                <table className="w-full admin-table"><thead><tr><th>SKU</th><th>Product</th><th>Category</th><th>Open</th></tr></thead><tbody>
+              <div className="overflow-hidden border border-gray-100 rounded-lg">
+                <table className="w-full table-fixed admin-table"><thead><tr><th>SKU</th><th>Product</th><th>Category</th><th>Open</th></tr></thead><tbody>
                   {result.preview.map((product) => <tr key={product.id}><td className="font-mono text-xs text-accent">{product.sku}</td><td>{product.title}</td><td>{product.category}</td><td><Link className="text-accent text-sm" href={`/admin/products/${product.id}`}>Edit</Link></td></tr>)}
                 </tbody></table>
               </div>

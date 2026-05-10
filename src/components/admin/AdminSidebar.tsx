@@ -26,7 +26,7 @@ const NAV = [
 export default function AdminSidebar() {
   const path = usePathname();
   return (
-    <aside className="w-54 bg-navy-950 text-white flex flex-col flex-shrink-0">
+    <aside className="w-56 bg-navy-950 text-white flex flex-col flex-shrink-0">
       <div className="px-4 py-5 border-b border-white/8">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-accent rounded-md flex items-center justify-center">
@@ -43,9 +43,9 @@ export default function AdminSidebar() {
           const active = n.href==="/admin" ? path==="/admin" : path.startsWith(n.href);
           return (
             <Link key={n.href} href={n.href}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-display font-600 transition-all ${
+              className={`flex min-w-0 items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-display font-700 transition-all ${
                 active ? "bg-white/10 text-white border-l-2 border-accent pl-2.5" : "text-white/50 border-l-2 border-transparent hover:bg-white/5 hover:text-white"}`}>
-              <span className={active?"text-accent":""}>{n.icon}</span>{n.label}
+              <span className={active?"text-accent shrink-0":"shrink-0"}>{n.icon}</span><span className="truncate">{n.label}</span>
             </Link>
           );
         })}

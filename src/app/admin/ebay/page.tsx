@@ -481,7 +481,7 @@ export default function EbayAdminPage() {
               <h2 className="font-display text-lg font-900 text-navy-950">Recent sync runs</h2>
               <p className="text-xs text-gray-500">Compact log of sync, repair and remap operations.</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
                   <tr><th className="px-4 py-2">Started</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Mode/page</th><th className="px-4 py-2">Imported</th><th className="px-4 py-2">Updated</th><th className="px-4 py-2">Skipped</th><th className="px-4 py-2">Records</th><th className="px-4 py-2">Message / errors</th></tr>

@@ -83,7 +83,7 @@ export default function AdminRequests() {
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display font-800 text-navy-900 text-2xl">Requests</h1>
-          <p className="text-sm text-gray-500 mt-1">{description}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{description}</p>
         </div>
         <span className="badge bg-blue-50 text-blue-700 border-blue-200">Preview mode</span>
       </div>
@@ -101,7 +101,7 @@ export default function AdminRequests() {
         Phase 4 connects all request forms to API routes and reference generation. Until PostgreSQL/email is connected, this admin table shows preview/API data rather than persistent live submissions.
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         {loading ? (
           <div className="p-8 text-sm text-gray-500">Loading requests...</div>
         ) : error ? (
@@ -109,7 +109,7 @@ export default function AdminRequests() {
         ) : rows.length === 0 ? (
           <div className="p-8 text-sm text-gray-500">No preview requests found for this category.</div>
         ) : (
-          <table className="w-full admin-table">
+          <table className="w-full table-fixed admin-table">
             <thead>
               <tr><th>ID</th><th>Date</th><th>Customer</th><th>Subject / Item</th><th>Message</th><th>Status</th><th>Actions</th></tr>
             </thead>

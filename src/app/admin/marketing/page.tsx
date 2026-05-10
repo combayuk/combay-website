@@ -460,7 +460,7 @@ export default function MarketingAutomationPage() {
           <button type="button" onClick={() => setForm(emptyForm)} className="btn-secondary py-2 text-xs"><Plus size={14} /> New</button>
         </div>
         {loading ? <div className="p-5 text-sm text-gray-500">Loading automations...</div> : rules.length === 0 ? <div className="p-6 text-center text-sm text-gray-400">No custom rules yet.</div> : (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
                 <tr><th className="px-4 py-2">Rule</th><th className="px-4 py-2">Trigger</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Sent/failed</th><th className="px-4 py-2 text-right">Actions</th></tr>

@@ -472,7 +472,7 @@ export default function PromotionsPage() {
         </div>
 
         {loading ? <div className="p-6 text-sm text-gray-500">Loading promotions…</div> : filteredPromotions.length === 0 ? <div className="p-8 text-center text-sm text-gray-400">No promotions match the current filters.</div> : (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
                 <tr>
