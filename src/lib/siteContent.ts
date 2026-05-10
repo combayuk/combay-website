@@ -1,18 +1,21 @@
 import { prisma, withDatabase } from "@/lib/db";
+import { PUBLIC_CATEGORY_GROUPS } from "@/lib/categoryTaxonomy";
 
 export type SiteHeroSlide = { eyebrow:string; heading:string; accent:string; body:string; cta1Label:string; cta1Href:string; cta2Label:string; cta2Href:string; stat1Value:string; stat1Label:string; stat2Value:string; stat2Label:string; stat3Value:string; stat3Label:string; imageUrl:string; backgroundImageUrl:string };
 export type CmsBlock = { icon:string; title:string; subtitle:string; body:string; imageUrl:string; linkLabel:string; linkHref:string; blockType:string; width:string; align:string; background:string; animation:string };
 export type CmsStep = { number:string; title:string; body:string; imageUrl:string };
 export type CmsPage = { eyebrow:string; heading:string; accent:string; body:string; backgroundImageUrl:string; heroImageUrl:string; primaryLabel:string; primaryHref:string; secondaryLabel:string; secondaryHref:string; sectionEyebrow:string; sectionHeading:string; sectionBody:string; blocks:CmsBlock[]; steps:CmsStep[]; ctaHeading:string; ctaBody:string; ctaPrimaryLabel:string; ctaPrimaryHref:string; ctaSecondaryLabel:string; ctaSecondaryHref:string; sectionOrder:string[]; quoteImageUrl:string; quoteName:string; quoteDesignation:string; quoteText:string; proofPoints:string[] };
 export type FaqItem = { question:string; answer:string };
-export type CmsTextStyle = { fontSize?:string; fontFamily?:string; fontWeight?:string; italic?:boolean; colour?:string };
-export type VisualWidget = { id:string; type:string; title?:string; subtitle?:string; body?:string; text?:string; textKind?:"heading"|"subheading"|"paragraph"|"caption"; icon?:string; imageUrl?:string; videoUrl?:string; thumbnailUrl?:string; caption?:string; url?:string; linkLabel?:string; promoCode?:string; copyCodeEnabled?:boolean; openInNewTab?:boolean; buttonStyle?:"primary"|"secondary"|"outline"; autoplay?:boolean; muted?:boolean; loop?:boolean; width?:string; align?:"left"|"center"|"right"; height?:number; thickness?:number; colour?:string; background?:string; marginTop?:number; marginBottom?:number; columns?:number; sectionVariant?:"plain"|"soft"|"dark"|"accent"; visible?:boolean; fontSize?:string; fontFamily?:string; fontWeight?:string; italic?:boolean; textColour?:string };
+export type CmsTextStyle = { fontSize?:string; fontFamily?:string; fontWeight?:string; italic?:boolean; colour?:string; align?: "left" | "center" | "right"; lineHeight?: string; textKind?: "heading" | "subheading" | "paragraph" | "caption" };
+export type VisualWidget = { id:string; type:string; title?:string; subtitle?:string; body?:string; text?:string; textKind?:"heading"|"subheading"|"paragraph"|"caption"; icon?:string; imageUrl?:string; videoUrl?:string; thumbnailUrl?:string; caption?:string; url?:string; linkLabel?:string; promoCode?:string; copyCodeEnabled?:boolean; openInNewTab?:boolean; buttonStyle?:"primary"|"secondary"|"outline"; autoplay?:boolean; muted?:boolean; loop?:boolean; width?:string; align?:"left"|"center"|"right"; height?:number; thickness?:number; colour?:string; background?:string; marginTop?:number; marginBottom?:number; columns?:number; sectionVariant?:"plain"|"soft"|"dark"|"accent"; visible?:boolean; fontSize?:string; fontFamily?:string; fontWeight?:string; italic?:boolean; lineHeight?:string; textColour?:string };
 export type FaqGroup = { key:string; label:string; items:FaqItem[] };
+export type CmsCategory = { label:string; slug:string; description:string; image:string; icon:string; iconType:"library"|"image"; order:number; visible:boolean };
 export type PolicyPageContent = { eyebrow:string; heading:string; lastUpdated:string; body:string; footer:string };
 export type SiteContent = {
   hiddenSections?: Record<string, string[]>;
   visualWidgets?: Record<string, VisualWidget[]>;
   textStyles?: Record<string, CmsTextStyle>;
+  categories?: CmsCategory[];
   policies: { terms:PolicyPageContent; privacy:PolicyPageContent; returns:PolicyPageContent; warranty:PolicyPageContent; payment:PolicyPageContent };
   heroSlides: SiteHeroSlide[];
   trust: { eyebrow:string; heading:string; accent:string; clients:string[]; backgroundImageUrl:string };
@@ -26,10 +29,33 @@ export const SITE_CONTENT_KEY = "site.content.v1";
 const block=(icon:string,title:string,subtitle:string,body:string,linkLabel="",linkHref=""):CmsBlock=>({icon,title,subtitle,body,imageUrl:"",linkLabel,linkHref,blockType:"icon",width:"quarter",align:"left",background:"white",animation:"none"});
 const step=(number:string,title:string,body:string):CmsStep=>({number,title,body,imageUrl:""});
 const page=(p:Partial<CmsPage>):CmsPage=>({ eyebrow:"",heading:"",accent:"",body:"",backgroundImageUrl:"",heroImageUrl:"",primaryLabel:"",primaryHref:"#",secondaryLabel:"",secondaryHref:"#",sectionEyebrow:"",sectionHeading:"",sectionBody:"",blocks:[],steps:[],ctaHeading:"",ctaBody:"",ctaPrimaryLabel:"",ctaPrimaryHref:"#",ctaSecondaryLabel:"",ctaSecondaryHref:"#",sectionOrder:["hero","contactBar","content","process","formOrCta"],quoteImageUrl:"/images/about/industrial-supply-desk.svg",quoteName:"Combay Team",quoteDesignation:"Industrial equipment supply, repair and asset recovery",quoteText:"Combay was built for maintenance and procurement teams who need practical answers: is the item available, what condition is it in, can it be repaired, and how quickly can it move?",proofPoints:["Tested stock","Warranty-backed supply","Repair-led asset recovery"],...p });
+const libraryIconForCategory = (slug: string) => {
+  if (slug.includes("automation")) return "⚙️";
+  if (slug.includes("electrical")) return "🔌";
+  if (slug.includes("lab")) return "🔬";
+  if (slug.includes("test")) return "📟";
+  if (slug.includes("it")) return "🖧";
+  if (slug.includes("broadcast") || slug.includes("av")) return "🎥";
+  if (slug.includes("process") || slug.includes("workshop")) return "🤖";
+  return "▣";
+};
+const slugifyCmsCategory = (value: string) => String(value || "category").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "category";
+const defaultCmsCategories = (): CmsCategory[] => PUBLIC_CATEGORY_GROUPS.map((group, index) => ({
+  label: group.label,
+  slug: group.slug,
+  description: group.subcategories?.length ? `${group.subcategories.length} product groups` : "Stock category",
+  image: group.image,
+  icon: libraryIconForCategory(group.slug),
+  iconType: "image",
+  order: index,
+  visible: true,
+}));
+
 export const defaultSiteContent: SiteContent = {
   hiddenSections: {},
   visualWidgets: {},
   textStyles: {},
+  categories: defaultCmsCategories(),
   policies: {
     payment: { eyebrow:"Policies", heading:"Payment Policy", lastUpdated:"January 2025", body:"100% payment is required in advance prior to dispatch on all orders. Accepted methods: bank transfer (BACS/CHAPS), credit/debit card, PayPal (where available), and cash (in-person collection only). Credit accounts are available to businesses with a proven purchasing history. Contact info@combay.co.uk to apply.", footer:"For the full policy or questions, contact us at info@combay.co.uk." },
     privacy: { eyebrow:"Policies", heading:"Privacy Policy", lastUpdated:"January 2025", body:"We collect only the data necessary to process your order and provide our services. This includes name, email, phone, company, and delivery address. We do not sell your data to third parties. You may request deletion or access to your data by emailing info@combay.co.uk. We comply with UK GDPR.", footer:"For the full policy or questions, contact us at info@combay.co.uk." },
@@ -144,6 +170,12 @@ function mergeVisualWidget(i:any, fallbackIndex=0): VisualWidget {
     marginBottom: Number.isFinite(Number(i?.marginBottom)) ? Number(i.marginBottom) : 0,
     columns: Number.isFinite(Number(i?.columns)) ? Math.max(1, Math.min(4, Number(i.columns))) : (type === "section" ? 1 : undefined),
     sectionVariant: ["plain","soft","dark","accent"].includes(String(i?.sectionVariant)) ? i.sectionVariant : "plain",
+    fontSize: opt(i?.fontSize),
+    fontFamily: opt(i?.fontFamily),
+    fontWeight: opt(i?.fontWeight),
+    italic: Boolean(i?.italic),
+    lineHeight: opt(i?.lineHeight),
+    textColour: opt(i?.textColour),
     visible: i?.visible === false ? false : true,
   };
 }
@@ -161,7 +193,7 @@ function mergeVisualWidgets(raw:any): Record<string, VisualWidget[]> {
 function containsTestArtifact(value?: string): boolean {
   const textValue = String(value || "").trim().toLowerCase();
   if (!textValue) return false;
-  return ["new faq question", "new card", "video placeholder", "add the answer here"].some((needle) => textValue.includes(needle));
+  return ["lorem ipsum", "demo item", "test artifact", "placeholder only"].some((needle) => textValue.includes(needle));
 }
 
 function cleanBlocks(page: "home" | "about", pageData: CmsPage): CmsPage {
@@ -250,11 +282,41 @@ function cleanTextStyles(raw: any): Record<string, CmsTextStyle> {
     if (typeof item.fontFamily === "string") style.fontFamily = item.fontFamily.slice(0, 120);
     if (typeof item.fontWeight === "string") style.fontWeight = item.fontWeight.slice(0, 16);
     if (typeof item.colour === "string") style.colour = item.colour.slice(0, 32);
+    if (["left","center","right"].includes(String(item.align || ""))) style.align = item.align as CmsTextStyle["align"];
+    if (typeof item.lineHeight === "string") style.lineHeight = item.lineHeight.slice(0, 24);
+    if (["heading","subheading","paragraph","caption"].includes(String(item.textKind || ""))) style.textKind = item.textKind as CmsTextStyle["textKind"];
     if (typeof item.italic === "boolean") style.italic = item.italic;
     if (Object.keys(style).length) out[String(key).slice(0, 120)] = style;
   }
   return out;
 }
-export function normaliseSiteContent(input: unknown): SiteContent { const raw:any=typeof input==="object"&&input?input:{}; const f=defaultSiteContent; return { hiddenSections:hiddenSections(raw.hiddenSections), visualWidgets:cleanVisualWidgetsMap(mergeVisualWidgets(raw.visualWidgets)), textStyles:cleanTextStyles(raw.textStyles), policies:{terms:mergePolicy(raw.policies?.terms,f.policies.terms),privacy:mergePolicy(raw.policies?.privacy,f.policies.privacy),returns:mergePolicy(raw.policies?.returns,f.policies.returns),warranty:mergePolicy(raw.policies?.warranty,f.policies.warranty),payment:mergePolicy(raw.policies?.payment,f.policies.payment)}, heroSlides:f.heroSlides.map((x,i)=>mergeSlide(raw.heroSlides?.[i],x)), trust:{eyebrow:text(raw.trust?.eyebrow,f.trust.eyebrow),heading:text(raw.trust?.heading,f.trust.heading),accent:text(raw.trust?.accent,f.trust.accent),clients:Array.isArray(raw.trust?.clients)?raw.trust.clients.map((x:any)=>String(x||"").trim()).filter(Boolean).slice(0,40):f.trust.clients,backgroundImageUrl:opt(raw.trust?.backgroundImageUrl)||f.trust.backgroundImageUrl}, finalCta:{eyebrow:text(raw.finalCta?.eyebrow,f.finalCta.eyebrow),heading:text(raw.finalCta?.heading,f.finalCta.heading),body:text(raw.finalCta?.body,f.finalCta.body),primaryLabel:text(raw.finalCta?.primaryLabel,f.finalCta.primaryLabel),primaryHref:href(raw.finalCta?.primaryHref,f.finalCta.primaryHref),secondaryLabel:text(raw.finalCta?.secondaryLabel,f.finalCta.secondaryLabel),secondaryHref:href(raw.finalCta?.secondaryHref,f.finalCta.secondaryHref),tertiaryLabel:text(raw.finalCta?.tertiaryLabel,f.finalCta.tertiaryLabel),tertiaryHref:href(raw.finalCta?.tertiaryHref,f.finalCta.tertiaryHref),backgroundImageUrl:opt(raw.finalCta?.backgroundImageUrl)||f.finalCta.backgroundImageUrl}, contact:{salesEmail:text(raw.contact?.salesEmail,f.contact.salesEmail),infoEmail:text(raw.contact?.infoEmail,f.contact.infoEmail),phone:text(raw.contact?.phone,f.contact.phone),location:text(raw.contact?.location,f.contact.location),whatsapp:text(raw.contact?.whatsapp,f.contact.whatsapp),businessHours:text(raw.contact?.businessHours,f.contact.businessHours),mapEmbedUrl:text(raw.contact?.mapEmbedUrl,f.contact.mapEmbedUrl)}, footer:{description:text(raw.footer?.description,f.footer.description),backgroundImageUrl:opt(raw.footer?.backgroundImageUrl)||f.footer.backgroundImageUrl}, pages:{home:cleanBlocks("home", mergePage(raw.pages?.home,f.pages.home)),repair:mergePage(raw.pages?.repair,f.pages.repair),assetRecovery:mergePage(raw.pages?.assetRecovery,f.pages.assetRecovery),about:cleanBlocks("about", upgradeAboutPage(mergePage(raw.pages?.about,f.pages.about))),contact:mergePage(raw.pages?.contact,f.pages.contact)}, faq:{eyebrow:text(raw.faq?.eyebrow,f.faq.eyebrow),heading:text(raw.faq?.heading,f.faq.heading),body:text(raw.faq?.body,f.faq.body),backgroundImageUrl:opt(raw.faq?.backgroundImageUrl)||f.faq.backgroundImageUrl,groups:ensureFaqTabs(cleanFaqGroups(arr(raw.faq?.groups,f.faq.groups,mergeFaqGroup,12))),previewItems:cleanFaqItems(arr(raw.faq?.previewItems,f.faq.previewItems,mergeFaqItem,10)),ctaHeading:text(raw.faq?.ctaHeading,f.faq.ctaHeading),ctaBody:text(raw.faq?.ctaBody,f.faq.ctaBody),ctaLabel:text(raw.faq?.ctaLabel,f.faq.ctaLabel),ctaHref:href(raw.faq?.ctaHref,f.faq.ctaHref)} } }
+
+function cleanCategories(raw: any): CmsCategory[] {
+  const fallback = defaultSiteContent.categories || defaultCmsCategories();
+  const input = Array.isArray(raw) ? raw : fallback;
+  const seen = new Set<string>();
+  const out: CmsCategory[] = [];
+  input.forEach((item: any, index: number) => {
+    const label = text(item?.label, fallback[index]?.label || "New category");
+    const slugBase = slugifyCmsCategory(item?.slug || label);
+    let slug = slugBase;
+    let suffix = 2;
+    while (seen.has(slug)) { slug = `${slugBase}-${suffix}`; suffix += 1; }
+    seen.add(slug);
+    const iconType = item?.iconType === "library" ? "library" : "image";
+    out.push({
+      label,
+      slug,
+      description: opt(item?.description) || fallback[index]?.description || "Stock category",
+      image: opt(item?.image) || fallback[index]?.image || "/images/categories/real/plc-module.svg",
+      icon: opt(item?.icon) || fallback[index]?.icon || libraryIconForCategory(slug),
+      iconType,
+      order: Number.isFinite(Number(item?.order)) ? Number(item.order) : index,
+      visible: item?.visible === false ? false : true,
+    });
+  });
+  return out.sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).slice(0, 24).map((item, index) => ({ ...item, order: index }));
+}
+export function normaliseSiteContent(input: unknown): SiteContent { const raw:any=typeof input==="object"&&input?input:{}; const f=defaultSiteContent; return { hiddenSections:hiddenSections(raw.hiddenSections), visualWidgets:cleanVisualWidgetsMap(mergeVisualWidgets(raw.visualWidgets)), textStyles:cleanTextStyles(raw.textStyles), categories:cleanCategories(raw.categories), policies:{terms:mergePolicy(raw.policies?.terms,f.policies.terms),privacy:mergePolicy(raw.policies?.privacy,f.policies.privacy),returns:mergePolicy(raw.policies?.returns,f.policies.returns),warranty:mergePolicy(raw.policies?.warranty,f.policies.warranty),payment:mergePolicy(raw.policies?.payment,f.policies.payment)}, heroSlides:f.heroSlides.map((x,i)=>mergeSlide(raw.heroSlides?.[i],x)), trust:{eyebrow:text(raw.trust?.eyebrow,f.trust.eyebrow),heading:text(raw.trust?.heading,f.trust.heading),accent:text(raw.trust?.accent,f.trust.accent),clients:Array.isArray(raw.trust?.clients)?raw.trust.clients.map((x:any)=>String(x||"").trim()).filter(Boolean).slice(0,40):f.trust.clients,backgroundImageUrl:opt(raw.trust?.backgroundImageUrl)||f.trust.backgroundImageUrl}, finalCta:{eyebrow:text(raw.finalCta?.eyebrow,f.finalCta.eyebrow),heading:text(raw.finalCta?.heading,f.finalCta.heading),body:text(raw.finalCta?.body,f.finalCta.body),primaryLabel:text(raw.finalCta?.primaryLabel,f.finalCta.primaryLabel),primaryHref:href(raw.finalCta?.primaryHref,f.finalCta.primaryHref),secondaryLabel:text(raw.finalCta?.secondaryLabel,f.finalCta.secondaryLabel),secondaryHref:href(raw.finalCta?.secondaryHref,f.finalCta.secondaryHref),tertiaryLabel:text(raw.finalCta?.tertiaryLabel,f.finalCta.tertiaryLabel),tertiaryHref:href(raw.finalCta?.tertiaryHref,f.finalCta.tertiaryHref),backgroundImageUrl:opt(raw.finalCta?.backgroundImageUrl)||f.finalCta.backgroundImageUrl}, contact:{salesEmail:text(raw.contact?.salesEmail,f.contact.salesEmail),infoEmail:text(raw.contact?.infoEmail,f.contact.infoEmail),phone:text(raw.contact?.phone,f.contact.phone),location:text(raw.contact?.location,f.contact.location),whatsapp:text(raw.contact?.whatsapp,f.contact.whatsapp),businessHours:text(raw.contact?.businessHours,f.contact.businessHours),mapEmbedUrl:text(raw.contact?.mapEmbedUrl,f.contact.mapEmbedUrl)}, footer:{description:text(raw.footer?.description,f.footer.description),backgroundImageUrl:opt(raw.footer?.backgroundImageUrl)||f.footer.backgroundImageUrl}, pages:{home:cleanBlocks("home", mergePage(raw.pages?.home,f.pages.home)),repair:mergePage(raw.pages?.repair,f.pages.repair),assetRecovery:mergePage(raw.pages?.assetRecovery,f.pages.assetRecovery),about:cleanBlocks("about", upgradeAboutPage(mergePage(raw.pages?.about,f.pages.about))),contact:mergePage(raw.pages?.contact,f.pages.contact)}, faq:{eyebrow:text(raw.faq?.eyebrow,f.faq.eyebrow),heading:text(raw.faq?.heading,f.faq.heading),body:text(raw.faq?.body,f.faq.body),backgroundImageUrl:opt(raw.faq?.backgroundImageUrl)||f.faq.backgroundImageUrl,groups:ensureFaqTabs(cleanFaqGroups(arr(raw.faq?.groups,f.faq.groups,mergeFaqGroup,12))),previewItems:cleanFaqItems(arr(raw.faq?.previewItems,f.faq.previewItems,mergeFaqItem,10)),ctaHeading:text(raw.faq?.ctaHeading,f.faq.ctaHeading),ctaBody:text(raw.faq?.ctaBody,f.faq.ctaBody),ctaLabel:text(raw.faq?.ctaLabel,f.faq.ctaLabel),ctaHref:href(raw.faq?.ctaHref,f.faq.ctaHref)} } }
 export async function getSiteContent(): Promise<SiteContent> { const dbResult=await withDatabase(async()=>{ const row=await prisma.siteSetting.findUnique({where:{key:SITE_CONTENT_KEY}}); if(!row?.value) return defaultSiteContent; try{return normaliseSiteContent(JSON.parse(row.value))}catch{return defaultSiteContent} }); return dbResult.ok?dbResult.data:defaultSiteContent }
 export async function saveSiteContent(content: SiteContent): Promise<SiteContent> { const safe=normaliseSiteContent(content); await prisma.siteSetting.upsert({where:{key:SITE_CONTENT_KEY},update:{value:JSON.stringify(safe)},create:{key:SITE_CONTENT_KEY,value:JSON.stringify(safe)}}); return safe }

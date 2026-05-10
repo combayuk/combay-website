@@ -3,6 +3,7 @@ import "./globals.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SessionProvider from "@/components/SessionProvider";
+import PublicTextStyleApplier from "@/components/visual-cms/PublicTextStyleApplier";
 
 export const metadata: Metadata = {
   title: { default: "Combay — Industrial Equipment Specialists", template: "%s | Combay" },
@@ -22,6 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body>
         <SessionProvider session={session}>
+          <PublicTextStyleApplier />
           {children}
         </SessionProvider>
       </body>

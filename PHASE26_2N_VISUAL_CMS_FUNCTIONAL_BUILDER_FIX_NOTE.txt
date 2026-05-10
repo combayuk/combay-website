@@ -1,0 +1,144 @@
+Phase 26.2N — Visual CMS functional website-builder fix
+
+Context:
+The user reported that Visual CMS still did not behave like a real website builder and provided strict requirements:
+- PC/tablet/mobile and zoom toolbar text must not crop.
+- Text style controls must actually work and persist.
+- Category management must exist.
+- Category icons must be editable from an icon library or uploaded image.
+- Widgets must be placed where admin selects/drops them.
+- Widgets must persist and appear on the live site.
+- Non-editable areas must remain visible/locked.
+- CMS preview must remain close to the live website.
+
+Implemented:
+
+1. Device / screen toolbar fix
+File: src/components/admin/VisualCmsBuilder.tsx
+- Device selector widened.
+- Zoom selector widened.
+- Added explicit Fit Width (72%) option.
+- Kept 60%, 85%, and 100%.
+- Added better padding/line-height so PC / Tablet / Mobile and zoom labels display without cropping.
+
+2. Functional text styling
+Files:
+- src/components/admin/VisualCmsBuilder.tsx
+- src/lib/siteContent.ts
+- src/components/visual-cms/PublicTextStyleApplier.tsx
+- src/app/layout.tsx
+- src/app/globals.css
+
+Changes:
+- Expanded CmsTextStyle to support:
+  - font size
+  - font family
+  - font weight / bold
+  - italic
+  - colour
+  - alignment left/centre/right
+  - line height
+  - text type: heading/subheading/body/caption
+- Text style inspector now exposes only functional controls.
+- Changing a selected text style now applies immediately inside the Visual CMS iframe preview.
+- Added PublicTextStyleApplier mounted in root layout so saved CMS text styles apply on the live website after save.
+- Added live helper CSS for heading/subheading/caption text-kind styling.
+
+3. Category management
+Files:
+- src/lib/siteContent.ts
+- src/components/admin/VisualCmsBuilder.tsx
+- src/components/home/IndustryStrip.tsx
+- src/app/page.tsx
+
+Changes:
+- Added CmsCategory type and categories[] into CMS content.
+- Default categories are seeded from PUBLIC_CATEGORY_GROUPS.
+- Categories are normalised and persisted through /api/admin/content.
+- Visual CMS now has a Categories tab.
+- Admin can:
+  - add new category
+  - edit name
+  - edit slug
+  - edit description
+  - show/hide category
+  - reorder categories up/down
+  - delete category
+  - select internal icon-library icon
+  - upload image/icon
+- Homepage IndustryStrip now renders CMS-managed categories from site content.
+- Uploaded category images/icons render object-contain inside the existing Combay category icon frame to avoid stretching/layout breakage.
+
+4. Category icon management
+- Added internal icon library:
+  - ⚙️ 🔌 🔬 📟 🖧 🎥 🤖 📦 🔩 🧪 🛠 🏭 💡 📡 🔋 🖥
+- Category editor supports iconType:
+  - library
+  - image/uploaded icon
+- Image/icon preview updates in Visual CMS panel.
+- Saved category/icon changes appear on homepage category strip.
+
+5. Widget functionality and persistence
+Files:
+- src/components/admin/VisualCmsBuilder.tsx
+- src/lib/siteContent.ts
+- src/components/visual-cms/VisualWidgetZone.tsx
+
+Changes:
+- Stopped normaliser deleting legitimate newly-added widgets such as New card, FAQ and video placeholder.
+- Widget inspector changes now auto-save and refresh preview, so widget controls are not fake/draft-only.
+- Widget move up/down controls added.
+- Existing duplicate/delete controls retained.
+- Widget text style now includes line-height support.
+- Widget text style fields continue to persist through CMS visualWidgets.
+- Existing drag/drop zone logic is preserved.
+
+6. Native category canvas collection support
+- Homepage category strip now has data-vcms-collection="categories".
+- Category cards expose data-vcms-item="categories".
+- Visual CMS injected controls can add/delete/duplicate category items when targeting that collection.
+
+7. Locked/non-editable areas
+- Injected editor CSS now includes a compact locked label style.
+- Protected checkout/cart/payment/system-linked elements receive a locked marker in CMS mode.
+- Existing visible-only overlay for non-editable pages remains.
+
+Preserved:
+- all existing CMS content load/save API logic
+- live iframe preview
+- page selector
+- widget tab
+- style tab
+- drag/drop placement
+- yellow placement line
+- selected widget inspector
+- background replacement
+- hero slide background editing
+- section delete/restore
+- policy editing
+- upload button
+- save website action
+- existing visual widget renderer
+
+No Prisma schema change.
+No db push required.
+
+Testing checklist:
+1. Admin > Content / Visual CMS
+2. Confirm PC / Tablet / Mobile text is not cropped.
+3. Confirm Fit Width (72%), 60%, 85%, 100% labels are not cropped.
+4. Select live page text, change font size/weight/colour/alignment/line height/text type.
+5. Confirm selected text updates in preview immediately.
+6. Click Save website, refresh live public page, confirm style remains.
+7. Open Categories tab.
+8. Add new category.
+9. Edit category name/description/slug.
+10. Select icon from library and save.
+11. Upload icon/image and save.
+12. Confirm homepage category strip updates after save.
+13. Add widget into selected drop zone.
+14. Edit widget title/body/link/style.
+15. Move widget up/down.
+16. Delete widget.
+17. Refresh admin page and confirm saved widget/category changes persist.
+18. Confirm protected pages/areas show locked indication.

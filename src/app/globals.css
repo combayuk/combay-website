@@ -173,3 +173,7 @@ body {
   }
 }
 
+/* Live Visual CMS text style helpers */
+.vcms-style-heading-live { font-size: 2rem !important; font-weight: 900 !important; }
+.vcms-style-subheading-live { font-size: 1.35rem !important; font-weight: 800 !important; }
+.vcms-style-caption-live { font-size: .8rem !important; color: #64748b !important; }

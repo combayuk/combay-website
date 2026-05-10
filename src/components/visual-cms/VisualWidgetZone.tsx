@@ -48,6 +48,8 @@ function widgetTextStyle(widget: VisualWidget): React.CSSProperties {
     fontWeight: widget.fontWeight || undefined,
     fontStyle: widget.italic ? "italic" : undefined,
     color: widget.textColour || undefined,
+    lineHeight: widget.lineHeight || undefined,
+    textAlign: widget.align || undefined,
   };
 }
 

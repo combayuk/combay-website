@@ -31,7 +31,7 @@ export default async function HomePage() {
       <VisualWidgetZone pageKey="home" zone="afterHero" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "promotionStrip") && <PublicPromotionStrip placement="home" />}
       <VisualWidgetZone pageKey="home" zone="afterPromotion" allWidgets={content.visualWidgets} />
-      {!isSectionHidden(content, "home", "industryStrip") && <IndustryStrip />}
+      {!isSectionHidden(content, "home", "industryStrip") && <IndustryStrip categories={content.categories} />}
       <VisualWidgetZone pageKey="home" zone="afterIndustry" allWidgets={content.visualWidgets} />
       {!isSectionHidden(content, "home", "serviceCards") && <ServiceTabs content={content.pages.home} />}
       <VisualWidgetZone pageKey="home" zone="afterServices" allWidgets={content.visualWidgets} />
