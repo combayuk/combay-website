@@ -73,37 +73,37 @@ const sections = [
 export default function AdminQaPage() {
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-900 uppercase tracking-[0.18em] text-accent">Launch QA</p>
-            <h1 className="mt-1 font-display text-3xl font-900 tracking-tight text-navy-950">Smoke-test checklist</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+            <h1 className="mt-1 font-display text-2xl font-900 tracking-tight text-navy-950">Smoke-test checklist</h1>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
               This page is intentionally a checklist, not a new feature module. Use it after each deploy to avoid regressions across existing completed phases.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/" target="_blank" className="btn-secondary text-sm py-2">
+            <Link href="/" target="_blank" className="btn-secondary text-xs py-2">
               Public site <ExternalLink size={14} />
             </Link>
-            <Link href="/admin/ebay" className="btn-primary text-sm py-2">
+            <Link href="/admin/ebay" className="btn-primary text-xs py-2">
               eBay sync
             </Link>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         {sections.map((section) => (
-          <section key={section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-2">
-              <ShieldCheck size={17} className="text-accent" />
-              <h2 className="font-display text-lg font-900 text-navy-950">{section.title}</h2>
+          <section key={section.title} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <ShieldCheck size={15} className="text-accent" />
+              <h2 className="font-display text-base font-900 text-navy-950">{section.title}</h2>
             </div>
-            <ul className="space-y-2.5">
+            <ul className="space-y-2">
               {section.items.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm leading-5 text-slate-600">
-                  <Circle size={15} className="mt-0.5 flex-shrink-0 text-slate-300" />
+                <li key={item} className="flex items-start gap-2 text-xs leading-5 text-slate-600">
+                  <Circle size={13} className="mt-0.5 flex-shrink-0 text-slate-300" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -112,12 +112,12 @@ export default function AdminQaPage() {
         ))}
       </div>
 
-      <section className="rounded-2xl border border-green-200 bg-green-50 p-5">
+      <section className="rounded-xl border border-green-200 bg-green-50 p-4">
         <div className="flex items-start gap-3">
           <CheckCircle2 size={19} className="mt-0.5 flex-shrink-0 text-green-700" />
           <div>
             <h2 className="font-display text-base font-900 text-green-900">QA rule going forward</h2>
-            <p className="mt-1 text-sm leading-6 text-green-800">
+            <p className="mt-1 text-xs leading-5 text-green-800">
               Before starting any new feature phase, confirm the gap against the current codebase first. Existing completed modules should be QA-tested, not rebuilt.
             </p>
           </div>

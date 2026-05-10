@@ -1,0 +1,70 @@
+Phase 26.2L — Compact Requests, Product AI and Launch QA pages
+
+Context:
+After admin-wide containment hardening, the next remaining admin surfaces were Requests, Product AI and Launch QA. This phase improves their density and table containment while preserving existing functionality.
+
+Implemented:
+1. Admin > Requests
+   File: src/app/admin/requests/page.tsx
+   - Compact operational header.
+   - Smaller request-type tabs.
+   - Reduced preview-mode notice height.
+   - Reworked request table into compact table-fixed layout:
+     - ID / Date
+     - Customer
+     - Subject / Item
+     - Status
+     - Manage
+   - Contained long IDs, emails, subjects and messages.
+   - Converted request detail modal into a right-side drawer.
+   - Reduced drawer padding and button sizes.
+   - Kept Reply/View actions and status select.
+
+2. Admin > Product AI
+   File: src/app/admin/products/ai/page.tsx
+   - Compact header and warning note.
+   - Reduced queue/batch panel spacing.
+   - Smaller Refresh Queue and Generate buttons.
+   - Smaller result stat cards.
+   - Reworked queue-preview table with explicit fixed columns:
+     - SKU
+     - Product
+     - Category
+     - Open
+   - Contained long SKU/title/category text.
+   - Reduced updated/error result card text size and added break containment.
+
+3. Admin > Launch QA
+   File: src/app/admin/qa/page.tsx
+   - Smaller header.
+   - Smaller action buttons.
+   - Reduced QA card padding and grid gaps.
+   - Reduced checklist row text/icon size.
+   - Reduced final QA rule card density.
+
+Preserved:
+- Requests tab switching.
+- Request API loading.
+- Reply by email.
+- Request detail drawer.
+- Status select.
+- Product AI queue refresh.
+- Product AI batch generate/save.
+- Product AI result preview/updated/error reporting.
+- Launch QA checklist content and links.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Requests:
+   - switch all request tabs
+   - confirm table fits without horizontal scroll
+   - open request drawer
+   - Reply by email still works
+2. Admin > Product AI:
+   - Refresh queue
+   - Generate small batch if safe
+   - confirm preview table is contained
+3. Admin > QA:
+   - confirm checklist is compact and all links still work
