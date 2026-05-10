@@ -253,6 +253,47 @@ export async function rejectProcessedImageJob(jobId: string, reason?: string) {
 }
 
 
+
+export async function deleteParkedImageProcessingRecords() {
+  const removableStatuses = ["REJECTED", "NEEDS_REVIEW", "FAILED"];
+  const jobs = await prisma.productImageProcessingJob.findMany({
+    where: { status: { in: removableStatuses } },
+    select: { id: true, status: true, resultUrl: true, previewUrl: true, productImageId: true },
+    take: 10000,
+  });
+
+  const resultUrls = Array.from(new Set(jobs.flatMap((job) => [job.resultUrl, job.previewUrl]).filter(Boolean).map(String)));
+  const imageIds = Array.from(new Set(jobs.map((job) => job.productImageId).filter(Boolean).map(String)));
+
+  if (jobs.length) {
+    await prisma.productImageProcessingJob.deleteMany({
+      where: { id: { in: jobs.map((job) => job.id) } },
+    });
+  }
+
+  if (imageIds.length) {
+    await prisma.productImage.updateMany({
+      where: {
+        id: { in: imageIds },
+        backgroundProcessingStatus: { in: ["parked_v2", "needs_review", "failed", "rejected"] },
+      },
+      data: {
+        backgroundProcessedAt: null,
+        backgroundProcessingStatus: null,
+        backgroundProcessingError: null,
+      },
+    }).catch(() => undefined);
+  }
+
+  return {
+    ok: true,
+    deletedJobs: jobs.length,
+    imageStatusReset: imageIds.length,
+    resultUrls,
+    note: "Database cleanup complete. Delete resultUrls from VPS storage using the supplied cleanup script.",
+  };
+}
+
 export async function parkImageProcessingForV2() {
   const now = new Date();
 

@@ -1,0 +1,32 @@
+Phase 21.2 — Delete parked/rejected background-removal records and provide VPS storage cleanup
+
+Context:
+Bulk background removal was parked for V2 because output quality was not acceptable. The user asked to auto-delete parked/rejected images to optimise VPS storage and move to the next stage.
+
+Important architecture note:
+The Vercel/Next.js app cannot directly delete physical files on Hostinger VPS storage. It can delete database records and references. Physical generated files under assets.combay.co.uk must be deleted on the VPS with a server-side cleanup script.
+
+Implemented:
+- Adds deleteParkedImageProcessingRecords() in src/lib/productImageQueue.ts.
+- Adds POST /api/admin/product-images/queue action: delete-parked-v2-records.
+- Admin > eBay now has:
+  - Park old V2 jobs
+  - Delete parked records
+- Database cleanup deletes old REJECTED / NEEDS_REVIEW / FAILED ProductImageProcessingJob rows.
+- Database cleanup resets ProductImage background processing status/error where appropriate.
+- It does not apply bad processed outputs.
+- It does not delete original product images.
+- Adds VPS cleanup script:
+  scripts/image-worker/cleanup_parked_processed_images.py
+
+VPS cleanup:
+After deploying and extracting the updated scripts to VPS if desired:
+  cd /opt/combay-image-worker
+  python3 cleanup_parked_processed_images.py --dry-run
+  python3 cleanup_parked_processed_images.py --delete
+
+If the upload root is not auto-detected:
+  COMBAY_UPLOAD_ROOT=/var/www/combay-uploads python3 cleanup_parked_processed_images.py --dry-run
+
+No Prisma schema change.
+No db push required.

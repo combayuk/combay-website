@@ -7,6 +7,7 @@ import {
   rejectProcessedImageJob,
   markExpiredBackupExports,
   parkImageProcessingForV2,
+  deleteParkedImageProcessingRecords,
 } from "@/lib/productImageQueue";
 import { prisma } from "@/lib/db";
 
@@ -69,6 +70,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ...result,
         message: `Image processing parked for V2. Rejected ${result.jobsUpdated} old queued/review/failed job(s) and marked ${result.imagesUpdated} image status record(s) as parked.`,
+      });
+    }
+
+    if (action === "delete-parked-v2-records") {
+      const result = await deleteParkedImageProcessingRecords();
+      return NextResponse.json({
+        ...result,
+        message: `Deleted ${result.deletedJobs} parked/rejected image-processing record(s) and reset ${result.imageStatusReset} image status record(s). VPS processed files should be deleted with the cleanup script if present.`,
       });
     }
 

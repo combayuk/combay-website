@@ -221,6 +221,20 @@ export default function EbayAdminPage() {
     await load();
   }
 
+  async function deleteParkedImageRecords() {
+    setSyncing("backgrounds");
+    setMessage("Deleting parked/rejected image-processing database records. Original product images remain live.");
+    const response = await fetch("/api/admin/product-images/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete-parked-v2-records" }),
+    });
+    const result = await response.json().catch(() => ({}));
+    setMessage(result.ok ? result.message || "Parked image-processing records deleted." : result.error || "Could not delete parked image-processing records.");
+    setSyncing(null);
+    await load();
+  }
+
   const connected = config.refreshTokenConfigured;
   const accountDeletionEndpoint = typeof window !== "undefined" ? `${window.location.origin}/api/ebay/account-deletion` : "/api/ebay/account-deletion";
 
@@ -284,12 +298,17 @@ export default function EbayAdminPage() {
               The bulk background-removal worker remains in the codebase but is intentionally inactive after quality testing. Original eBay images remain live.
             </p>
             <p className="text-xs text-gray-500 mt-2">
-              Use the cleanup action only to hide old low-quality review/failed background-removal jobs from the active queue. It does not delete product images and does not apply bad processed outputs.
+              Use Park old V2 jobs to hide low-quality review/failed background-removal jobs. Use Delete parked records after parking to remove those processed-output references from the database. Original product images remain live. Actual generated files on the VPS can be removed with the cleanup script in scripts/image-worker.
             </p>
           </div>
-          <button type="button" onClick={parkImageJobsForV2} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
-            <RefreshCw size={14} className={syncing === "backgrounds" ? "animate-spin" : ""} /> Clean parked V2 image jobs
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={parkImageJobsForV2} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
+              <RefreshCw size={14} className={syncing === "backgrounds" ? "animate-spin" : ""} /> Park old V2 jobs
+            </button>
+            <button type="button" onClick={deleteParkedImageRecords} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
+              Delete parked records
+            </button>
+          </div>
         </div>
       </section>
 
