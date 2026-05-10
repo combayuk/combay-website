@@ -1,0 +1,77 @@
+Phase 26.2I — Compact Support, Users and Admin Dashboard
+
+Context:
+The next admin-density pass after invoice editor was to reduce remaining bulky operational areas. There is no standalone src/app/admin/settings/page.tsx in the current codebase, so this phase compacted the existing remaining admin surfaces:
+- Support
+- Users
+- Admin dashboard
+
+Implemented:
+1. Admin > Support
+   File: src/app/admin/support/page.tsx
+   - Compact operational header.
+   - Added compact stats strip:
+     - total tickets
+     - new
+     - in progress
+     - awaiting customer
+     - resolved/closed
+   - Tightened search/status filter panel.
+   - Reworked support tickets table into table-fixed compact layout.
+   - Contained long ticket IDs, emails, subjects and context text.
+   - Converted ticket manage modal into a right-side drawer.
+   - Reduced ticket history/reply/details padding and control sizes.
+
+2. Admin > Users
+   File: src/app/admin/users/page.tsx
+   - Compact operational header.
+   - Replaced large stat cards with compact stats strip:
+     - users
+     - customers
+     - admins
+     - suspended
+   - Reduced create-admin form spacing and action button sizes.
+   - Ensured the users table remains contained with fixed layout and no horizontal overflow wrapper.
+
+3. Admin dashboard
+   File: src/app/admin/page.tsx
+   - Reduced hero/header size.
+   - Reduced primary action card padding.
+   - Reduced card icon sizing.
+   - Reduced dashboard grid gaps.
+   - Reduced reminder/quick-link card density.
+   - Kept all links and admin navigation intact.
+
+Preserved:
+- support ticket listing
+- support search/status filtering
+- support status updates
+- ticket history
+- admin reply/internal-note flow
+- customer-visible/email-customer toggles
+- support status/notes saving
+- user listing
+- create admin account
+- suspend/reactivate customer
+- delete secondary admin
+- root admin protection
+- dashboard navigation links and launch hygiene reminders
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Support:
+   - search/filter support tickets
+   - open Manage drawer
+   - update status/notes
+   - send customer-visible reply
+   - save internal note
+2. Admin > Users:
+   - confirm compact stats/header
+   - create admin test if needed
+   - suspend/reactivate test customer
+   - confirm Type column remains contained
+3. Admin dashboard:
+   - confirm links still route correctly
+   - confirm card layout is more compact

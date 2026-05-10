@@ -106,53 +106,55 @@ export default function AdminUsersPage() {
   const suspendedCount = users.filter((u) => u.suspendedAt).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-xs font-900 uppercase tracking-[0.18em] text-accent">Admin</p>
-          <h1 className="font-display text-3xl font-900 tracking-tight text-navy-950">Users</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">View registered customers, manage admin access and suspend accounts where needed. Suspended users cannot sign in or register again with the same email/phone.</p>
+          <h1 className="font-display text-2xl font-900 tracking-tight text-navy-950">Users</h1>
+          <p className="mt-1 max-w-2xl text-xs text-slate-500">View registered customers, manage admin access and suspend accounts where needed. Suspended users cannot sign in or register again with the same email/phone.</p>
         </div>
-        <button onClick={loadUsers} disabled={loading} className="btn-secondary inline-flex items-center gap-2">
+        <button onClick={loadUsers} disabled={loading} className="btn-secondary inline-flex items-center gap-2 py-2 text-xs">
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
         </button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-800 uppercase tracking-wider text-slate-400">Total users</p><p className="mt-1 font-display text-3xl font-900 text-navy-950">{users.length}</p></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-800 uppercase tracking-wider text-slate-400">Customers</p><p className="mt-1 font-display text-3xl font-900 text-navy-950">{customerCount}</p></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-800 uppercase tracking-wider text-slate-400">Admins</p><p className="mt-1 font-display text-3xl font-900 text-navy-950">{adminCount}</p></div>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm"><p className="text-xs font-800 uppercase tracking-wider text-red-500">Suspended</p><p className="mt-1 font-display text-3xl font-900 text-red-700">{suspendedCount}</p></div>
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{users.length} users</span>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 font-900 text-blue-700">{customerCount} customers</span>
+          <span className="rounded-full bg-purple-50 px-3 py-1.5 font-900 text-purple-700">{adminCount} admins</span>
+          <span className="rounded-full bg-red-50 px-3 py-1.5 font-900 text-red-700">{suspendedCount} suspended</span>
+        </div>
       </div>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</div> : null}
       {message ? <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-700 text-green-700">{message}</div> : null}
 
       <form onSubmit={createAdmin} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
+        <div className="mb-3 flex items-center gap-2">
           <UserPlus size={18} className="text-accent" />
           <div>
-            <h2 className="font-display text-lg font-900 text-navy-950">Create admin account</h2>
+            <h2 className="font-display text-base font-900 text-navy-950">Create admin account</h2>
             <p className="text-xs text-slate-500">Additional admin accounts can be deleted later. The primary sales@combay.co.uk admin cannot be deleted.</p>
           </div>
         </div>
-        <div className="grid gap-3 lg:grid-cols-4">
+        <div className="grid gap-2.5 lg:grid-cols-4">
           <input className="input h-10 text-sm" placeholder="Name" value={newAdmin.name} onChange={(e) => setNewAdmin({ ...newAdmin, name: e.target.value })} />
           <input className="input h-10 text-sm" type="email" required placeholder="Admin email" value={newAdmin.email} onChange={(e) => setNewAdmin({ ...newAdmin, email: e.target.value })} />
           <input className="input h-10 text-sm" placeholder="Phone optional" value={newAdmin.phone} onChange={(e) => setNewAdmin({ ...newAdmin, phone: e.target.value })} />
           <input className="input h-10 text-sm" type="password" required minLength={10} placeholder="Temporary password" value={newAdmin.password} onChange={(e) => setNewAdmin({ ...newAdmin, password: e.target.value })} />
         </div>
-        <button disabled={creatingAdmin} className="btn-primary mt-3 inline-flex items-center gap-2 py-2 text-sm"><UserPlus size={15} /> {creatingAdmin ? "Creating..." : "Create admin"}</button>
+        <button disabled={creatingAdmin} className="btn-primary mt-3 inline-flex items-center gap-2 py-2 text-xs"><UserPlus size={15} /> {creatingAdmin ? "Creating..." : "Create admin"}</button>
       </form>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 p-4">
+        <div className="border-b border-slate-200 px-4 py-3">
           <label className="flex max-w-lg items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 focus-within:border-accent">
             <Search size={16} className="text-slate-400" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by email, name, phone or company" className="min-w-0 flex-1 text-sm outline-none" />
           </label>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-hidden">
           <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
             <thead className="bg-slate-50 text-left text-[11px] font-900 uppercase tracking-wider text-slate-500">
               <tr>
@@ -187,8 +189,8 @@ export default function AdminUsersPage() {
                     <td className="px-3 py-3 align-top">
                       {suspended ? <div className="text-red-700"><p className="flex items-center gap-1 font-900"><ShieldAlert size={14} /> Suspended</p><p className="mt-1 text-xs text-red-500">{fmt(user.suspendedAt)}</p></div> : <p className="flex items-center gap-1 font-900 text-green-700"><CheckCircle2 size={14} /> Active</p>}
                     </td>
-                    <td className="px-4 py-4 align-top text-slate-500">{fmt(user.createdAt)}</td>
-                    <td className="px-4 py-4 align-top text-right">
+                    <td className="px-3 py-3 align-top text-xs text-slate-500">{fmt(user.createdAt)}</td>
+                    <td className="px-3 py-3 align-top text-right">
                       {user.role === "ADMIN" ? (
                         rootAdmin ? <span className="text-xs text-slate-400">Non-deletable</span> : <button disabled={savingId === user.id} onClick={() => deleteAdmin(user)} className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={13} /> Delete admin</button>
                       ) : suspended ? (
