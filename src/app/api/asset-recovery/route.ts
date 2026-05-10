@@ -73,6 +73,8 @@ export async function POST(req: Request) {
           title: `New asset recovery request`,
           reference,
           body: `Thank you for submitting your surplus stock / asset recovery enquiry. We have received the details and will review them shortly.`,
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/asset-recovery`,
+          ctaLabel: "View asset recovery service",
         })
       : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
   };

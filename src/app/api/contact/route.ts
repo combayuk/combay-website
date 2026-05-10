@@ -71,6 +71,8 @@ export async function POST(req: Request) {
           title: `New contact enquiry`,
           reference,
           body: `Thank you for contacting Combay. We have received your enquiry and will respond as soon as possible.`,
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/contact`,
+          ctaLabel: "Contact Combay",
         })
       : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
   };

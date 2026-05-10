@@ -52,7 +52,7 @@ export async function POST(request: Request) {
           title: "Payment confirmation",
           reference: invoice.documentNumber,
           body: `Thank you. Payment has been received for ${invoice.documentNumber}. We will now process the order/proforma workflow and contact you with any dispatch updates.`,
-          ctaUrl: `${process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/orders`,
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/orders`,
           ctaLabel: "View portal",
         }).catch((emailError) => console.error("[invoice-payment-email-failed]", emailError));
 
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
           title: "Order confirmation",
           reference: order.orderNumber,
           body: `Thank you for your order. Payment has been received and your order is now being processed.`,
-          ctaUrl: `${process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/orders`,
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/orders`,
           ctaLabel: "View order",
         });
         const paidOrderCount = await prisma.order.count({

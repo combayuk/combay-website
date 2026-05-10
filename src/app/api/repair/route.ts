@@ -77,6 +77,8 @@ export async function POST(req: Request) {
           title: `New repair request`,
           reference,
           body: `Thank you for submitting your repair request. We have received the equipment/fault details and will review them shortly.`,
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/repair`,
+          ctaLabel: "View repair services",
         })
       : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
   };

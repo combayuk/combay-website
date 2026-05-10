@@ -112,7 +112,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (!existing) throw new Error("Support ticket not found.");
 
     if (emailCustomer && existing.email) {
-      const portalUrl = `${process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/support`;
+      const portalUrl = `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/support`;
       emailResult = await sendEmail({
         to: existing.email,
         subject: `Update on your Combay support ticket ${existing.reference || existing.id}`,

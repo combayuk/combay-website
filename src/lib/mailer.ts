@@ -122,10 +122,10 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
 
 export function emailButton(url: string, label: string, variant: "primary" | "secondary" = "primary") {
   const isPrimary = variant === "primary";
-  const bg = isPrimary ? "#f2a900" : "#ffffff";
-  const color = isPrimary ? "#0f172a" : "#0f172a";
-  const border = isPrimary ? "#f2a900" : "#0f172a";
-  return `<table role="presentation" border="0" cellPadding="0" cellSpacing="0" style="margin:18px 0 0;"><tr><td align="left"><a href="${escapeHtml(url)}" style="display:inline-block;background:${bg};border:1px solid ${border};border-radius:8px;color:${color};font-size:14px;font-weight:800;line-height:1;text-decoration:none;padding:13px 18px;">${escapeHtml(label)}</a></td></tr></table>`;
+  const bg = isPrimary ? "#E8A44A" : "#ffffff";
+  const color = isPrimary ? "#111827" : "#2D4F7A";
+  const border = isPrimary ? "#E8A44A" : "#2D4F7A";
+  return `<table role="presentation" border="0" cellPadding="0" cellSpacing="0" style="margin:20px 0 2px;"><tr><td align="left"><a href="${escapeHtml(url)}" style="display:inline-block;background:${bg};border:1px solid ${border};border-radius:9px;color:${color};font-size:14px;font-weight:800;line-height:1.1;text-decoration:none;padding:13px 18px;mso-padding-alt:0;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
 export function htmlShell(title: string, content: string, preheader?: string) {
@@ -172,7 +172,7 @@ export async function sendAdminNotification(args: { subject: string; title: stri
 }
 
 export async function sendCustomerAcknowledgement(args: { to: string; name?: string; subject: string; title: string; reference?: string; body: string; ctaUrl?: string; ctaLabel?: string; }) {
-  const cta = args.ctaUrl && args.ctaLabel ? emailButton(args.ctaUrl, args.ctaLabel, "secondary") : "";
+  const cta = args.ctaUrl && args.ctaLabel ? emailButton(args.ctaUrl, args.ctaLabel, "primary") : "";
   const ref = args.reference ? `<div style="margin:18px 0;padding:12px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Reference</div><strong style="font-size:16px;color:#111827;">${escapeHtml(args.reference)}</strong></div>` : "";
   const html = htmlShell(
     args.title,

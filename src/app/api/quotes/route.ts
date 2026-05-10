@@ -145,6 +145,8 @@ export async function POST(req: Request) {
           title: `Quote request received`,
           reference,
           body: `Thank you for your quote request. We have received the item details and will confirm price, stock, shipping and any required documentation before sending a formal quote.`,
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal`,
+          ctaLabel: "View customer portal",
         })
       : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
   };

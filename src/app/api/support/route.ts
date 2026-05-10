@@ -155,7 +155,7 @@ export async function POST(req: Request) {
           title: `Support ticket received`,
           reference,
           body: `Thank you. Your support request has been received and logged against reference ${reference}. We will review your message and respond with the next step.`,
-          ctaUrl: `${process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/support`,
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/support`,
           ctaLabel: "View support portal",
         })
       : { configured: false, sent: false, provider: "not-configured" as const, message: "Customer email not sent because customer email was missing." },

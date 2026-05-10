@@ -1,0 +1,60 @@
+Phase 26.2P — Launch email CTA restoration and email-template hardening
+
+Context:
+Earlier, CTA buttons were removed from customer emails temporarily. The user later confirmed that the real customer order was completed and CTA/buttons can be re-added for launch. This phase restores professional customer-facing CTA buttons while preserving the polished Combay email format.
+
+Implemented:
+1. Email button design
+   File: src/lib/mailer.ts
+   - Updated emailButton styling to use Combay launch colours:
+     - primary #E8A44A
+     - text #111827
+     - secondary border #2D4F7A
+   - Kept email-safe table/button markup.
+   - Customer acknowledgements now use a primary CTA button when a CTA URL/label is provided.
+   - No duplicate "Sourcing Stock Supply" slogan was added.
+
+2. Customer acknowledgement CTAs restored
+   Added CTA URL/label to:
+   - src/app/api/contact/route.ts
+     - Contact Combay
+   - src/app/api/repair/route.ts
+     - View repair services
+   - src/app/api/asset-recovery/route.ts
+     - View asset recovery service
+   - src/app/api/quotes/route.ts
+     - View customer portal
+   - src/app/api/returns/route.ts
+     - View return status
+
+3. Existing support/order/payment CTAs preserved and hardened
+   Files:
+   - src/app/api/support/route.ts
+   - src/app/api/support/[id]/route.ts
+   - src/app/api/stripe/webhook/route.ts
+   - Existing support/order/payment buttons remain.
+   - URL fallback now prefers NEXT_PUBLIC_SITE_URL, then NEXTAUTH_URL, then https://combay.co.uk.
+
+Preserved:
+- Resend send logic
+- EMAIL_FROM / RESEND_API_KEY configuration
+- Combay logo in email header
+- email footer contact details
+- admin notification emails
+- document send/open/print email buttons
+- marketing broadcast CTA/unsubscribe logic
+- automation email CTA logic
+- support reply CTA
+- order/payment confirmation CTA
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Submit a contact form and confirm customer email includes Contact Combay button.
+2. Submit a repair request and confirm customer email includes View repair services button.
+3. Submit asset recovery request and confirm CTA appears.
+4. Submit quote request and confirm customer email includes View customer portal button.
+5. Submit return request and confirm customer email includes View return status button.
+6. Create/send support ticket and confirm View support portal button remains.
+7. Confirm email logo appears and no duplicate slogan is printed under the logo.

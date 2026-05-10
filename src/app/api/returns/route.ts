@@ -98,6 +98,8 @@ export async function POST(req: Request) {
           title: "Return request received",
           reference,
           body: "Thank you. Your return request has been received and is awaiting admin approval. The return timeline will begin after approval.",
+          ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://combay.co.uk"}/portal/returns`,
+          ctaLabel: "View return status",
         })
       : { configured: false, sent: false, provider: "not-configured", message: "Customer email not sent because customer email was missing." },
   };
