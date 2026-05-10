@@ -1,0 +1,74 @@
+Phase 26.2M — Visual CMS containment and editor-panel refinement
+
+Context:
+After the admin-wide table and page-density work, the next remaining high-risk admin area was the Visual CMS. Earlier requirements for Visual CMS included:
+- one main live-screen editor with left-side controls only
+- no cropped editing panel
+- live-screen parity
+- easy widget placement
+- replace background controls
+- compact styling controls
+This phase keeps the existing Visual CMS engine and CMS JSON logic, but improves containment, panel density and editor usability.
+
+Implemented:
+1. Visual CMS shell containment
+   File: src/components/admin/VisualCmsBuilder.tsx
+   - Added overflow-hidden to the fixed editor shell.
+   - Reduced left editor panel width from 370px to 320px so the live screen has more room.
+   - Added overflow-hidden to the left panel to prevent it spilling into the canvas.
+   - Kept the controls on the left only.
+
+2. Left editor panel density
+   - Reduced header height and text size.
+   - Reduced tab height.
+   - Reduced page-selector row sizing.
+   - Reduced widget card padding and icon/text size.
+   - Reduced helper-note height.
+   - Reduced style-panel spacing.
+   - Reduced save button height.
+
+3. Canvas/topbar containment
+   - Added overflow-hidden to the main editor area.
+   - Reduced top toolbar height and padding.
+   - Reduced device/zoom selector sizes.
+   - Reduced live-canvas surrounding padding.
+   - Lowered default zoom from 78% to 72% so more of the live page fits in the first viewport.
+   - Updated zoom choices to 60%, 72%, 85% and 100%.
+   - Kept desktop/tablet/mobile preview device logic intact.
+
+4. Route clarity
+   Files:
+   - src/app/admin/content/page.tsx
+   - src/app/admin/content/visual/page.tsx
+   - Added maintainability comments noting that VisualCmsBuilder owns the full-screen editor layout.
+
+Preserved:
+- all CMS content loading/saving
+- live iframe preview
+- page selector
+- widgets tab
+- style tab
+- drag/drop widget placement
+- selected widget inspector
+- text style inspector
+- background replacement
+- hero slide background editing
+- home/about/page section controls
+- delete/restore sections
+- hero button deletion
+- policy page editing
+- upload button logic
+- save website action
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Content or Admin > Content > Visual.
+2. Confirm the editor opens full-screen.
+3. Confirm the left panel no longer crowds/crops the live screen.
+4. Confirm Pages / Widgets / Style tabs still work.
+5. Drag a widget to the canvas and confirm the yellow placement line appears.
+6. Click a widget and confirm the Style panel opens.
+7. Replace a hero/background image or colour.
+8. Save website and confirm the preview refreshes.
