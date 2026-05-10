@@ -1,0 +1,80 @@
+Phase 26.2F — Compact Orders, Returns and Leads operations pages
+
+Context:
+After compacting Custom Email, Email Automation, Promotions, eBay Sync and Product Editor, the next frequent-use admin areas were Orders, Returns and Leads. This phase keeps existing functionality and improves admin density, scanning, and day-to-day operations.
+
+Implemented:
+1. Admin > Orders
+   File: src/app/admin/orders/page.tsx
+   - Compact operational header.
+   - Added compact stats strip:
+     - total orders
+     - paid orders
+     - to process
+     - dispatched
+   - Tighter search/status filter area.
+   - Smaller status filter pills.
+   - Order manage modal changed to a right-side drawer style for a more professional admin workflow.
+   - Kept status update, courier/tracking update and document creation controls.
+
+2. Admin > Returns
+   File: src/app/admin/returns/page.tsx
+   - Compact operational header.
+   - Added compact stats strip:
+     - total returns
+     - awaiting approval
+     - in progress
+     - closed/refunded
+   - Tighter search/status filters.
+   - More compact return table rows.
+   - Return update modal changed to a right-side drawer style.
+   - Kept approval, rejection, status update, return label, tracking and refund proof controls.
+
+3. Admin > Leads
+   File: src/app/admin/leads/page.tsx
+   - Compact operational header.
+   - Replaced large stat cards with a small stats strip:
+     - unique leads
+     - RFQs
+     - paid leads
+     - total contacts
+   - Tighter search/source filters.
+   - Leads table card given cleaner compact styling.
+   - Lead details modal changed to a right-side drawer style.
+   - Kept deduplicated lead history and full contact/source timeline.
+
+Preserved:
+- order listing
+- order status updates
+- tracking/courier updates
+- commercial invoice / paid invoice / packing list creation
+- returns listing
+- return approval/rejection
+- customer-visible return timeline updates
+- document upload fields for returns
+- lead listing
+- source filtering
+- lead search
+- lead history modal
+- all existing API calls and backend logic
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Orders:
+   - search/filter
+   - open Manage drawer
+   - update status/tracking
+   - create paid invoice / packing list / commercial invoice
+2. Admin > Returns:
+   - search/filter
+   - open View/update drawer
+   - approve/reject return
+   - update status and customer message
+   - check return document fields still appear
+3. Admin > Leads:
+   - search/filter by source
+   - open lead drawer
+   - confirm full history is visible
+4. Confirm all three pages feel smaller, less bulky and easier to scan.

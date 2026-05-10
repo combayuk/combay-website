@@ -113,30 +113,39 @@ export default function AdminReturnsPage() {
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display font-800 text-navy-900 text-2xl">Returns</h1>
-          <p className="text-sm text-gray-500 mt-1">Approve returns, attach customer documents and update the customer-visible return timeline.</p>
+          <h1 className="font-display font-900 text-navy-950 text-2xl">Returns</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Approve returns, attach customer documents and update the customer-visible return timeline.</p>
         </div>
-        <button onClick={loadReturns} className="btn-secondary flex items-center gap-1.5"><RefreshCw size={14}/> Refresh</button>
+        <button onClick={loadReturns} className="btn-secondary text-xs py-2 flex items-center gap-1.5"><RefreshCw size={14}/> Refresh</button>
       </div>
 
-      {message && <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg px-4 py-3">{message}</div>}
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{returns.length} returns</span>
+          <span className="rounded-full bg-amber-50 px-3 py-1.5 font-900 text-amber-700">{returns.filter((r) => r.status === "AWAITING_APPROVAL" || r.status === "REQUESTED").length} awaiting approval</span>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 font-900 text-blue-700">{returns.filter((r) => r.status === "APPROVED" || r.status === "IN_TRANSIT" || r.status === "RECEIVED").length} in progress</span>
+          <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{returns.filter((r) => r.status === "REFUNDED" || r.status === "CLOSED").length} closed/refunded</span>
+        </div>
+      </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 grid lg:grid-cols-[1fr_220px] gap-3">
+      {message && <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg px-4 py-2.5">{message}</div>}
+
+      <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid lg:grid-cols-[1fr_220px] gap-2 shadow-sm">
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-          <input value={search} onChange={(e)=>setSearch(e.target.value)} className="input pl-9" placeholder="Search by return ref, order, customer, email, SKU or reason…" />
+          <input value={search} onChange={(e)=>setSearch(e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-accent" placeholder="Search by return ref, order, customer, email, SKU or reason…" />
         </div>
-        <select value={status} onChange={(e)=>setStatus(e.target.value)} className="input">
+        <select value={status} onChange={(e)=>setStatus(e.target.value)} className="input py-2 text-sm">
           <option value="">All statuses</option>
           {RETURN_STATUSES.map((item) => <option key={item} value={item}>{label(item)}</option>)}
         </select>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[150px_140px_1fr_160px_150px_220px] gap-4 px-5 py-3 bg-gray-50 text-[11px] font-display font-700 text-gray-500 uppercase tracking-widest">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="grid grid-cols-[140px_120px_1fr_140px_140px_200px] gap-3 px-4 py-2.5 bg-gray-50 text-[11px] font-display font-700 text-gray-500 uppercase tracking-widest">
           <div>Return #</div><div>Order</div><div>Customer / Item</div><div>Reason</div><div>Status</div><div>Actions</div>
         </div>
         {loading ? (
@@ -144,7 +153,7 @@ export default function AdminReturnsPage() {
         ) : filtered.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">No returns found.</div>
         ) : filtered.map((row) => (
-          <div key={row.id} className="grid grid-cols-[150px_140px_1fr_160px_150px_220px] gap-4 px-5 py-4 border-t border-gray-100 items-center text-sm">
+          <div key={row.id} className="grid grid-cols-[140px_120px_1fr_140px_140px_200px] gap-3 px-4 py-3 border-t border-gray-100 items-center text-sm">
             <div className="font-mono text-xs font-700 text-navy-950 break-all">{row.reference}</div>
             <div className="font-display font-700 text-navy-950">{row.orderId}</div>
             <div>
@@ -217,7 +226,7 @@ function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-auto p-6 relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
         <div className="mb-5">
@@ -246,13 +255,13 @@ function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="label">Return status</label>
-              <select value={nextStatus} onChange={(e)=>setNextStatus(e.target.value)} className="input">
+              <select value={nextStatus} onChange={(e)=>setNextStatus(e.target.value)} className="input py-2 text-sm">
                 {RETURN_STATUSES.map((item) => <option key={item} value={item}>{label(item)}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Customer notification</label>
-              <input className="input" value={customerMessage} onChange={(e)=>setCustomerMessage(e.target.value)} placeholder="Optional note for customer email" />
+              <input className="input py-2 text-sm" value={customerMessage} onChange={(e)=>setCustomerMessage(e.target.value)} placeholder="Optional note for customer email" />
             </div>
           </div>
           <div className="mt-3">
@@ -268,7 +277,7 @@ function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
               <label className="label">Return label / collection document</label>
-              <input type="file" accept="application/pdf,image/*" className="input" onChange={(e) => uploadDocument(e.target.files?.[0] || null, "label")} />
+              <input type="file" accept="application/pdf,image/*" className="input py-2 text-sm" onChange={(e) => uploadDocument(e.target.files?.[0] || null, "label")} />
               <input className="input mt-2" value={returnLabelName} onChange={(e)=>setReturnLabelName(e.target.value)} placeholder="Display name" />
               <input className="input mt-2" value={returnLabelUrl} onChange={(e)=>setReturnLabelUrl(e.target.value)} placeholder="Return label URL" />
               <div className="mt-2 flex gap-2 items-center text-xs">
@@ -278,7 +287,7 @@ function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => 
             </div>
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
               <label className="label">Refund paid proof</label>
-              <input type="file" accept="application/pdf,image/*" className="input" onChange={(e) => uploadDocument(e.target.files?.[0] || null, "refund")} />
+              <input type="file" accept="application/pdf,image/*" className="input py-2 text-sm" onChange={(e) => uploadDocument(e.target.files?.[0] || null, "refund")} />
               <input className="input mt-2" value={refundProofName} onChange={(e)=>setRefundProofName(e.target.value)} placeholder="Display name" />
               <input className="input mt-2" value={refundProofUrl} onChange={(e)=>setRefundProofUrl(e.target.value)} placeholder="Refund proof URL" />
               <div className="mt-2 flex gap-2 items-center text-xs">
@@ -289,9 +298,9 @@ function ReturnModal({ row, onClose, onSave }: { row: ReturnRow; onClose: () => 
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:col-span-2">
               <label className="label">Return shipment tracking</label>
               <div className="grid md:grid-cols-3 gap-3">
-                <input className="input" value={returnCourier} onChange={(e)=>setReturnCourier(e.target.value)} placeholder="Courier e.g. DHL / DPD" />
-                <input className="input" value={returnTrackingNumber} onChange={(e)=>setReturnTrackingNumber(e.target.value)} placeholder="Tracking number" />
-                <input className="input" value={returnTrackingUrl} onChange={(e)=>setReturnTrackingUrl(e.target.value)} placeholder="Tracking URL override" />
+                <input className="input py-2 text-sm" value={returnCourier} onChange={(e)=>setReturnCourier(e.target.value)} placeholder="Courier e.g. DHL / DPD" />
+                <input className="input py-2 text-sm" value={returnTrackingNumber} onChange={(e)=>setReturnTrackingNumber(e.target.value)} placeholder="Tracking number" />
+                <input className="input py-2 text-sm" value={returnTrackingUrl} onChange={(e)=>setReturnTrackingUrl(e.target.value)} placeholder="Tracking URL override" />
               </div>
             </div>
           </div>

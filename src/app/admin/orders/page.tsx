@@ -167,23 +167,32 @@ export default function AdminOrders() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm flex items-center justify-between gap-3">
         <div>
-          <h1 className="font-display font-800 text-navy-950 text-2xl">Orders</h1>
-          <p className="text-xs text-gray-400 mt-1">Source: {source || "database"}{loading ? " · loading…" : ""}</p>
+          <h1 className="font-display font-900 text-navy-950 text-2xl">Orders</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Source: {source || "database"}{loading ? " · loading…" : ""}</p>
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{orders.length} orders</span>
+          <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{orders.filter((o) => o.paymentStatus === "PAID").length} paid</span>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 font-900 text-blue-700">{orders.filter((o) => o.status === "PROCESSING" || o.status === "PAYMENT_RECEIVED").length} to process</span>
+          <span className="rounded-full bg-purple-50 px-3 py-1.5 font-900 text-purple-700">{orders.filter((o) => o.status === "DISPATCHED").length} dispatched</span>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by order #, customer or email..." className="input pl-9 py-2 text-xs w-72" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by order #, customer or email..." className="h-9 w-80 rounded-lg border border-slate-200 pl-9 pr-3 text-xs outline-none focus:border-accent" />
           </div>
           <div className="flex gap-1 flex-wrap">
             {["ALL", ...ORDER_STATUSES].map((s) => (
-              <button key={s} onClick={() => setFilter(s)} className={`text-xs font-display font-600 px-3 py-1.5 rounded-md border transition-colors ${filter === s ? "bg-navy-950 text-white border-navy-950" : "text-gray-600 border-gray-200 hover:border-navy-950"}`}>
+              <button key={s} onClick={() => setFilter(s)} className={`text-xs font-display font-800 px-2.5 py-1 rounded-full border transition-colors ${filter === s ? "bg-navy-950 text-white border-navy-950" : "text-gray-600 border-gray-200 hover:border-navy-950"}`}>
                 {label(s)}
               </button>
             ))}
@@ -220,9 +229,9 @@ export default function AdminOrders() {
       </div>
 
       {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div className="fixed inset-0 bg-black/50 z-50">
+          <div className="absolute right-0 top-0 h-full w-full max-w-[680px] overflow-y-auto bg-white shadow-2xl">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
               <div>
                 <h2 className="font-display font-800 text-xl text-navy-950">Manage order</h2>
                 <p className="font-mono text-xs text-gray-400 mt-1">{selected.orderNumber}</p>
@@ -230,7 +239,7 @@ export default function AdminOrders() {
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-navy-900"><X size={20} /></button>
             </div>
 
-            <form onSubmit={saveOrderUpdate} className="p-5 space-y-5">
+            <form onSubmit={saveOrderUpdate} className="p-5 space-y-4">
               <div className="grid sm:grid-cols-2 gap-4 text-sm">
                 <div><p className="text-xs text-gray-400">Customer</p><p className="font-display font-700 text-navy-950">{selected.customerName}</p><p className="text-gray-500 text-xs">{selected.customerEmail}</p></div>
                 <div><p className="text-xs text-gray-400">Total</p><p className="font-display font-700 text-navy-950">{formatMoney(selected.total)}</p><p className="text-gray-500 text-xs">Payment: {label(selected.paymentStatus)}</p></div>
@@ -238,7 +247,7 @@ export default function AdminOrders() {
 
               <div>
                 <label className="label">Order status</label>
-                <select name="status" defaultValue={selected.status} className="input">
+                <select name="status" defaultValue={selected.status} className="input py-2 text-sm">
                   {ORDER_STATUSES.map((status) => <option key={status} value={status}>{label(status)}</option>)}
                 </select>
                 <p className="text-xs text-gray-400 mt-1">Adding a tracking number will usually set the order to dispatched.</p>
@@ -247,20 +256,20 @@ export default function AdminOrders() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label">Courier</label>
-                  <select name="trackingCarrier" defaultValue={selected.trackingCarrier ?? ""} className="input">
+                  <select name="trackingCarrier" defaultValue={selected.trackingCarrier ?? ""} className="input py-2 text-sm">
                     <option value="">Select courier</option>
                     {COURIER_NAMES.map((courier) => <option key={courier} value={courier}>{courier}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="label">Tracking number</label>
-                  <input name="trackingNumber" defaultValue={selected.trackingNumber ?? ""} className="input" placeholder="e.g. JD000225..." />
+                  <input name="trackingNumber" defaultValue={selected.trackingNumber ?? ""} className="input py-2 text-sm" placeholder="e.g. JD000225..." />
                 </div>
               </div>
 
               <div>
                 <label className="label">Tracking URL override optional</label>
-                <input name="trackingUrl" defaultValue={selected.trackingUrl ?? ""} className="input" placeholder="Leave blank to use courier tracking URL" />
+                <input name="trackingUrl" defaultValue={selected.trackingUrl ?? ""} className="input py-2 text-sm" placeholder="Leave blank to use courier tracking URL" />
               </div>
 
               <div>

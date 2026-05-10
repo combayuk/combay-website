@@ -77,29 +77,31 @@ export default function AdminLeadsPage() {
   }, [leads, query, source]);
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-4 mb-6">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm flex items-center justify-between gap-4">
         <div>
-          <h1 className="font-display font-800 text-navy-950 text-2xl">Leads</h1>
-          <p className="text-xs text-gray-400 mt-1">Deduplicated by email. Contact history captures RFQs, web forms, support/repair enquiries, paid Stripe orders and bank-transfer/proforma receipts. Source: {mode || "database"}{loading ? " · loading…" : ""}</p>
+          <h1 className="font-display font-900 text-navy-950 text-2xl">Leads</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Deduplicated by email. Contact history captures RFQs, web forms, support/repair enquiries, paid Stripe orders and bank-transfer/proforma receipts. Source: {mode || "database"}{loading ? " · loading…" : ""}</p>
         </div>
-        <button onClick={loadLeads} className="btn-secondary text-sm py-2">Refresh</button>
+        <button onClick={loadLeads} className="btn-secondary text-xs py-2">Refresh</button>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-3 mb-5">
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Unique leads</p><p className="font-display font-800 text-2xl text-navy-950">{leads.length}</p></div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">RFQs</p><p className="font-display font-800 text-2xl text-navy-950">{leads.filter((l) => l.source.includes("RFQ") || (l.interactions ?? []).some(i => i.source.includes("RFQ"))).length}</p></div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Paid leads</p><p className="font-display font-800 text-2xl text-navy-950">{leads.filter((l) => l.source.includes("paid") || (l.interactions ?? []).some(i => i.source.includes("paid"))).length}</p></div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Total contacts</p><p className="font-display font-800 text-2xl text-navy-950">{leads.reduce((sum, l) => sum + (l.contactCount || 1), 0)}</p></div>
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{leads.length} unique leads</span>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 font-900 text-blue-700">{leads.filter((l) => l.source.includes("RFQ") || (l.interactions ?? []).some(i => i.source.includes("RFQ"))).length} RFQs</span>
+          <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{leads.filter((l) => l.source.includes("paid") || (l.interactions ?? []).some(i => i.source.includes("paid"))).length} paid leads</span>
+          <span className="rounded-full bg-amber-50 px-3 py-1.5 font-900 text-amber-700">{leads.reduce((sum, l) => sum + (l.contactCount || 1), 0)} total contacts</span>
+        </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, company, country, SKU, history…" className="input pl-9 py-2 text-xs w-80" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, company, country, SKU, history…" className="h-9 w-80 rounded-lg border border-slate-200 pl-9 pr-3 text-xs outline-none focus:border-accent" />
           </div>
-          <select value={source} onChange={(event) => setSource(event.target.value)} className="input py-2 text-xs w-64">
+          <select value={source} onChange={(event) => setSource(event.target.value)} className="h-9 w-64 rounded-lg border border-slate-200 px-3 text-xs outline-none focus:border-accent">
             <option value="ALL">All sources</option>
             {sources.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
@@ -135,16 +137,16 @@ export default function AdminLeadsPage() {
 function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
   const history = lead.interactions ?? [];
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl max-w-3xl mx-auto my-8 border border-gray-200">
-        <div className="p-5 border-b border-gray-100 flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 bg-black/50">
+      <div className="absolute right-0 top-0 h-full w-full max-w-[720px] overflow-y-auto bg-white shadow-2xl">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-4 sticky top-0 bg-white z-10">
           <div>
             <h2 className="font-display font-800 text-xl text-navy-950">Lead details</h2>
             <p className="text-xs text-gray-400 mt-1">Deduplicated lead profile with full contact/source history.</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-navy-900"><X size={18}/></button>
         </div>
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-4">
           <div className="grid md:grid-cols-2 gap-3 text-sm">
             <Info label="Name" value={lead.name} />
             <Info label="Email" value={lead.email} />
@@ -188,5 +190,5 @@ function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
 }
 
 function Info({ label, value }: { label: string; value?: string | null }) {
-  return <div className="border border-gray-200 rounded-lg p-3"><p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{label}</p><p className="text-sm text-navy-950 font-display font-600 break-words">{value || "—"}</p></div>;
+  return <div className="border border-gray-200 rounded-lg px-3 py-2"><p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{label}</p><p className="text-sm text-navy-950 font-display font-600 break-words">{value || "—"}</p></div>;
 }
