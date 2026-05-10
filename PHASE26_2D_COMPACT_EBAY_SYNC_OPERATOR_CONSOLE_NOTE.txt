@@ -1,0 +1,73 @@
+Phase 26.2D — Compact eBay Sync operator console
+
+Context:
+The user asked for the admin panel to become more compact and professional, especially eBay Sync. This phase keeps all existing eBay functionality but reorganises the page into a compact operator console.
+
+Implemented:
+- Rebuilt Admin > eBay into a compact tabbed operator console.
+- Added compact top status strip:
+  - OAuth connected / not connected
+  - key configuration status
+  - recent run pass/fail summary
+  - refresh action
+- Replaced bulky permanent sections with compact tabs:
+  - Sync
+  - Maintenance
+  - Connection
+  - Compliance
+  - Runs
+- Sync tab:
+  - compact Test 10 / First 50 / Sync all action cards
+  - large inventory progress panel
+  - pause / resume / reset page / reset stuck controls
+  - recommended sync flow guidance
+- Maintenance tab:
+  - repair missing details
+  - refresh categories/overviews
+  - remap categories only
+  - request image backup
+  - parked V2 image-worker cleanup controls
+- Connection tab:
+  - compact two-column config fields
+  - save settings
+  - connect OAuth
+  - reset stuck sync
+  - connection status summary
+- Compliance tab:
+  - account deletion endpoint info
+  - eBay notification setup checklist
+- Runs tab:
+  - compact sync run table
+  - status chips
+  - mode/page/import/update/skip/records/message columns
+
+Preserved:
+- eBay config save
+- OAuth start link
+- Test sync 10
+- Sync first 50
+- Sync all resumable batches
+- Repair missing details
+- Refresh categories/overviews
+- Remap categories only
+- Pause/resume/reset full sync progress
+- Reset stuck sync
+- Account deletion notification endpoint display
+- Park/delete old image jobs
+- Request image backup
+- Recent sync runs table
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > eBay.
+2. Confirm compact tabs render: Sync, Maintenance, Connection, Compliance, Runs.
+3. Save settings in Connection tab.
+4. Confirm OAuth link remains present.
+5. Run Test sync 10.
+6. Run Sync first 50.
+7. Confirm Sync all button still runs resumable batches.
+8. Confirm Repair missing details, Refresh categories/overviews, Remap categories only are present.
+9. Confirm Runs tab displays recent logs.
+10. Confirm account deletion endpoint is still visible in Compliance tab.
