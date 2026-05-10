@@ -1,0 +1,66 @@
+Phase 26.2J — Admin table crop and Products no-horizontal-scroll fix
+
+Context:
+The user reported:
+- Action/manage cells are going outside/cropped in tables.
+- Product page table still requires horizontal scrolling and needs the same compact no-scroll treatment as Leads/Invoices.
+
+Implemented:
+1. Admin > Products
+   File: src/app/admin/products/page.tsx
+   - Replaced horizontal-scroll admin table with compact table-fixed layout.
+   - Combined columns:
+     - Product
+     - Category / Condition
+     - Price / Stock
+     - Status / Source
+     - Actions
+   - Removed min-width product row layout.
+   - Contained SKU/title/brand/MPN text with truncation/break rules.
+   - Action icons now sit in a wider fixed action column and wrap safely.
+
+2. Action/manage crop fixes
+   Files:
+   - src/app/admin/support/page.tsx
+   - src/app/admin/users/page.tsx
+   - src/app/admin/leads/page.tsx
+   - src/app/admin/orders/page.tsx
+   - src/app/admin/returns/page.tsx
+   - src/app/admin/invoices/page.tsx
+   Changes:
+   - Widened/rebalanced action/manage columns.
+   - Renamed narrow Action headers to Manage where appropriate.
+   - Made Manage buttons whitespace-safe.
+   - Shortened/compacted row action buttons where needed.
+   - Reworked Orders table from horizontal-scroll admin-table to compact no-scroll table-fixed layout.
+   - Adjusted Returns action grid width/button sizing to prevent row action clipping.
+   - Increased Invoices action column width to prevent action wrap/crop.
+
+Preserved:
+- Product preview/edit/duplicate/archive actions.
+- Product search/category/status filtering.
+- Support manage drawer.
+- User create/suspend/reactivate/delete admin controls.
+- Leads manage drawer.
+- Orders manage drawer/status/tracking/document controls.
+- Returns approve/reject/manage flow.
+- Invoices view/edit/send/sent/received/VAT controls.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Products:
+   - Confirm no left-right horizontal scroll.
+   - Confirm Preview/Edit/Duplicate/Archive actions fit in the Actions column.
+   - Confirm long product titles/SKUs/brands do not break out.
+2. Admin > Support:
+   - Confirm Manage button is not cropped.
+3. Admin > Users:
+   - Confirm action buttons do not crop.
+4. Admin > Orders:
+   - Confirm no left-right scroll and Manage button fits.
+5. Admin > Returns:
+   - Confirm Manage/Approve/Reject row buttons fit.
+6. Admin > Invoices and Leads:
+   - Confirm action columns are not cropped.

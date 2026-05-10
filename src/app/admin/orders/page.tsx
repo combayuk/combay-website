@@ -199,33 +199,56 @@ export default function AdminOrders() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="admin-table">
-            <thead>
-              <tr><th>Order #</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Tracking</th><th>Actions</th></tr>
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed text-xs">
+            <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="w-[16%] px-3 py-2">Order</th>
+                <th className="w-[24%] px-3 py-2">Customer</th>
+                <th className="w-[20%] px-3 py-2">Items</th>
+                <th className="w-[16%] px-3 py-2">Payment / Status</th>
+                <th className="w-[12%] px-3 py-2">Tracking</th>
+                <th className="w-[12%] px-3 py-2 text-right">Manage</th>
+              </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {filtered.map((order) => {
                 const items = order.items?.map((item) => `${item.quantity}× ${item.sku}`).join(", ") || "—";
                 const trackUrl = getTrackUrl(order.trackingCarrier, order.trackingNumber, order.trackingUrl);
                 return (
-                  <tr key={order.id || order.orderNumber}>
-                    <td className="font-mono text-xs font-700 text-navy-950 break-all max-w-[130px]">{order.orderNumber}</td>
-                    <td className="text-xs text-gray-500 whitespace-nowrap">{new Date(order.createdAt).toLocaleDateString("en-GB")}</td>
-                    <td><div className="font-display font-600 text-sm text-navy-950">{order.customerName}</div><div className="text-xs text-gray-400">{order.customerEmail}</div>{order.company && <div className="text-xs text-gray-400">{order.company}</div>}</td>
-                    <td className="text-xs text-gray-600 max-w-[220px] truncate">{items}</td>
-                    <td className="font-display font-700 text-navy-950 whitespace-nowrap">{formatMoney(order.total)}</td>
-                    <td><span className={`badge ${PAY_COLOR[order.paymentStatus] ?? ""}`}>{label(order.paymentStatus)}</span></td>
-                    <td><span className={`badge ${S_COLOR[order.status] ?? ""}`}>{label(order.status)}</span></td>
-                    <td>{order.trackingNumber ? <a href={trackUrl} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-accent hover:text-accent-dark flex items-center gap-1 transition-colors">{order.trackingNumber} <ExternalLink size={10} /></a> : <span className="text-gray-300 text-xs">Not uploaded</span>}</td>
-                    <td><button onClick={() => { setSelected(order); setMessage(""); }} className="btn-secondary px-3 py-1.5 text-xs">Manage</button></td>
+                  <tr key={order.id || order.orderNumber} className="hover:bg-slate-50/70">
+                    <td className="px-3 py-3 align-top">
+                      <p className="break-all font-mono text-[11px] font-900 text-navy-950">{order.orderNumber}</p>
+                      <p className="mt-1 text-[11px] text-gray-500">{new Date(order.createdAt).toLocaleDateString("en-GB")}</p>
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      <p className="truncate font-display text-sm font-800 text-navy-950">{order.customerName}</p>
+                      <p className="break-all text-[11px] text-gray-400">{order.customerEmail}</p>
+                      {order.company && <p className="truncate text-[11px] text-gray-400">{order.company}</p>}
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      <p className="truncate text-xs text-gray-600">{items}</p>
+                      <p className="mt-1 font-display text-xs font-900 text-navy-950">{formatMoney(order.total)}</p>
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      <div className="flex flex-wrap gap-1">
+                        <span className={`badge ${PAY_COLOR[order.paymentStatus] ?? ""}`}>{label(order.paymentStatus)}</span>
+                        <span className={`badge ${S_COLOR[order.status] ?? ""}`}>{label(order.status)}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      {trackUrl ? <a href={trackUrl} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 truncate text-[11px] text-accent transition-colors">{order.trackingNumber || "Track"} <ExternalLink size={10} className="shrink-0" /></a> : <span className="text-gray-300 text-[11px]">Not uploaded</span>}
+                    </td>
+                    <td className="px-3 py-3 align-top text-right">
+                      <button onClick={() => { setSelected(order); setMessage(""); }} className="inline-flex whitespace-nowrap rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-900 text-navy-950 hover:bg-slate-50">Manage</button>
+                    </td>
                   </tr>
                 );
               })}
-              {!loading && filtered.length === 0 && <tr><td colSpan={9} className="text-center text-sm text-gray-400 py-8">No orders found.</td></tr>}
+              {!loading && filtered.length === 0 && <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-8">No orders found.</td></tr>}
             </tbody>
           </table>
-        </div>
+        </div>        </div>
       </div>
 
       {selected && (

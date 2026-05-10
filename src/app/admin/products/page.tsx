@@ -154,38 +154,52 @@ export default function AdminProducts() {
           </select>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full admin-table">
-            <thead><tr><th>Product</th><th>Category</th><th>Condition</th><th>Price</th><th>Stock</th><th>Status</th><th>Source</th><th>Actions</th></tr></thead>
-            <tbody>
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed text-xs">
+            <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="w-[38%] px-3 py-2">Product</th>
+                <th className="w-[17%] px-3 py-2">Category / Condition</th>
+                <th className="w-[13%] px-3 py-2">Price / Stock</th>
+                <th className="w-[14%] px-3 py-2">Status / Source</th>
+                <th className="w-[18%] px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
               {filtered.map((product) => {
                 const condition = CONDITION_LABELS[product.condition];
                 return (
-                  <tr key={product.id}>
-                    <td>
-                      <div className="flex items-center gap-3 min-w-[320px]">
-                        <div className="w-10 h-10 rounded-lg bg-surface border border-gray-200 flex items-center justify-center text-gray-300 overflow-hidden">
+                  <tr key={product.id} className="hover:bg-slate-50/70">
+                    <td className="px-3 py-3 align-top">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <div className="h-10 w-10 shrink-0 rounded-lg bg-surface border border-gray-200 flex items-center justify-center text-gray-300 overflow-hidden">
                           {product.image ? <img src={product.image} alt="" className="w-full h-full object-cover" /> : <Package size={17} />}
                         </div>
-                        <div>
-                          <p className="font-mono text-[11px] text-accent tracking-wide">{product.sku}</p>
-                          <p className="font-display font-700 text-navy-950 text-sm line-clamp-1">{product.title || "Untitled product"}</p>
-                          <p className="text-xs text-gray-400">{product.brand} · {product.mpn}</p>
+                        <div className="min-w-0">
+                          <p className="font-mono text-[11px] text-accent tracking-wide break-all">{product.sku}</p>
+                          <p className="truncate font-display font-800 text-navy-950 text-sm">{product.title || "Untitled product"}</p>
+                          <p className="truncate text-[11px] text-gray-400">{product.brand || "—"} · {product.mpn || "—"}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="text-xs text-gray-500 whitespace-nowrap">{product.category}</td>
-                    <td><span className={`badge border text-xs ${condition.color}`}>{condition.label}</span></td>
-                    <td className="font-display font-700 whitespace-nowrap">{priceLabel(product)}</td>
-                    <td className={`font-display font-700 ${product.stockQty <= 0 ? "text-red-600" : product.stockQty <= 2 ? "text-yellow-700" : "text-green-700"}`}>{product.stockQty}</td>
-                    <td><span className={`badge border text-xs ${product.status === "PUBLISHED" ? "text-green-700 bg-green-50 border-green-200" : product.status === "DRAFT" ? "text-yellow-700 bg-yellow-50 border-yellow-200" : "text-gray-600 bg-gray-50 border-gray-200"}`}>{product.status}</span></td>
-                    <td className="text-xs text-gray-400 uppercase">{product.source}</td>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <Link href={`/shop/${product.slug}`} target="_blank" className="text-gray-400 hover:text-navy-900 transition-colors" title="Preview"><Eye size={14} /></Link>
-                        <Link href={`/admin/products/${product.id}`} className="text-gray-400 hover:text-accent transition-colors" title="Edit"><Edit size={14} /></Link>
-                        <button onClick={() => duplicateProduct(product)} className="text-gray-400 hover:text-navy-900 transition-colors" title="Duplicate"><Copy size={14} /></button>
-                        <button onClick={() => archiveProduct(product)} className="text-gray-400 hover:text-red-500 transition-colors" title="Archive"><Trash2 size={14} /></button>
+                    <td className="px-3 py-3 align-top">
+                      <p className="truncate text-xs text-gray-500">{product.category || "—"}</p>
+                      <span className={`mt-1 inline-flex max-w-full rounded-full border px-2 py-1 text-[10px] font-900 ${condition.color}`}><span className="truncate">{condition.label}</span></span>
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      <p className="font-display font-900 text-navy-950">{priceLabel(product)}</p>
+                      <p className={`mt-1 text-xs font-900 ${product.stockQty <= 0 ? "text-red-600" : product.stockQty <= 2 ? "text-yellow-700" : "text-green-700"}`}>{product.stockQty} in stock</p>
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      <span className={`inline-flex max-w-full rounded-full border px-2 py-1 text-[10px] font-900 ${product.status === "PUBLISHED" ? "text-green-700 bg-green-50 border-green-200" : product.status === "DRAFT" ? "text-yellow-700 bg-yellow-50 border-yellow-200" : "text-gray-600 bg-gray-50 border-gray-200"}`}><span className="truncate">{product.status}</span></span>
+                      <p className="mt-1 truncate text-[11px] uppercase text-gray-400">{product.source || "—"}</p>
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <Link href={`/shop/${product.slug}`} target="_blank" className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Preview"><Eye size={12} /></Link>
+                        <Link href={`/admin/products/${product.id}`} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Edit"><Edit size={12} /></Link>
+                        <button onClick={() => duplicateProduct(product)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Duplicate"><Copy size={12} /></button>
+                        <button onClick={() => archiveProduct(product)} className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-900 text-red-700 hover:bg-red-50" title="Archive"><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>
@@ -193,7 +207,7 @@ export default function AdminProducts() {
               })}
             </tbody>
           </table>
-        </div>
+        </div>        </div>
 
         {loading && <div className="p-10 text-center text-gray-400 text-sm">Loading products…</div>}
         {!loading && filtered.length === 0 && <div className="p-10 text-center text-gray-400 text-sm">No products match that filter.</div>}

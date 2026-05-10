@@ -158,12 +158,12 @@ export default function AdminUsersPage() {
           <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
             <thead className="bg-slate-50 text-left text-[11px] font-900 uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="w-[30%] px-3 py-2">User</th>
-                <th className="w-[14%] px-3 py-2">Phone</th>
-                <th className="w-[15%] px-3 py-2">Type</th>
+                <th className="w-[28%] px-3 py-2">User</th>
+                <th className="w-[13%] px-3 py-2">Phone</th>
+                <th className="w-[14%] px-3 py-2">Type</th>
                 <th className="w-[14%] px-3 py-2">Status</th>
-                <th className="w-[12%] px-3 py-2">Created</th>
-                <th className="w-[15%] px-3 py-2 text-right">Action</th>
+                <th className="w-[11%] px-3 py-2">Created</th>
+                <th className="w-[20%] px-3 py-2 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -192,11 +192,11 @@ export default function AdminUsersPage() {
                     <td className="px-3 py-3 align-top text-xs text-slate-500">{fmt(user.createdAt)}</td>
                     <td className="px-3 py-3 align-top text-right">
                       {user.role === "ADMIN" ? (
-                        rootAdmin ? <span className="text-xs text-slate-400">Non-deletable</span> : <button disabled={savingId === user.id} onClick={() => deleteAdmin(user)} className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={13} /> Delete admin</button>
+                        rootAdmin ? <span className="text-xs text-slate-400">Non-deletable</span> : <button disabled={savingId === user.id} onClick={() => deleteAdmin(user)} className="inline-flex max-w-full items-center gap-1 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={13} /> Delete</button>
                       ) : suspended ? (
-                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "reactivate")} className="rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-900 text-navy-900 hover:bg-slate-50 disabled:opacity-50">Reactivate</button>
+                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "reactivate")} className="inline-flex max-w-full rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-900 text-navy-900 hover:bg-slate-50 disabled:opacity-50">Reactivate</button>
                       ) : (
-                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "suspend")} className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Ban size={13} /> Suspend</button>
+                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "suspend")} className="inline-flex max-w-full items-center gap-1 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Ban size={13} /> Suspend</button>
                       )}
                     </td>
                   </tr>

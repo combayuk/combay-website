@@ -261,12 +261,12 @@ export default function InvoicesPage() {
           <table className="w-full table-fixed text-xs">
             <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="w-[18%] px-3 py-2">Document</th>
-                <th className="w-[24%] px-3 py-2">Customer</th>
-                <th className="w-[14%] px-3 py-2">Order / VAT</th>
-                <th className="w-[15%] px-3 py-2">Amounts</th>
-                <th className="w-[12%] px-3 py-2">Status</th>
-                <th className="w-[17%] px-3 py-2 text-right">Actions</th>
+                <th className="w-[17%] px-3 py-2">Document</th>
+                <th className="w-[22%] px-3 py-2">Customer</th>
+                <th className="w-[13%] px-3 py-2">Order / VAT</th>
+                <th className="w-[14%] px-3 py-2">Amounts</th>
+                <th className="w-[11%] px-3 py-2">Status</th>
+                <th className="w-[23%] px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -306,7 +306,7 @@ export default function InvoicesPage() {
                     <span className={`badge ${STATUS_COLOUR[doc.status] ?? STATUS_COLOUR.DRAFT}`}>{label(doc.status)}</span>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex flex-wrap justify-end gap-1">
+                    <div className="flex flex-wrap justify-end gap-1.5">
                       <a href={`/api/invoices/${doc.id}/html`} target="_blank" rel="noopener noreferrer" className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-navy-950 hover:bg-slate-50">View</a>
                       <Link href={`/admin/invoices/${doc.id}/edit`} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-navy-950 hover:bg-slate-50">Edit</Link>
                       <button onClick={() => sendDocument(doc)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-navy-950 hover:bg-slate-50">Send</button>

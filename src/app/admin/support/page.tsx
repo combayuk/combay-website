@@ -136,12 +136,12 @@ export default function AdminSupportPage() {
           <table className="w-full table-fixed text-xs">
             <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
               <tr>
-                <th className="w-[16%] px-3 py-2">Ticket</th>
-                <th className="w-[22%] px-3 py-2">Customer</th>
-                <th className="w-[32%] px-3 py-2">Subject / context</th>
-                <th className="w-[14%] px-3 py-2">Updated</th>
-                <th className="w-[10%] px-3 py-2">Status</th>
-                <th className="w-[6%] px-3 py-2 text-right">Action</th>
+                <th className="w-[15%] px-3 py-2">Ticket</th>
+                <th className="w-[20%] px-3 py-2">Customer</th>
+                <th className="w-[28%] px-3 py-2">Subject / context</th>
+                <th className="w-[12%] px-3 py-2">Updated</th>
+                <th className="w-[12%] px-3 py-2">Status</th>
+                <th className="w-[13%] px-3 py-2 text-right">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -163,7 +163,7 @@ export default function AdminSupportPage() {
                   <td className="px-3 py-3 align-top text-[11px] text-gray-500">{ticket.updatedAt ? new Date(ticket.updatedAt).toLocaleString("en-GB") : ticket.date}</td>
                   <td className="px-3 py-3 align-top"><span className={`inline-flex max-w-full rounded-full border px-2 py-1 text-[10px] font-900 ${STATUS_COLOR[ticket.status] || STATUS_COLOR.NEW}`}><span className="truncate">{ticket.status.replace(/_/g, " ")}</span></span></td>
                   <td className="px-3 py-3 align-top text-right">
-                    <button type="button" onClick={() => refreshSelected(ticket.dbId || ticket.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-navy-950 hover:bg-slate-50">Manage</button>
+                    <button type="button" onClick={() => refreshSelected(ticket.dbId || ticket.id)} className="inline-flex whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-navy-950 hover:bg-slate-50">Manage</button>
                   </td>
                 </tr>
               ))}

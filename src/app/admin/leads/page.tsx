@@ -111,11 +111,11 @@ export default function AdminLeadsPage() {
           <table className="w-full table-fixed text-xs">
             <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="w-[16%] px-3 py-2">Last / Source</th>
-                <th className="w-[25%] px-3 py-2">Lead</th>
-                <th className="w-[22%] px-3 py-2">Company / Country</th>
+                <th className="w-[15%] px-3 py-2">Last / Source</th>
+                <th className="w-[24%] px-3 py-2">Lead</th>
+                <th className="w-[21%] px-3 py-2">Company / Country</th>
                 <th className="w-[25%] px-3 py-2">Product / History</th>
-                <th className="w-[12%] px-3 py-2 text-right">Actions</th>
+                <th className="w-[15%] px-3 py-2 text-right">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -154,7 +154,7 @@ export default function AdminLeadsPage() {
                     </div>
                   </td>
                   <td className="px-3 py-3 align-top text-right">
-                    <button type="button" onClick={() => setSelectedLead(lead)} className="rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-900 text-navy-950 hover:bg-slate-50 inline-flex items-center gap-1"><Eye size={12}/> View</button>
+                    <button type="button" onClick={() => setSelectedLead(lead)} className="inline-flex whitespace-nowrap rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-900 text-navy-950 hover:bg-slate-50 items-center gap-1"><Eye size={12}/> View</button>
                   </td>
                 </tr>
               ))}
