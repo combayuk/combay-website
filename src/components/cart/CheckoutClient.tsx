@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { CheckCircle2, Lock, AlertTriangle } from "lucide-react";
 import AccountBenefitBanner from "@/components/commerce/AccountBenefitBanner";
+import CountryCombobox from "@/components/cart/CountryCombobox";
 import { clearCart, formatCurrency, getCartSummary, readCartLines, type CartLine } from "@/lib/cart";
+import { countryNameFromCode, normaliseCountryCode, type CountryOption } from "@/lib/countries";
 
 type SavedAddress = { id: string; label?: string | null; fullName?: string | null; company?: string | null; phone?: string | null; address1: string; address2?: string | null; city: string; postcode: string; country: string; isPrimary: boolean; };
 
@@ -20,6 +22,7 @@ type CheckoutForm = {
   city: string;
   postcode: string;
   country: string;
+  countryCode: string;
   notes: string;
 };
 
@@ -33,6 +36,7 @@ const initialForm: CheckoutForm = {
   city: "",
   postcode: "",
   country: "United Kingdom",
+  countryCode: "GB",
   notes: "",
 };
 
@@ -59,7 +63,20 @@ export default function CheckoutClient() {
       const primary = addresses.find((a) => a.isPrimary) || addresses[0] || null;
       setSavedAddresses(addresses);
       if (primary) setSelectedAddressId(primary.id);
-      setForm((cur) => ({ ...cur, fullName: data.customer?.fullName || primary?.fullName || cur.fullName, email: data.customer?.email || cur.email, phone: data.customer?.phone || primary?.phone || cur.phone, company: data.customer?.company || primary?.company || cur.company, address1: primary?.address1 || cur.address1, address2: primary?.address2 || cur.address2, city: primary?.city || cur.city, postcode: primary?.postcode || cur.postcode, country: primary?.country || cur.country }));
+      const primaryCountryCode = normaliseCountryCode(primary?.country || "GB") || "GB";
+      setForm((cur) => ({
+        ...cur,
+        fullName: data.customer?.fullName || primary?.fullName || cur.fullName,
+        email: data.customer?.email || cur.email,
+        phone: data.customer?.phone || primary?.phone || cur.phone,
+        company: data.customer?.company || primary?.company || cur.company,
+        address1: primary?.address1 || cur.address1,
+        address2: primary?.address2 || cur.address2,
+        city: primary?.city || cur.city,
+        postcode: primary?.postcode || cur.postcode,
+        countryCode: primaryCountryCode,
+        country: countryNameFromCode(primaryCountryCode, primary?.country || cur.country),
+      }));
     }).catch(() => undefined);
   }, []);
 
@@ -76,14 +93,14 @@ export default function CheckoutClient() {
     fetch("/api/shipping/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ country: form.country, lines: lines.map((line) => ({ sku: line.sku, qty: line.qty })) }),
+      body: JSON.stringify({ country: form.country, countryCode: form.countryCode, lines: lines.map((line) => ({ sku: line.sku, qty: line.qty })) }),
     })
       .then((response) => response.json())
       .then((data) => { if (active && data?.ok && data.shipping) setLiveShipping(data.shipping); })
       .catch(() => { if (active) setLiveShipping(null); })
       .finally(() => { if (active) setShippingLoading(false); });
     return () => { active = false; };
-  }, [form.country, lines]);
+  }, [form.country, form.countryCode, lines]);
 
   const activeShipping = liveShipping || summary.shipping;
   const displayShipping = activeShipping.manualQuoteRequired ? 0 : Number(activeShipping.cost || 0);
@@ -93,7 +110,26 @@ export default function CheckoutClient() {
   const stripeConfigured = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
   function update<K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) { setForm((current) => ({ ...current, [key]: value })); }
-  function useSavedAddress(id: string) { setSelectedAddressId(id); const a = savedAddresses.find((item) => item.id === id); if (!a) return; setForm((cur) => ({ ...cur, fullName: a.fullName || cur.fullName, phone: a.phone || cur.phone, company: a.company || cur.company, address1: a.address1, address2: a.address2 || "", city: a.city, postcode: a.postcode, country: a.country || "United Kingdom" })); }
+  function updateCountry(country: CountryOption) { setForm((current) => ({ ...current, country: country.name, countryCode: country.code })); }
+  function invalidateCountry() { setForm((current) => ({ ...current, country: "", countryCode: "" })); }
+  function useSavedAddress(id: string) {
+    setSelectedAddressId(id);
+    const a = savedAddresses.find((item) => item.id === id);
+    if (!a) return;
+    const countryCode = normaliseCountryCode(a.country) || "GB";
+    setForm((cur) => ({
+      ...cur,
+      fullName: a.fullName || cur.fullName,
+      phone: a.phone || cur.phone,
+      company: a.company || cur.company,
+      address1: a.address1,
+      address2: a.address2 || "",
+      city: a.city,
+      postcode: a.postcode,
+      countryCode,
+      country: countryNameFromCode(countryCode, a.country || "United Kingdom"),
+    }));
+  }
 
   async function applyPromotion() {
     setPromo(null);
@@ -134,6 +170,11 @@ export default function CheckoutClient() {
 
     if (summary.lines.length === 0) {
       setError("Your cart is empty.");
+      return;
+    }
+
+    if (!normaliseCountryCode(form.countryCode)) {
+      setError("Select a valid delivery country from the dropdown before checkout.");
       return;
     }
 
@@ -262,7 +303,16 @@ export default function CheckoutClient() {
               <label className="block md:col-span-2"><span className="label">Address line 2</span><input className="input py-2 text-sm" value={form.address2} onChange={(e) => update("address2", e.target.value)} /></label>
               <label className="block"><span className="label">Town / city *</span><input required className="input py-2 text-sm" value={form.city} onChange={(e) => update("city", e.target.value)} /></label>
               <label className="block"><span className="label">Postcode *</span><input required className="input py-2 text-sm" value={form.postcode} onChange={(e) => update("postcode", e.target.value)} /></label>
-              <label className="block md:col-span-2"><span className="label">Country *</span><input required className="input py-2 text-sm" value={form.country} onChange={(e) => update("country", e.target.value)} /></label>
+              <div className="block md:col-span-2">
+                <CountryCombobox
+                  required
+                  valueCode={form.countryCode}
+                  valueName={form.country}
+                  onChange={updateCountry}
+                  onInvalidInput={invalidateCountry}
+                  error={!normaliseCountryCode(form.countryCode) ? "Select a valid country from the dropdown." : null}
+                />
+              </div>
               <label className="block md:col-span-2"><span className="label">Delivery notes</span><textarea className="textarea min-h-[90px] py-2 text-sm" value={form.notes} onChange={(e) => update("notes", e.target.value)} /></label>
             </div>
           </section>

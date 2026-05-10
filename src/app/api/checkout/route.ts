@@ -6,6 +6,7 @@ import { createStripeCheckoutSession, isStripeConfigured } from "@/lib/stripe";
 import { calculatePromotionTotals, checkPromotionProductTargets, findPromotionByCode } from "@/lib/promotions";
 import { customerPaymentCancelUrl, customerPaymentSuccessUrl } from "@/lib/paymentReturn";
 import { calculateOrderShipping, snapshotFromShipping } from "@/lib/shipping";
+import { countryNameFromCode, isValidCountryCode, normaliseCountryCode } from "@/lib/countries";
 
 type CheckoutLine = {
   sku: string;
@@ -89,8 +90,12 @@ export async function POST(request: Request) {
     }
 
     const subtotal = Number(orderItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2));
-    const country = String(body.customer.country ?? body.address?.country ?? "United Kingdom");
-    const shippingResult = await calculateOrderShipping(orderItems.map((item) => ({ sku: item.sku, quantity: item.quantity })), country);
+    const countryCode = normaliseCountryCode(body.customer.countryCode || body.address?.countryCode || body.customer.country || body.address?.country);
+    if (!countryCode || !isValidCountryCode(countryCode)) {
+      throw new Error("Select a valid delivery country before checkout.");
+    }
+    const country = countryNameFromCode(countryCode, String(body.customer.country ?? body.address?.country ?? "United Kingdom"));
+    const shippingResult = await calculateOrderShipping(orderItems.map((item) => ({ sku: item.sku, quantity: item.quantity })), country, countryCode);
     if (shippingResult.manualQuoteRequired || shippingResult.cost === null) {
       throw new Error("Manual shipping quote required. Please request a shipping quote before payment.");
     }
@@ -148,7 +153,8 @@ export async function POST(request: Request) {
           address2: body.customer.address2 ?? body.address?.address2 ?? "",
           city: body.customer.city ?? body.address?.city ?? "",
           postcode: body.customer.postcode ?? body.address?.postcode ?? "",
-          country: body.customer.country ?? body.address?.country ?? "United Kingdom",
+          country,
+          countryCode,
         },
         notes: body.customer.notes ? String(body.customer.notes) : null,
         shippingSnapshot: { create: snapshotFromShipping(shippingResult) as any },

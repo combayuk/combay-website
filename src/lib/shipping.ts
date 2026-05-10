@@ -1,4 +1,5 @@
 import { prisma, withDatabase } from "@/lib/db";
+import { shippingZoneForCountryCode, normaliseCountryCode } from "@/lib/countries";
 
 export type ShippingZoneSeed = {
   name: string;
@@ -143,12 +144,11 @@ function money(value: number | null | undefined) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Number(value));
 }
 
-function normaliseCountry(country?: string | null) {
-  return String(country || "United Kingdom").trim().toLowerCase();
-}
+export function destinationZoneForCountry(country?: string | null, countryCode?: string | null) {
+  const selectedCode = normaliseCountryCode(countryCode || country);
+  if (selectedCode) return shippingZoneForCountryCode(selectedCode);
 
-export function destinationZoneForCountry(country?: string | null) {
-  const cleaned = normaliseCountry(country);
+  const cleaned = String(country || "United Kingdom").trim().toLowerCase();
   if (!cleaned) return "UK";
   for (const zone of DEFAULT_SHIPPING_ZONES) {
     if (zone.countries.some((candidate) => candidate.toLowerCase() === cleaned)) return zone.name;
@@ -220,8 +220,8 @@ export function defaultPolicySummary(zoneName = "UK"): ProductShippingSummary {
   };
 }
 
-export function buildProductShippingSummary(product: any, country = "United Kingdom"): ProductShippingSummary {
-  const zoneName = destinationZoneForCountry(country);
+export function buildProductShippingSummary(product: any, country = "United Kingdom", countryCode?: string | null): ProductShippingSummary {
+  const zoneName = destinationZoneForCountry(country, countryCode);
   const override = Array.isArray(product?.shippingOverrides) ? product.shippingOverrides[0] : product?.shippingOverride;
   const policy = product?.shippingPolicy;
   if (!policy) return defaultPolicySummary(zoneName);
@@ -333,8 +333,8 @@ export async function listShippingPolicies() {
   };
 }
 
-export async function calculateOrderShipping(lines: Array<{ sku: string; quantity: number; product?: any }>, country = "United Kingdom"): Promise<CartShippingResult> {
-  const zoneName = destinationZoneForCountry(country);
+export async function calculateOrderShipping(lines: Array<{ sku: string; quantity: number; product?: any }>, country = "United Kingdom", countryCode?: string | null): Promise<CartShippingResult> {
+  const zoneName = destinationZoneForCountry(country, countryCode);
   const requestedSkus = lines.map((line) => line.sku).filter(Boolean);
   const dbResult = await withDatabase(async () => {
     const products = await prisma.product.findMany({
@@ -349,7 +349,7 @@ export async function calculateOrderShipping(lines: Array<{ sku: string; quantit
 
   const lineSummaries = lines.map((line) => {
     const product = productBySku.get(line.sku) ?? line.product ?? null;
-    const summary = product ? buildProductShippingSummary(product, country) : defaultPolicySummary(zoneName);
+    const summary = product ? buildProductShippingSummary(product, country, countryCode) : defaultPolicySummary(zoneName);
     return { ...summary, sku: line.sku, quantity: Math.max(1, Number(line.quantity || 1)) };
   });
 
