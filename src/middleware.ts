@@ -25,6 +25,13 @@ export async function middleware(request: NextRequest) {
 
   if (isStatic(pathname)) return NextResponse.next();
 
+  // Public eBay compliance endpoint.
+  // This route must accept unauthenticated GET challenge requests and POST notifications from eBay.
+  // Do not protect it with the admin-only /api/ebay/* middleware rule.
+  if (pathname === "/api/ebay/account-deletion") {
+    return NextResponse.next();
+  }
+
   if (host.toLowerCase().startsWith("admin.") && pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/admin-login";

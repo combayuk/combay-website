@@ -1,0 +1,28 @@
+Phase 20C.2 — eBay account deletion endpoint middleware bypass
+
+Problem found during testing:
+PowerShell POST to:
+https://combay-website-lt8v.vercel.app/api/ebay/account-deletion
+returned 401 Unauthorized.
+
+Root cause:
+src/middleware.ts protects all /api/ebay/* routes as admin-only.
+That means eBay's unauthenticated POST notifications and GET challenge requests are blocked before reaching the route handler.
+
+Fix:
+Adds a narrow public bypass only for:
+  /api/ebay/account-deletion
+
+This endpoint must be public because eBay sends unauthenticated GET challenge requests and POST notifications.
+All other /api/ebay/* endpoints remain admin-protected.
+
+No Prisma schema change.
+
+After deploy, test:
+1. Browser GET:
+   https://combay-website-lt8v.vercel.app/api/ebay/account-deletion
+2. Browser challenge:
+   https://combay-website-lt8v.vercel.app/api/ebay/account-deletion?challenge_code=test123
+3. PowerShell POST:
+   Invoke-WebRequest -Uri "https://combay-website-lt8v.vercel.app/api/ebay/account-deletion" -Method POST -ContentType "application/json" -Body '{"metadata":{"topic":"MARKETPLACE_ACCOUNT_DELETION"},"notification":{"data":{"username":"test-user"}}}'
+Expected: StatusCode 200.
