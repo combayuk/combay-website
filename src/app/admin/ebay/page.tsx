@@ -38,23 +38,19 @@ export default function EbayAdminPage() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | "backgrounds" | "queueImages" | "backupImages" | null>(null);
-  const [imageQueueStats, setImageQueueStats] = useState<any>(null);
   const [syncProgress, setSyncProgress] = useState<any>(null);
 
   async function load() {
-    const [configRes, runsRes, queueRes, progressRes] = await Promise.all([
+    const [configRes, runsRes, progressRes] = await Promise.all([
       fetch("/api/ebay/config", { cache: "no-store" }),
       fetch("/api/ebay/runs", { cache: "no-store" }),
-      fetch("/api/admin/product-images/queue", { cache: "no-store" }).catch(() => null),
       fetch("/api/ebay/sync", { cache: "no-store" }).catch(() => null),
     ]);
     const configJson = await configRes.json();
     const runsJson = await runsRes.json();
-    const queueJson = queueRes ? await queueRes.json().catch(() => null) : null;
     const progressJson = progressRes ? await progressRes.json().catch(() => null) : null;
     if (configJson.config) setConfig(configJson.config);
     setRuns(runsJson.runs ?? []);
-    if (queueJson?.ok) setImageQueueStats(queueJson);
     if (progressJson?.ok) setSyncProgress(progressJson);
   }
 
@@ -211,6 +207,20 @@ export default function EbayAdminPage() {
     await load();
   }
 
+  async function parkImageJobsForV2() {
+    setSyncing("backgrounds");
+    setMessage("Parking old background-removal jobs for V2 and keeping original product images live.");
+    const response = await fetch("/api/admin/product-images/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "park-v2-cleanup" }),
+    });
+    const result = await response.json().catch(() => ({}));
+    setMessage(result.ok ? result.message || "Image processing jobs parked for V2." : result.error || "Could not park image processing jobs.");
+    setSyncing(null);
+    await load();
+  }
+
   const connected = config.refreshTokenConfigured;
   const accountDeletionEndpoint = typeof window !== "undefined" ? `${window.location.origin}/api/ebay/account-deletion` : "/api/ebay/account-deletion";
 
@@ -266,25 +276,22 @@ export default function EbayAdminPage() {
         ))}
       </section>
 
-      {imageQueueStats ? (
-        <section className="grid gap-3 md:grid-cols-3">
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-400 uppercase tracking-widest">Image worker</p>
-            <p className="font-display font-800 text-navy-950 mt-1">{imageQueueStats.stats?.workerConfigured ? "Secret configured" : "Secret missing"}</p>
-            <p className="text-xs text-gray-500 mt-1">Set IMAGE_WORKER_SECRET for VPS/local workers.</p>
+      <section className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-display font-800 text-navy-950 text-lg">Image background removal parked for V2</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              The bulk background-removal worker remains in the codebase but is intentionally inactive after quality testing. Original eBay images remain live.
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              Use the cleanup action only to hide old low-quality review/failed background-removal jobs from the active queue. It does not delete product images and does not apply bad processed outputs.
+            </p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-400 uppercase tracking-widest">Queued jobs</p>
-            <p className="font-display font-800 text-navy-950 mt-1">{imageQueueStats.stats?.jobs?.QUEUED || 0}</p>
-            <p className="text-xs text-gray-500 mt-1">Waiting for background removal.</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-400 uppercase tracking-widest">Needs review / failed</p>
-            <p className="font-display font-800 text-navy-950 mt-1">{(imageQueueStats.stats?.jobs?.NEEDS_REVIEW || 0) + (imageQueueStats.stats?.jobs?.FAILED || 0)}</p>
-            <p className="text-xs text-gray-500 mt-1">Review before applying poor cut-outs.</p>
-          </div>
-        </section>
-      ) : null}
+          <button type="button" onClick={parkImageJobsForV2} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
+            <RefreshCw size={14} className={syncing === "backgrounds" ? "animate-spin" : ""} /> Clean parked V2 image jobs
+          </button>
+        </div>
+      </section>
 
       {syncProgress ? (
         <section className="bg-white border border-gray-200 rounded-xl p-5">

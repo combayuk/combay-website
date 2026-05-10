@@ -6,6 +6,7 @@ import {
   queueProductImages,
   rejectProcessedImageJob,
   markExpiredBackupExports,
+  parkImageProcessingForV2,
 } from "@/lib/productImageQueue";
 import { prisma } from "@/lib/db";
 
@@ -61,6 +62,15 @@ export async function POST(req: NextRequest) {
         requestedBy: String(body.requestedBy || "admin"),
       });
       return NextResponse.json({ ok: true, export: exportRow, message: "Image backup export queued. The worker will create a secure downloadable ZIP and email the admin when ready." });
+    }
+
+    if (action === "park-v2-cleanup") {
+      const result = await parkImageProcessingForV2();
+      return NextResponse.json({
+        ok: true,
+        ...result,
+        message: `Image processing parked for V2. Rejected ${result.jobsUpdated} old queued/review/failed job(s) and marked ${result.imagesUpdated} image status record(s) as parked.`,
+      });
     }
 
     return NextResponse.json({ ok: false, error: "Unsupported image queue action." }, { status: 400 });

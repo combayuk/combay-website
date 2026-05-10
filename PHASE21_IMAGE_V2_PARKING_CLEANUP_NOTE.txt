@@ -1,0 +1,17 @@
+Phase 21 — Image-processing V2 parking cleanup
+
+Context:
+The bulk background-removal worker successfully processed jobs but the quality was unacceptable for industrial/eBay source photos, so the feature is parked for V2. The live site must keep original eBay images and must not confuse admin users with active-looking review/failed image job counts.
+
+Implemented:
+- Keeps background-removal infrastructure in the codebase for V2.
+- Adds API action: POST /api/admin/product-images/queue with action=park-v2-cleanup.
+- Cleanup action changes old QUEUED/CLAIMED/PROCESSING/NEEDS_REVIEW/FAILED background-removal jobs to REJECTED.
+- Cleanup action marks matching ProductImage backgroundProcessingStatus values as parked_v2.
+- Does not apply any low-quality processed resultUrl to live product images.
+- Does not delete original product images.
+- Admin > eBay no longer shows active image queue stats as if this parked feature needs attention.
+- Admin > eBay now shows a parked-V2 explanation and a safe “Clean parked V2 image jobs” button.
+
+No Prisma schema change.
+No db push required for this phase.

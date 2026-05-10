@@ -252,6 +252,38 @@ export async function rejectProcessedImageJob(jobId: string, reason?: string) {
   });
 }
 
+
+export async function parkImageProcessingForV2() {
+  const now = new Date();
+
+  const jobs = await prisma.productImageProcessingJob.updateMany({
+    where: {
+      status: { in: ["QUEUED", "CLAIMED", "PROCESSING", "NEEDS_REVIEW", "FAILED"] },
+    },
+    data: {
+      status: "REJECTED",
+      rejectedAt: now,
+      error: "Background removal parked for V2 after quality review. Original product image retained.",
+    },
+  });
+
+  const images = await prisma.productImage.updateMany({
+    where: {
+      backgroundProcessingStatus: { in: ["queued", "claimed", "processing", "needs_review", "failed"] },
+    },
+    data: {
+      backgroundProcessingStatus: "parked_v2",
+      backgroundProcessingError: "Background removal parked for V2. Original image retained.",
+    },
+  });
+
+  return {
+    ok: true,
+    jobsUpdated: jobs.count,
+    imagesUpdated: images.count,
+  };
+}
+
 export async function createBackupExportRequest(args: { email?: string | null; requestedBy?: string | null }) {
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
   const exportRow = await prisma.productImageBackupExport.create({
