@@ -110,32 +110,34 @@ export default function AdminProducts() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display font-800 text-navy-950 text-2xl">Products</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Database-backed product management. Products now save to Neon/PostgreSQL.</p>
+          <h1 className="font-display font-900 text-navy-950 text-2xl">Products</h1>
+          <p className="text-gray-500 text-xs mt-0.5">Database-backed product management. Products now save to Neon/PostgreSQL.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => handleCsvUpload(event.target.files?.[0] ?? null)} />
-          <button type="button" onClick={() => csvInputRef.current?.click()} className="btn-secondary text-sm py-2"><Upload size={14} /> Upload CSV</button>
-          <a href="/stock-list-template.csv" download className="btn-secondary text-sm py-2"><Download size={14} /> CSV Template</a>
-          <Link href="/admin/products/ai" className="btn-secondary text-sm py-2"><Sparkles size={14} /> Product AI</Link>
-          <Link href="/admin/products/new" className="btn-primary text-sm py-2"><Plus size={14} /> Add Product</Link>
+          <button type="button" onClick={() => csvInputRef.current?.click()} className="btn-secondary text-xs py-2"><Upload size={14} /> Upload CSV</button>
+          <a href="/stock-list-template.csv" download className="btn-secondary text-xs py-2"><Download size={14} /> CSV Template</a>
+          <Link href="/admin/products/ai" className="btn-secondary text-xs py-2"><Sparkles size={14} /> Product AI</Link>
+          <Link href="/admin/products/new" className="btn-primary text-xs py-2"><Plus size={14} /> Add Product</Link>
         </div>
       </div>
 
       {message && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-sm">{message}</div>}
 
-      <div className="grid md:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Loaded</p><p className="font-display font-800 text-2xl text-navy-950">{products.length}</p></div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Published</p><p className="font-display font-800 text-2xl text-green-700">{products.filter((p) => p.status === "PUBLISHED").length}</p></div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Draft</p><p className="font-display font-800 text-2xl text-yellow-700">{products.filter((p) => p.status === "DRAFT").length}</p></div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4"><p className="text-xs text-gray-400">Archived</p><p className="font-display font-800 text-2xl text-gray-700">{products.filter((p) => p.status === "ARCHIVED").length}</p></div>
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{products.length} loaded</span>
+          <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{products.filter((p) => p.status === "PUBLISHED").length} published</span>
+          <span className="rounded-full bg-yellow-50 px-3 py-1.5 font-900 text-yellow-700">{products.filter((p) => p.status === "DRAFT").length} draft</span>
+          <span className="rounded-full bg-gray-50 px-3 py-1.5 font-900 text-gray-700">{products.filter((p) => p.status === "ARCHIVED").length} archived</span>
+        </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-100 grid md:grid-cols-[1fr_220px_170px] gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="px-4 py-3 border-b border-gray-100 grid md:grid-cols-[1fr_220px_170px] gap-2">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search SKU, MPN, brand, title..." className="input pl-9 py-2 text-sm" />

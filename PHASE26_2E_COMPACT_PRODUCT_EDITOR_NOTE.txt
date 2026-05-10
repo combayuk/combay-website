@@ -1,0 +1,63 @@
+Phase 26.2E — Compact Product Editor and product manager density pass
+
+Context:
+After Custom Email, Email Automation, Promotions and eBay Sync were compacted, the next bulky admin area was the Product Editor. This phase keeps existing product functionality but makes the add/edit workflow cleaner, more compact and easier to scan.
+
+Implemented:
+- Updated src/components/admin/ProductEditor.tsx.
+- Made the product editor header smaller and more operational.
+- Replaced large launch-readiness cards with a compact readiness strip.
+- Made product editor tabs smaller and more admin-tool-like.
+- Wrapped the editor body in a two-column desktop layout:
+  - main editing panel
+  - right-side product summary / launch checklist panel
+- Added right-side product summary:
+  - thumbnail
+  - title
+  - SKU
+  - category/condition
+  - price
+  - stock
+  - image count
+  - variant count
+- Added right-side launch checklist summary.
+- Kept the sticky bottom save bar but made it less bulky.
+- Light input density pass for product editor fields.
+- Updated Admin > Products list page:
+  - compact operational header
+  - smaller action buttons
+  - compact stats strip instead of large stat cards
+  - slightly tighter filter area
+
+Preserved:
+- product create/edit backend
+- save draft
+- publish
+- archive/duplicate product
+- CSV upload and stock template
+- Product AI link
+- all editor tabs
+- images/gallery/video/documents
+- variants
+- price/POA/stock/logistics
+- eBay listing ID and sync-exclusion controls
+- SEO/tags/admin notes
+- Gemini/local content assistant
+- upload flow
+- all API payload behaviour
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Products.
+2. Confirm compact header/stats/filter table layout.
+3. Open Add Product.
+4. Confirm compact readiness strip and tabs.
+5. Confirm right-side summary updates when title/SKU/images/price/stock change.
+6. Save draft.
+7. Edit existing product.
+8. Upload/add image URL.
+9. Add/edit variant.
+10. Save & publish.
+11. Confirm public product page still displays correctly.

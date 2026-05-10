@@ -315,61 +315,59 @@ export default function ProductEditor({ mode, productId }: Props) {
   if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-8 text-sm text-gray-500">Loading product from database…</div>;
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3 min-w-0">
             <Link href="/admin/products" className="mt-1 text-gray-400 hover:text-navy-950 p-1"><ArrowLeft size={18} /></Link>
             <div className="min-w-0">
-              <p className="font-mono text-xs tracking-widest uppercase text-gray-400 mb-2">Product editor</p>
-              <h1 className="font-display font-900 text-navy-950 text-3xl truncate">{mode === "new" ? "Add product" : "Edit product"}</h1>
-              <p className="text-gray-500 text-sm mt-1 font-mono">SKU: {product.sku || "Not set"} · {product.status}</p>
+              <p className="font-mono text-[11px] tracking-widest uppercase text-gray-400">Product editor</p>
+              <h1 className="font-display font-900 text-navy-950 text-2xl truncate">{mode === "new" ? "Add product" : "Edit product"}</h1>
+              <p className="text-gray-500 text-xs mt-1 font-mono">SKU: {product.sku || "Not set"} · {product.status}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary text-sm py-2"><Save size={14} /> Save draft</button>
-            <button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary text-sm py-2">Publish product →</button>
+            <button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary text-xs py-2"><Save size={14} /> Save draft</button>
+            <button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary text-xs py-2">Publish product →</button>
           </div>
         </div>
       </section>
 
-      {message && <div className={`${saved ? "bg-green-50 border-green-200 text-green-700" : "bg-yellow-50 border-yellow-200 text-yellow-900"} border rounded-xl px-4 py-3 text-sm font-display font-700`}>{message}</div>}
+      {message && <div className={`${saved ? "bg-green-50 border-green-200 text-green-700" : "bg-yellow-50 border-yellow-200 text-yellow-900"} border rounded-xl px-4 py-2.5 text-sm font-display font-700`}>{message}</div>}
 
-      <section className="grid md:grid-cols-6 gap-3">
-        {editorChecks.map((item) => (
-          <div key={item.label} className={`rounded-xl border p-3 ${item.ok ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
-            <div className="flex items-center gap-2">
-              {item.ok ? <CheckCircle2 size={15} className="text-green-700" /> : <AlertTriangle size={15} className="text-amber-700" />}
-              <p className={`font-display font-900 text-xs ${item.ok ? "text-green-800" : "text-amber-800"}`}>{item.label}</p>
-            </div>
-          </div>
-        ))}
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <p className="text-[11px] text-gray-400 uppercase tracking-widest">Ready</p>
-          <p className="font-display font-900 text-navy-950 mt-1">{readyCount}/{editorChecks.length}</p>
+      <section className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-900 text-navy-950">Ready {readyCount}/{editorChecks.length}</span>
+          {editorChecks.map((item) => (
+            <span key={item.label} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-900 ${item.ok ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+              {item.ok ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+              {item.label}
+            </span>
+          ))}
         </div>
       </section>
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-2 overflow-x-auto shadow-sm">
-        <div className="flex gap-1 min-w-max">
+      <div className="rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm overflow-x-auto">
+        <div className="flex min-w-max gap-1">
           {tabs.map((item) => (
-            <button key={item.id} onClick={() => setTab(item.id)} className={`px-4 py-2.5 text-sm font-display font-800 whitespace-nowrap rounded-xl transition-colors ${tab === item.id ? "bg-[#2D4F7A] text-white shadow-sm" : "text-gray-500 hover:bg-slate-50 hover:text-navy-950"}`}>{item.label}</button>
+            <button key={item.id} onClick={() => setTab(item.id)} className={`rounded-lg px-3 py-2 text-xs font-display font-900 whitespace-nowrap transition-colors ${tab === item.id ? "bg-[#2D4F7A] text-white shadow-sm" : "text-gray-500 hover:bg-slate-50 hover:text-navy-950"}`}>{item.label}</button>
           ))}
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
         {tab === "basic" && (
           <div className="grid lg:grid-cols-2 gap-5">
-            <div><label className="label">SKU</label><input value={product.sku} onChange={(e) => update("sku", e.target.value)} className="input font-mono" /></div>
-            <div><label className="label">Status</label><select value={product.status} onChange={(e) => update("status", e.target.value as AdminProductStatus)} className="input"><option value="PUBLISHED">Published</option><option value="DRAFT">Draft</option><option value="ARCHIVED">Archived</option></select></div>
-            <div className="lg:col-span-2"><label className="label">Product title *</label><input value={product.title} onChange={(e) => update("title", e.target.value)} className="input" placeholder="e.g. Siemens S7-400 CPU 412-2 PLC Module" /></div>
-            <div><label className="label">Brand</label><input value={product.brand} onChange={(e) => update("brand", e.target.value)} className="input" /></div>
-            <div><label className="label">Manufacturer</label><input value={product.manufacturer} onChange={(e) => update("manufacturer", e.target.value)} className="input" /></div>
-            <div><label className="label">Model</label><input value={product.model} onChange={(e) => update("model", e.target.value)} className="input" /></div>
-            <div><label className="label">MPN / Part number</label><input value={product.mpn} onChange={(e) => update("mpn", e.target.value)} className="input" /></div>
-            <div><label className="label">Category</label><select value={product.category} onChange={(e) => updateCategory(e.target.value)} className="input">{product.category && !CATEGORIES.some((category) => category.label === product.category) && <option value={product.category}>{product.category}</option>}{CATEGORIES.filter((category) => category.slug).map((category) => <option key={category.slug} value={category.label}>{category.label}</option>)}</select></div>
-            <div><label className="label">Condition</label><select value={product.condition} onChange={(e) => update("condition", e.target.value as ConditionCode)} className="input">{CONDITION_OPTIONS.map((condition) => <option key={condition.value} value={condition.value}>{condition.label}</option>)}</select></div>
+            <div><label className="label">SKU</label><input value={product.sku} onChange={(e) => update("sku", e.target.value)} className="input py-2 text-sm font-mono" /></div>
+            <div><label className="label">Status</label><select value={product.status} onChange={(e) => update("status", e.target.value as AdminProductStatus)} className="input py-2 text-sm"><option value="PUBLISHED">Published</option><option value="DRAFT">Draft</option><option value="ARCHIVED">Archived</option></select></div>
+            <div className="lg:col-span-2"><label className="label">Product title *</label><input value={product.title} onChange={(e) => update("title", e.target.value)} className="input py-2 text-sm" placeholder="e.g. Siemens S7-400 CPU 412-2 PLC Module" /></div>
+            <div><label className="label">Brand</label><input value={product.brand} onChange={(e) => update("brand", e.target.value)} className="input py-2 text-sm" /></div>
+            <div><label className="label">Manufacturer</label><input value={product.manufacturer} onChange={(e) => update("manufacturer", e.target.value)} className="input py-2 text-sm" /></div>
+            <div><label className="label">Model</label><input value={product.model} onChange={(e) => update("model", e.target.value)} className="input py-2 text-sm" /></div>
+            <div><label className="label">MPN / Part number</label><input value={product.mpn} onChange={(e) => update("mpn", e.target.value)} className="input py-2 text-sm" /></div>
+            <div><label className="label">Category</label><select value={product.category} onChange={(e) => updateCategory(e.target.value)} className="input py-2 text-sm">{product.category && !CATEGORIES.some((category) => category.label === product.category) && <option value={product.category}>{product.category}</option>}{CATEGORIES.filter((category) => category.slug).map((category) => <option key={category.slug} value={category.label}>{category.label}</option>)}</select></div>
+            <div><label className="label">Condition</label><select value={product.condition} onChange={(e) => update("condition", e.target.value as ConditionCode)} className="input py-2 text-sm">{CONDITION_OPTIONS.map((condition) => <option key={condition.value} value={condition.value}>{condition.label}</option>)}</select></div>
           </div>
         )}
 
@@ -405,7 +403,7 @@ export default function ProductEditor({ mode, productId }: Props) {
           </div>
         )}
 
-        {tab === "logistics" && <div className="grid lg:grid-cols-2 gap-5"><div><label className="label">Price excluding VAT</label><input type="number" value={product.price ?? ""} disabled={product.priceOnRequest} onChange={(e) => update("price", e.target.value ? Number(e.target.value) : null)} className="input" /></div><div><label className="label">Stock quantity</label><input type="number" value={product.stockQty} onChange={(e) => update("stockQty", Number(e.target.value || 0))} className="input" /></div><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={product.priceOnRequest} onChange={(e) => update("priceOnRequest", e.target.checked)} /> Price on request / POA</label><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={Boolean(product.syncExcluded)} onChange={(e) => update("syncExcluded", e.target.checked as any)} /> Exclude from eBay sync updates</label><div><label className="label">Warehouse location / bin</label><input value={product.locationBin ?? ""} onChange={(e) => update("locationBin", e.target.value)} className="input" placeholder="WH-A-03" /></div><div><label className="label">Public item location</label><input value={(product as any).itemLocation ?? "United Kingdom"} onChange={(e) => update("itemLocation" as any, e.target.value as any)} className="input" placeholder="United Kingdom" /><p className="text-xs text-gray-400 mt-1">Shown on the public product page below SKU/brand details.</p></div><div><label className="label">eBay item / listing ID</label><input value={(product as any).ebayItemId ?? ""} onChange={(e) => update("ebayItemId", e.target.value as any)} className="input" /></div><div><label className="label">Weight (kg)</label><input value={product.weightKg ?? ""} onChange={(e) => update("weightKg", e.target.value)} className="input" /></div><div><label className="label">Dimensions (cm)</label><input value={product.dimensionsCm ?? ""} onChange={(e) => update("dimensionsCm", e.target.value)} className="input" placeholder="40 x 30 x 20" /></div><div><label className="label">HS code</label><input value={product.hsCode ?? ""} onChange={(e) => update("hsCode", e.target.value)} className="input" /></div><div><label className="label">Lead time</label><input value={product.leadTime} onChange={(e) => update("leadTime", e.target.value)} className="input" /></div><div className="lg:col-span-2"><label className="label">Dispatch note</label><textarea value={product.dispatchNote} onChange={(e) => update("dispatchNote", e.target.value)} className="input min-h-[90px]" /></div><div className="lg:col-span-2"><label className="label">Warranty statement</label><textarea value={product.warranty} onChange={(e) => update("warranty", e.target.value)} className="input min-h-[90px]" /></div></div>}
+        {tab === "logistics" && <div className="grid lg:grid-cols-2 gap-5"><div><label className="label">Price excluding VAT</label><input type="number" value={product.price ?? ""} disabled={product.priceOnRequest} onChange={(e) => update("price", e.target.value ? Number(e.target.value) : null)} className="input py-2 text-sm" /></div><div><label className="label">Stock quantity</label><input type="number" value={product.stockQty} onChange={(e) => update("stockQty", Number(e.target.value || 0))} className="input py-2 text-sm" /></div><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={product.priceOnRequest} onChange={(e) => update("priceOnRequest", e.target.checked)} /> Price on request / POA</label><label className="flex items-center gap-2 text-sm font-display font-700 text-navy-900"><input type="checkbox" checked={Boolean(product.syncExcluded)} onChange={(e) => update("syncExcluded", e.target.checked as any)} /> Exclude from eBay sync updates</label><div><label className="label">Warehouse location / bin</label><input value={product.locationBin ?? ""} onChange={(e) => update("locationBin", e.target.value)} className="input py-2 text-sm" placeholder="WH-A-03" /></div><div><label className="label">Public item location</label><input value={(product as any).itemLocation ?? "United Kingdom"} onChange={(e) => update("itemLocation" as any, e.target.value as any)} className="input py-2 text-sm" placeholder="United Kingdom" /><p className="text-xs text-gray-400 mt-1">Shown on the public product page below SKU/brand details.</p></div><div><label className="label">eBay item / listing ID</label><input value={(product as any).ebayItemId ?? ""} onChange={(e) => update("ebayItemId", e.target.value as any)} className="input py-2 text-sm" /></div><div><label className="label">Weight (kg)</label><input value={product.weightKg ?? ""} onChange={(e) => update("weightKg", e.target.value)} className="input py-2 text-sm" /></div><div><label className="label">Dimensions (cm)</label><input value={product.dimensionsCm ?? ""} onChange={(e) => update("dimensionsCm", e.target.value)} className="input py-2 text-sm" placeholder="40 x 30 x 20" /></div><div><label className="label">HS code</label><input value={product.hsCode ?? ""} onChange={(e) => update("hsCode", e.target.value)} className="input py-2 text-sm" /></div><div><label className="label">Lead time</label><input value={product.leadTime} onChange={(e) => update("leadTime", e.target.value)} className="input py-2 text-sm" /></div><div className="lg:col-span-2"><label className="label">Dispatch note</label><textarea value={product.dispatchNote} onChange={(e) => update("dispatchNote", e.target.value)} className="input min-h-[90px]" /></div><div className="lg:col-span-2"><label className="label">Warranty statement</label><textarea value={product.warranty} onChange={(e) => update("warranty", e.target.value)} className="input min-h-[90px]" /></div></div>}
 
 
         {tab === "variants" && (
@@ -426,18 +424,68 @@ export default function ProductEditor({ mode, productId }: Props) {
               <button type="button" disabled={Boolean(aiGenerating)} onClick={() => applyGeminiAssistant("seo")} className="btn-secondary text-sm"><Sparkles size={14} /> {aiGenerating === "seo" ? "Generating…" : "AI SEO"}</button>
             </div>
             <div><label className="label">Slug</label><input value={product.slug} onChange={(e) => update("slug", e.target.value)} className="input font-mono text-sm" /></div>
-            <div><label className="label">SEO title</label><input value={(product as any).seoTitle ?? ""} onChange={(e) => update("seoTitle" as any, e.target.value as any)} className="input" placeholder="Short product title for search engines" /><p className="text-xs text-gray-400 mt-1">Aim for 50–68 characters.</p></div>
+            <div><label className="label">SEO title</label><input value={(product as any).seoTitle ?? ""} onChange={(e) => update("seoTitle" as any, e.target.value as any)} className="input py-2 text-sm" placeholder="Short product title for search engines" /><p className="text-xs text-gray-400 mt-1">Aim for 50–68 characters.</p></div>
             <div><label className="label">SEO meta description</label><textarea value={(product as any).seoDescription ?? ""} onChange={(e) => update("seoDescription" as any, e.target.value as any)} className="input min-h-[90px]" placeholder="Concise search result description" /><p className="text-xs text-gray-400 mt-1">Aim for 140–155 characters.</p></div>
-            <div><label className="label">Search tags</label><input value={tagText} onChange={(e) => setTagText(e.target.value)} className="input" placeholder="PLC, Siemens, 6ES7412" /></div>
+            <div><label className="label">Search tags</label><input value={tagText} onChange={(e) => setTagText(e.target.value)} className="input py-2 text-sm" placeholder="PLC, Siemens, 6ES7412" /></div>
             <div><label className="label">Admin notes</label><textarea value={product.adminNotes ?? ""} onChange={(e) => update("adminNotes", e.target.value)} className="input min-h-[120px]" /></div>
           </div>
         )}
+        </div>
+
+        <aside className="space-y-3">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[11px] font-900 uppercase tracking-widest text-gray-400">Product summary</p>
+            <div className="mt-3 flex items-start gap-3">
+              <div className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+                {imageRows[0]?.url ? <img src={imageRows[0].url} alt="" className="h-full w-full object-contain" /> : <span className="text-gray-300">📦</span>}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-900 text-navy-950">{product.title || "Untitled product"}</p>
+                <p className="mt-1 font-mono text-[11px] text-accent">{product.sku || "No SKU"}</p>
+                <p className="mt-1 text-xs text-gray-500">{product.category || "No category"} · {product.condition}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+              <SummaryStat label="Price" value={product.priceOnRequest ? "POA" : product.price === null ? "—" : `£${Number(product.price).toLocaleString("en-GB")}`} />
+              <SummaryStat label="Stock" value={String(variantRows.length ? variantRows.reduce((sum, row) => sum + Number(row.stockQty || 0), 0) : product.stockQty)} />
+              <SummaryStat label="Images" value={`${imageRows.length}/${MAX_PRODUCT_IMAGES}`} />
+              <SummaryStat label="Variants" value={String(variantRows.length)} />
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-900 uppercase tracking-widest text-gray-400">Launch checklist</p>
+            <div className="mt-3 space-y-2">
+              {editorChecks.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-gray-600">{item.label}</span>
+                  <span className={`font-900 ${item.ok ? "text-green-700" : "text-amber-700"}`}>{item.ok ? "OK" : "Needs check"}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="font-display text-sm font-900 text-amber-950">Editor guidance</p>
+            <p className="mt-1 text-xs leading-5 text-amber-900">Save as draft while checking images, pricing, variants and SEO. Publish only after the summary looks complete.</p>
+          </section>
+        </aside>
       </div>
 
-      <div className="sticky bottom-4 z-20 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur p-3 shadow-2xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky bottom-4 z-20 rounded-xl border border-slate-200 bg-white/95 backdrop-blur p-3 shadow-2xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500"><span className="font-display font-900 text-navy-950">{readyCount}/{editorChecks.length}</span> launch fields complete · save as draft if still checking images, price or content.</div>
         <div className="flex flex-wrap gap-2"><Link href="/admin/products" className="btn-secondary">Cancel</Link><button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary"><Save size={14} /> Save draft</button><button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary">Save & publish</button></div>
       </div>
+    </div>
+  );
+}
+
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <p className="text-[10px] font-900 uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="mt-0.5 truncate font-display text-xs font-900 text-navy-950">{value}</p>
     </div>
   );
 }
