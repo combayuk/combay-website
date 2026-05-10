@@ -5,7 +5,6 @@ import Link from "next/link";
 import { FileText, HelpCircle, BookOpen, AlignLeft, X, ShieldCheck, Truck, PackageCheck, ShoppingCart, Minus, Plus, Video } from "lucide-react";
 import { CONDITION_LABELS, type CatalogProduct, type ProductVariantOption } from "@/lib/catalog";
 import { addCartItem } from "@/lib/cart";
-import ProductImageFrame from "@/components/shop/ProductImageFrame";
 
 type Tab = "description" | "overview" | "specs" | "documents";
 type EnquiryType = "quote" | "question" | null;
@@ -122,21 +121,17 @@ function ProductGallery({ product }: { product: CatalogProduct }) {
 
   return <div>
     <div
-      className={`mb-3 select-none ${active?.type === "image" && active.image?.url ? zoomStep === 2 ? "cursor-zoom-out" : "cursor-zoom-in" : ""}`}
+      className={`bg-surface border border-gray-200 rounded-2xl aspect-square flex items-center justify-center relative overflow-hidden mb-3 select-none ${active?.type === "image" && active.image?.url ? zoomStep === 2 ? "cursor-zoom-out" : "cursor-zoom-in" : ""}`}
       onClick={active?.type === "image" && active.image?.url ? cycleZoom : undefined}
       onMouseMove={moveZoomOrigin}
       title={active?.type === "image" && active.image?.url ? "Click to zoom: 125%, 150%, reset" : undefined}
     >
-      {active?.type === "image" ? (
-        <ProductImageFrame src={active.image?.url} alt={active.image?.alt ?? product.title} ratio="square" className="rounded-2xl product-detail-zoom" imageClassName="transition-transform duration-150 ease-out pointer-events-none" >
-          {active.image?.url && zoomStep > 0 ? <div className="absolute bottom-3 right-3 z-[2] bg-white/95 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] text-gray-600 shadow-sm pointer-events-none font-display font-700">{zoomStep === 1 ? "125%" : "150%"}</div> : null}
-          {active.image?.url && zoomStep > 0 ? <style>{`.product-detail-zoom img{transform:scale(${zoomScale});transform-origin:${transformOrigin};}`}</style> : null}
-        </ProductImageFrame>
-      ) : null}
-      {active?.type === "video" ? <video src={active.url} controls playsInline className="w-full aspect-square object-contain bg-black rounded-2xl border border-gray-200" /> : null}
-      {!active && <ProductImageFrame src={null} alt={product.title} ratio="square" className="rounded-2xl" />}
+      {active?.type === "image" && active.image?.url ? <img src={active.image.url} alt={active.image.alt ?? product.title} draggable={false} style={{ transform: `scale(${zoomScale})`, transformOrigin }} className="object-contain w-full h-full p-6 transition-transform duration-150 ease-out pointer-events-none" /> : null}
+      {active?.type === "video" ? <video src={active.url} controls playsInline className="w-full h-full object-contain bg-black" /> : null}
+      {!active && <div className="text-gray-200 text-[7rem] select-none">📦</div>}
+      {active?.type === "image" && active.image?.url && zoomStep > 0 && <div className="absolute bottom-3 right-3 bg-white/95 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] text-gray-600 shadow-sm pointer-events-none font-display font-700">{zoomStep === 1 ? "125%" : "150%"}</div>}
     </div>
-    <div className="flex gap-2 flex-wrap">{media.map((item, index) => <button key={item.type === "image" ? `${item.image.url}-${index}` : `video-${index}`} onClick={() => setActiveIndex(index)} className={`w-16 h-16 rounded-xl overflow-hidden transition-colors ${activeIndex === index ? "ring-2 ring-accent" : "ring-1 ring-gray-200 hover:ring-gray-400"}`}>{item.type === "image" ? <ProductImageFrame src={item.image.url} alt={item.image.alt ?? product.title} ratio="thumb" className="w-full h-full border-0" /> : <span className="w-full h-full bg-surface flex flex-col items-center justify-center gap-0.5 text-[10px] font-display font-700 text-navy-900"><Video size={18} /> Video</span>}</button>)}</div>
+    <div className="flex gap-2 flex-wrap">{media.map((item, index) => <button key={item.type === "image" ? `${item.image.url}-${index}` : `video-${index}`} onClick={() => setActiveIndex(index)} className={`w-16 h-16 bg-surface border rounded-xl flex items-center justify-center hover:border-gray-400 transition-colors overflow-hidden ${activeIndex === index ? "border-accent" : "border-gray-200"}`}>{item.type === "image" ? <img src={item.image.url} alt={item.image.alt ?? product.title} className="object-contain w-full h-full p-1" /> : <span className="flex flex-col items-center gap-0.5 text-[10px] font-display font-700 text-navy-900"><Video size={18} /> Video</span>}</button>)}</div>
   </div>;
 }
 function InfoPill({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) { return <div className="border border-gray-200 bg-white rounded-xl p-3"><div className="text-accent mb-1">{icon}</div><p className="font-display font-700 text-xs text-navy-950">{title}</p><p className="text-[11px] text-gray-500">{detail}</p></div>; }

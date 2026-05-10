@@ -7,7 +7,6 @@ import { CONDITION_LABELS, type CatalogProduct } from "@/lib/catalog";
 import { PUBLIC_CATEGORY_LIST, normaliseSelectedCategorySlug, selectedCategoryLabel, type PublicSubcategory } from "@/lib/categoryTaxonomy";
 import { addCartItem } from "@/lib/cart";
 import PublicPromotionCards, { type PromotionCardData } from "@/components/promotions/PublicPromotionCards";
-import ProductImageFrame from "@/components/shop/ProductImageFrame";
 
 const CONDITIONS = [
   { label: "All Conditions", value: "" },
@@ -138,10 +137,11 @@ function ProductCard({ product }: { product: CatalogProduct }) {
 
   return (
     <div className="card card-hover flex flex-col">
-      <ProductImageFrame src={product.image} alt={product.title} ratio="card" className="border-x-0 border-t-0 rounded-t-xl">
-        <span className={`absolute top-2 left-2 z-[2] badge border ${condition.color}`}>{condition.label}</span>
-        {hasVariants ? <span className="absolute top-2 right-2 z-[2] badge border bg-white/95 text-[#2D4F7A] border-[#D8E0EA]">Options</span> : null}
-      </ProductImageFrame>
+      <div className="bg-gray-50 border-b border-gray-100 aspect-[4/3] flex items-center justify-center relative overflow-hidden">
+        {product.image ? <img src={product.image} alt={product.title} className="object-contain w-full h-full p-4" /> : <div className="text-gray-300 text-4xl">📦</div>}
+        <span className={`absolute top-2 left-2 badge border ${condition.color}`}>{condition.label}</span>
+        {hasVariants ? <span className="absolute top-2 right-2 badge border bg-white/95 text-[#2D4F7A] border-[#D8E0EA]">Options</span> : null}
+      </div>
       <div className="p-4 flex flex-col flex-1">
         <p className="font-mono text-[11px] text-gray-400 mb-1">{product.sku} · {product.brand}</p>
         <h3 className="font-display font-700 text-navy-900 text-sm leading-snug mb-3 flex-1">{product.title}</h3>

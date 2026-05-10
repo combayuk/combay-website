@@ -1,0 +1,14 @@
+Phase 22.1 — Revert catalogue image frame experiment
+
+Context:
+The Combay patterned image frame was reviewed and rejected. Original product/eBay images look better.
+
+Implemented:
+- Reverts /shop product-card image presentation back to original simple bg-gray-50 image container.
+- Reverts product detail gallery back to original simple bg-surface image container and thumbnails.
+- Removes ProductImageFrame import usage.
+- ProductImageFrame.tsx is not included in this archive. If it was already committed from Phase 22, run:
+  git rm -f src/components/shop/ProductImageFrame.tsx
+
+No Prisma schema change.
+No db push required.
