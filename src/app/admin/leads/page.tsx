@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, UserRound, Mail, Phone, Building2, MapPin, PackageSearch, Eye, CalendarClock, X } from "lucide-react";
+import { Search, UserRound, Building2, MapPin, PackageSearch, Eye, CalendarClock, X } from "lucide-react";
 
 type LeadInteraction = {
   id: string;
@@ -107,26 +107,61 @@ export default function AdminLeadsPage() {
           </select>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="admin-table">
-            <thead><tr><th>Last contact</th><th>Lead</th><th>Contact</th><th>Company / Country</th><th>Source</th><th>Product / Reference</th><th>History</th><th>Actions</th></tr></thead>
-            <tbody>
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed text-xs">
+            <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="w-[16%] px-3 py-2">Last / Source</th>
+                <th className="w-[25%] px-3 py-2">Lead</th>
+                <th className="w-[22%] px-3 py-2">Company / Country</th>
+                <th className="w-[25%] px-3 py-2">Product / History</th>
+                <th className="w-[12%] px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
               {filtered.map((lead) => (
-                <tr key={lead.id}>
-                  <td className="text-xs text-gray-500 whitespace-nowrap">{dateTime(lead.lastContactAt || lead.createdAt)}</td>
-                  <td><div className="flex items-center gap-2"><UserRound size={13} className="text-accent"/><span className="font-display font-700 text-sm text-navy-950">{lead.name}</span></div></td>
-                  <td className="text-xs text-gray-600 space-y-1"><div className="flex items-center gap-1.5"><Mail size={12}/>{lead.email}</div><div className="flex items-center gap-1.5"><Phone size={12}/>{lead.phone}</div></td>
-                  <td className="text-xs text-gray-600 space-y-1"><div className="flex items-center gap-1.5"><Building2 size={12}/>{lead.company}</div><div className="flex items-center gap-1.5"><MapPin size={12}/>{lead.country}</div></td>
-                  <td><span className="badge bg-blue-50 text-blue-700 border-blue-200">{sourceLabel(lead.source)}</span></td>
-                  <td className="text-xs text-gray-600"><div className="flex items-center gap-1.5"><PackageSearch size={12}/><span className="font-mono">{lead.productSku || "—"}</span></div><div className="mt-1 max-w-[220px] truncate">{lead.productTitle || "—"}</div>{lead.sourceRef && <div className="mt-1 text-gray-400">Ref: {lead.sourceRef}</div>}</td>
-                  <td className="text-xs text-gray-500"><span className="badge bg-gray-50 text-gray-700 border-gray-200">{lead.contactCount || 1} contact{(lead.contactCount || 1) === 1 ? "" : "s"}</span></td>
-                  <td><button type="button" onClick={() => setSelectedLead(lead)} className="btn-secondary text-xs py-1.5 flex items-center gap-1"><Eye size={12}/> View</button></td>
+                <tr key={lead.id} className="hover:bg-slate-50/70">
+                  <td className="px-3 py-3 align-top">
+                    <p className="text-[11px] text-gray-500">{dateTime(lead.lastContactAt || lead.createdAt)}</p>
+                    <span className="mt-2 inline-flex max-w-full rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-900 text-blue-700">
+                      <span className="truncate">{sourceLabel(lead.source)}</span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <UserRound size={13} className="mt-0.5 shrink-0 text-accent" />
+                      <div className="min-w-0">
+                        <p className="truncate font-display text-sm font-800 text-navy-950">{lead.name || "Unnamed lead"}</p>
+                        <p className="break-all text-[11px] text-gray-500">{lead.email || "—"}</p>
+                        {lead.phone ? <p className="break-words text-[11px] text-gray-400">{lead.phone}</p> : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="space-y-1 text-[11px] text-gray-600">
+                      <div className="flex min-w-0 items-center gap-1.5"><Building2 size={12} className="shrink-0" /><span className="truncate">{lead.company || "—"}</span></div>
+                      <div className="flex min-w-0 items-center gap-1.5"><MapPin size={12} className="shrink-0" /><span className="truncate">{lead.country || "—"}</span></div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="text-[11px] text-gray-600">
+                      <div className="flex min-w-0 items-center gap-1.5"><PackageSearch size={12} className="shrink-0" /><span className="truncate font-mono">{lead.productSku || "—"}</span></div>
+                      <p className="mt-1 truncate">{lead.productTitle || "—"}</p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <span className="rounded-full border border-slate-200 bg-gray-50 px-2 py-0.5 text-[10px] font-900 text-gray-700">{lead.contactCount || 1} contact{(lead.contactCount || 1) === 1 ? "" : "s"}</span>
+                        {lead.sourceRef ? <span className="max-w-full truncate rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-gray-400">Ref: {lead.sourceRef}</span> : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-top text-right">
+                    <button type="button" onClick={() => setSelectedLead(lead)} className="rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-900 text-navy-950 hover:bg-slate-50 inline-flex items-center gap-1"><Eye size={12}/> View</button>
+                  </td>
                 </tr>
               ))}
-              {!loading && filtered.length === 0 && <tr><td colSpan={8} className="text-center text-sm text-gray-400 py-8">No leads found.</td></tr>}
+              {!loading && filtered.length === 0 && <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-8">No leads found.</td></tr>}
             </tbody>
           </table>
-        </div>
+        </div>        </div>
       </div>
 
       {selectedLead && <LeadModal lead={selectedLead} onClose={() => setSelectedLead(null)} />}

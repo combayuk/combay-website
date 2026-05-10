@@ -153,48 +153,48 @@ export default function AdminUsersPage() {
           </label>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-900 uppercase tracking-wider text-slate-500">
+          <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
+            <thead className="bg-slate-50 text-left text-[11px] font-900 uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-4 py-3">User</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3 text-right">Action</th>
+                <th className="w-[30%] px-3 py-2">User</th>
+                <th className="w-[14%] px-3 py-2">Phone</th>
+                <th className="w-[15%] px-3 py-2">Type</th>
+                <th className="w-[14%] px-3 py-2">Status</th>
+                <th className="w-[12%] px-3 py-2">Created</th>
+                <th className="w-[15%] px-3 py-2 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Loading users...</td></tr> : null}
-              {!loading && filtered.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No users found.</td></tr> : null}
+              {loading ? <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Loading users...</td></tr> : null}
+              {!loading && filtered.length === 0 ? <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">No users found.</td></tr> : null}
               {filtered.map((user) => {
                 const suspended = Boolean(user.suspendedAt);
                 const rootAdmin = user.email.toLowerCase() === ROOT_ADMIN_EMAIL;
                 return (
                   <tr key={user.id} className={suspended ? "bg-red-50/50" : "bg-white"}>
-                    <td className="px-4 py-4 align-top">
-                      <div className="flex items-start gap-3">
-                        <span className={`mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full ${suspended ? "bg-red-100 text-red-700" : "bg-slate-100 text-navy-900"}`}><UserRound size={17} /></span>
-                        <div>
-                          <p className="font-900 text-navy-950">{user.name || "Unnamed user"} {rootAdmin ? <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-900 text-navy-950">Primary admin</span> : null}</p>
-                          <p className="text-slate-500">{user.email}</p>
-                          {user.company ? <p className="mt-1 text-xs text-slate-400">{user.company}</p> : null}
+                    <td className="px-3 py-3 align-top">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${suspended ? "bg-red-100 text-red-700" : "bg-slate-100 text-navy-900"}`}><UserRound size={17} /></span>
+                        <div className="min-w-0">
+                          <p className="font-900 text-navy-950 break-words">{user.name || "Unnamed user"} {rootAdmin ? <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-900 text-navy-950">Primary admin</span> : null}</p>
+                          <p className="break-all text-[11px] text-slate-500">{user.email}</p>
+                          {user.company ? <p className="mt-1 truncate text-[11px] text-slate-400">{user.company}</p> : null}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4 align-top text-slate-600">{[user.phoneCode, user.phone].filter(Boolean).join(" ") || "—"}</td>
-                    <td className="px-4 py-4 align-top"><span className="rounded-full border border-slate-200 px-2 py-1 text-xs font-800 text-slate-600">{user.role}{user.accountType ? ` · ${user.accountType}` : ""}</span></td>
-                    <td className="px-4 py-4 align-top">
+                    <td className="px-3 py-3 align-top text-xs text-slate-600 break-words">{[user.phoneCode, user.phone].filter(Boolean).join(" ") || "—"}</td>
+                    <td className="px-3 py-3 align-top"><span className="inline-flex max-w-full rounded-full border border-slate-200 px-2 py-1 text-[11px] font-800 text-slate-600"><span className="min-w-0 truncate">{user.role}{user.accountType ? ` · ${user.accountType}` : ""}</span></span></td>
+                    <td className="px-3 py-3 align-top">
                       {suspended ? <div className="text-red-700"><p className="flex items-center gap-1 font-900"><ShieldAlert size={14} /> Suspended</p><p className="mt-1 text-xs text-red-500">{fmt(user.suspendedAt)}</p></div> : <p className="flex items-center gap-1 font-900 text-green-700"><CheckCircle2 size={14} /> Active</p>}
                     </td>
                     <td className="px-4 py-4 align-top text-slate-500">{fmt(user.createdAt)}</td>
                     <td className="px-4 py-4 align-top text-right">
                       {user.role === "ADMIN" ? (
-                        rootAdmin ? <span className="text-xs text-slate-400">Non-deletable</span> : <button disabled={savingId === user.id} onClick={() => deleteAdmin(user)} className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-xs font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={13} /> Delete admin</button>
+                        rootAdmin ? <span className="text-xs text-slate-400">Non-deletable</span> : <button disabled={savingId === user.id} onClick={() => deleteAdmin(user)} className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={13} /> Delete admin</button>
                       ) : suspended ? (
-                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "reactivate")} className="rounded-md border border-slate-200 px-3 py-2 text-xs font-900 text-navy-900 hover:bg-slate-50 disabled:opacity-50">Reactivate</button>
+                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "reactivate")} className="rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-900 text-navy-900 hover:bg-slate-50 disabled:opacity-50">Reactivate</button>
                       ) : (
-                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "suspend")} className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-xs font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Ban size={13} /> Suspend</button>
+                        <button disabled={savingId === user.id} onClick={() => updateUser(user, "suspend")} className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-900 text-red-700 hover:bg-red-50 disabled:opacity-50"><Ban size={13} /> Suspend</button>
                       )}
                     </td>
                   </tr>

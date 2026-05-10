@@ -1,0 +1,67 @@
+Phase 26.2G — Admin table containment and horizontal-scroll fix
+
+Context:
+The user reported that the admin design is breaking in several sections, including text breaking out of containers. Specific issues:
+- Type field on all rows of Users table.
+- Invoices & Quotes table requires left-right scrolling because the UI/table is too wide.
+- Leads table has the same left-right scrolling issue and needs the same resolution.
+
+Implemented:
+1. Admin > Users
+   File: src/app/admin/users/page.tsx
+   - Made the users table fixed-width/table-fixed.
+   - Added explicit column widths.
+   - Reduced cell padding.
+   - Contained long email/company text.
+   - Fixed the Type column by making the role/account type badge truncate within the cell instead of breaking out.
+   - Reduced action button size.
+
+2. Admin > Invoices / Quotes
+   File: src/app/admin/invoices/page.tsx
+   - Reworked the table into a no-horizontal-scroll compact table.
+   - Combined columns to reduce width:
+     - Document now includes document number, type and date.
+     - Customer includes name, email and company.
+     - Order / VAT combines order number and VAT toggle.
+     - Amounts combines total and balance.
+   - Changed the table to table-fixed with defined column widths.
+   - Replaced large action buttons with compact text actions.
+   - Removed horizontal overflow wrapper.
+   - Reduced header, filter and button density.
+
+3. Admin > Leads
+   File: src/app/admin/leads/page.tsx
+   - Reworked the table into a no-horizontal-scroll compact table.
+   - Combined columns:
+     - Last / Source
+     - Lead
+     - Company / Country
+     - Product / History
+     - Actions
+   - Changed the table to table-fixed with defined column widths.
+   - Contained long emails, product titles, references and company/country text.
+   - Removed horizontal overflow wrapper.
+   - Kept the right-side lead detail drawer and full contact history.
+
+Preserved:
+- Users list and action controls.
+- User suspension/reactivation/admin deletion controls.
+- Invoices/quotes/proformas/packing list view/edit/send/mark-sent/mark-received/VAT toggle.
+- Leads search/source filtering.
+- Lead detail drawer and contact/source history.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Users:
+   - Confirm Type badges remain inside each row/cell.
+   - Confirm long emails/company names do not break out of the container.
+2. Admin > Invoices:
+   - Confirm table fits in the admin viewport without left-right scrolling.
+   - Confirm View/Edit/Send/Sent/Received actions still work.
+   - Confirm VAT toggle still works.
+3. Admin > Leads:
+   - Confirm table fits in the admin viewport without left-right scrolling.
+   - Confirm long emails/product titles/references remain contained.
+   - Confirm lead drawer still opens and history is visible.
