@@ -1,0 +1,21 @@
+Phase 20B — Variation/cart guardrails and V2 image-processing park
+
+Background removal status:
+- The self-hosted background-removal worker remains in the codebase for V2 but is now parked in Admin > eBay.
+- The admin button now shows “Image processing parked for V2” and no longer exposes bulk queue/export actions in the main eBay sync control row.
+- Existing queued/reviewed image records are left untouched; no bad outputs are applied to the live shop.
+
+Variation/cart hardening:
+- Shop product cards now detect products with variants/options.
+- Variant products no longer allow direct Add to cart from the shop card because that bypasses required option selection.
+- Variant products now show an “Options” badge and a “Choose option” button that takes the user to the product page.
+- Product detail quantity input now clamps typed values to available stock.
+- Product detail plus button disables when selected variant/base quantity reaches available stock.
+- Cart quantity plus button now disables at available stock and clamps increases to the selected variant/base stock.
+
+Why:
+- eBay variation products must force option selection before cart/checkout/RFQ.
+- Cart quantity should not exceed stock available for the selected variant.
+- Background removal is deferred to V2 after quality testing showed unacceptable results for current industrial/eBay source images.
+
+No Prisma schema change in this patch.

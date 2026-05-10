@@ -30,8 +30,10 @@ export default function CartClient() {
 
   const summary = useMemo(() => getCartSummary(lines), [lines]);
 
-  function changeQty(sku: string, qty: number, variantId?: string, variantSku?: string | null) {
-    updateCartItemQty(sku, qty, variantId, variantSku);
+  function changeQty(sku: string, qty: number, variantId?: string, variantSku?: string | null, availableQty?: number) {
+    const maxQty = Math.max(0, Number(availableQty ?? qty));
+    const nextQty = maxQty > 0 ? Math.min(Math.max(1, qty), maxQty) : 0;
+    updateCartItemQty(sku, nextQty, variantId, variantSku);
     setLines(readCartLines());
   }
 
@@ -95,9 +97,9 @@ export default function CartClient() {
                 <div className="md:text-right">
                   <p className="font-display font-800 text-navy-950 mb-3">{product.priceOnRequest || product.price === null ? "POA" : formatCurrency(lineTotal)}</p>
                   <div className="inline-flex items-center border border-gray-200 rounded-lg overflow-hidden mb-3">
-                    <button onClick={() => changeQty(product.sku, qty - 1, variant?.id, variant?.sku)} className="p-2 hover:bg-gray-50" aria-label="Decrease quantity"><Minus size={13} /></button>
+                    <button onClick={() => changeQty(product.sku, qty - 1, variant?.id, variant?.sku, availableQty)} className="p-2 hover:bg-gray-50" aria-label="Decrease quantity"><Minus size={13} /></button>
                     <span className="px-3 text-sm font-display font-700 min-w-10 text-center">{qty}</span>
-                    <button onClick={() => changeQty(product.sku, qty + 1, variant?.id, variant?.sku)} className="p-2 hover:bg-gray-50" aria-label="Increase quantity"><Plus size={13} /></button>
+                    <button onClick={() => changeQty(product.sku, qty + 1, variant?.id, variant?.sku, availableQty)} disabled={qty >= availableQty} className="p-2 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Increase quantity"><Plus size={13} /></button>
                   </div>
                   <button onClick={() => remove(product.sku, variant?.id, variant?.sku)} className="flex md:ml-auto items-center gap-1 text-xs text-red-500 hover:text-red-700 font-600">
                     <Trash2 size={13} /> Remove

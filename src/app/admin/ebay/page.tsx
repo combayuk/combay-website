@@ -217,11 +217,8 @@ export default function EbayAdminPage() {
           <button onClick={refreshCategoriesAndOverviews} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
             <RefreshCw size={14} className={syncing === "refresh" ? "animate-spin" : ""} /> Refresh categories/overviews
           </button>
-          <button onClick={queueImageBackgrounds} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
-            <RefreshCw size={14} className={syncing === "queueImages" ? "animate-spin" : ""} /> Queue image backgrounds
-          </button>
-          <button onClick={requestImageBackup} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50">
-            <RefreshCw size={14} className={syncing === "backupImages" ? "animate-spin" : ""} /> Export image backup
+          <button type="button" disabled className="btn-secondary text-sm py-2 opacity-50 cursor-not-allowed" title="Background removal is parked for V2 after quality testing.">
+            <RefreshCw size={14} /> Image processing parked for V2
           </button>
         </div>
       </div>
@@ -343,7 +340,7 @@ export default function EbayAdminPage() {
             <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
             <p><strong>Repair missing details</strong> scans all imported eBay products, then repairs shallow records that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories. It repairs a safe batch at a time; run again if the message says products remain queued.</p><p><strong>Refresh categories/overviews</strong> remaps eBay imports into the closest website category and rebuilds shorter, more precise overview text. It processes a safe batch at a time.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
-            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p><p><strong>Queue image backgrounds</strong> adds all imported eBay images to the self-hosted VPS/local worker queue. The worker downloads originals temporarily, removes backgrounds locally, applies the Combay background, uploads the final processed image, then deletes temporary originals. Original image files are not stored permanently.</p><p><strong>Export image backup</strong> creates a 48-hour downloadable backup request for processed images. The worker creates the ZIP and emails the admin a secure temporary download link.</p>
+            <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p><p><strong>Image background removal is parked for V2.</strong> The queue/worker infrastructure remains in the codebase, but bulk background removal is disabled in the admin UI because the first quality test was not acceptable for industrial/eBay source photos.</p>
           </div>
           <div className="border-t border-gray-100 mt-4 pt-4 text-xs text-gray-400 space-y-1">
             <p>Last sync: {config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"}</p>
