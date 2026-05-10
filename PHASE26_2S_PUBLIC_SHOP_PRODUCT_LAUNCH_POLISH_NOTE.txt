@@ -1,0 +1,91 @@
+Phase 26.2S — Public shop and product-page launch polish
+
+Context:
+After admin, email, Visual CMS and customer portal work, the next customer-facing surface is the public shop/product journey. This phase focuses on compactness, mobile containment and customer-facing polish without changing checkout, cart, eBay sync, or product API logic.
+
+Implemented:
+1. Public Shop page / product cards
+   File: src/components/shop/ShopClient.tsx
+   - Reduced shop hero height and promo-card padding.
+   - Reduced sticky search/filter bar height.
+   - Made filter layout safer on mobile:
+     - filters stack above results on mobile
+     - sidebar only behaves as sidebar on large screens
+   - Reduced filter card padding and sticky top offset.
+   - Reduced product grid gap.
+   - Made product cards more compact:
+     - smaller image area
+     - smaller image padding
+     - smaller body padding
+     - contained long SKU/brand/MPN/category text
+     - constrained title height
+     - smaller price/stock block
+     - smaller View/Quote/Add to cart buttons
+   - Preserved quote links, product links and add-to-cart behaviour.
+
+2. Product detail page
+   File: src/components/shop/ProductDetail.tsx
+   - Reduced main page vertical padding.
+   - Reduced product detail grid gap.
+   - Made product metadata grid safer on mobile:
+     - one column on mobile
+     - two columns on larger screens
+     - long values truncated/contained
+   - Made price/action card more compact.
+   - Reduced action button height.
+   - Reduced tab/detail panel card padding where matching classes existed.
+   - Preserved:
+     - gallery
+     - variants
+     - quantity selector
+     - add to cart
+     - request quote
+     - ask question
+     - tabs
+     - documents/specs/overview
+
+3. Public navigation
+   File: src/components/layout/Navigation.tsx
+   - Slightly reduced header height.
+   - Slightly reduced logo size.
+   - Slightly reduced desktop CTA/button padding.
+   - Slightly reduced mobile menu row height.
+   - Preserved navigation, mega menu, search, WhatsApp and cart counter.
+
+4. Footer
+   File: src/components/layout/Footer.tsx
+   - Reduced footer vertical padding.
+   - Reduced footer logo size.
+   - Reduced footer grid gaps.
+   - Tightened contact/link spacing.
+   - Fixed labels:
+     - "Order’s/Quotes" -> "Orders / Quotes"
+     - "General/Media" -> "General / Media"
+   - Preserved all footer links and CMS footer content support.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Public Shop page:
+   - desktop and mobile
+   - filters open/close
+   - category selection
+   - search/sort
+   - product cards do not overflow
+   - View / Quote / Add to cart still work
+2. Product detail page:
+   - gallery displays
+   - variants select
+   - quantity changes
+   - add to cart works
+   - request quote opens/sends
+   - ask question opens/sends
+   - tabs still switch correctly
+3. Header:
+   - mega menu opens
+   - mobile menu opens
+   - cart counter still updates
+4. Footer:
+   - links remain correct
+   - contact labels display properly

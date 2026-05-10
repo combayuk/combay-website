@@ -54,9 +54,9 @@ export default function Navigation() {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/95">
       <div className="site-shell">
-        <div className="flex h-[68px] items-center justify-between gap-4">
+        <div className="flex h-[64px] items-center justify-between gap-3">
           <Link href="/" className="group flex flex-shrink-0 items-center" aria-label="Combay home">
-            <img src="/images/combay-logo.svg" alt="Combay" className="h-10 w-auto max-w-[180px] object-contain" />
+            <img src="/images/combay-logo.svg" alt="Combay" className="h-9 w-auto max-w-[165px] object-contain" />
           </Link>
 
           <nav className="hidden h-full items-center lg:flex">
@@ -102,7 +102,7 @@ export default function Navigation() {
               )}
             </div>
             {NAV.map((item) => (
-              <Link key={item.href} href={item.href} className="flex h-full items-center border-b-2 border-transparent px-3.5 text-sm font-800 text-slate-700 transition-colors hover:border-[#E8A44A] hover:text-[#2D4F7A]">
+              <Link key={item.href} href={item.href} className="flex h-full items-center border-b-2 border-transparent px-3 text-sm font-800 text-slate-700 transition-colors hover:border-[#E8A44A] hover:text-[#2D4F7A]">
                 {item.label}
               </Link>
             ))}
@@ -113,10 +113,10 @@ export default function Navigation() {
               <ShoppingCart size={18} />
               {cartCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E8A44A] px-1 text-[10px] font-900 text-[#2D4F7A]">{cartCount}</span>}
             </Link>
-            <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? "447340383334"}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-md border border-[#25D366]/50 px-3.5 py-2 text-sm font-800 leading-none text-[#128C4A] transition-colors hover:bg-[#25D366] hover:text-white">
+            <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? "447340383334"}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-md border border-[#25D366]/50 px-3 py-2 text-sm font-800 leading-none text-[#128C4A] transition-colors hover:bg-[#25D366] hover:text-white">
               <WAIcon /> WhatsApp
             </a>
-            <Link href="/repair" className="rounded-md bg-[#2D4F7A] px-4 py-2.5 text-sm font-900 text-white transition-colors hover:bg-[#355F8E]">Request Repair</Link>
+            <Link href="/repair" className="rounded-md bg-[#2D4F7A] px-3.5 py-2 text-sm font-900 text-white transition-colors hover:bg-[#355F8E]">Request Repair</Link>
           </div>
 
           <button className="rounded-md border border-slate-200 p-2.5 text-[#2D4F7A] lg:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
@@ -127,10 +127,10 @@ export default function Navigation() {
 
       {mobileOpen && (
         <div className="border-t border-slate-200 bg-white lg:hidden">
-          <div className="site-shell py-4">
+          <div className="site-shell py-3">
             <div className="grid gap-2">
               <Link href="/shop" className="rounded-lg bg-slate-50 px-3 py-2.5 font-900 text-[#2D4F7A]">Shop equipment</Link>
-              {NAV.map((item) => <Link key={item.href} href={item.href} className="rounded-lg px-4 py-3 font-800 text-slate-700 hover:bg-slate-50">{item.label}</Link>)}
+              {NAV.map((item) => <Link key={item.href} href={item.href} className="rounded-lg px-3 py-2.5 text-sm font-800 text-slate-700 hover:bg-slate-50">{item.label}</Link>)}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Link href="/cart" className="btn-secondary">Cart {cartCount ? `(${cartCount})` : ""}</Link>
                 <Link href="/contact" className="btn-primary">Get quote</Link>
