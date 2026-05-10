@@ -1,0 +1,55 @@
+Phase 26.2B — Compact Gmail-style Email Automation composer
+
+Context:
+The user requested the same compact Gmail-style principle from Custom Email to be applied to Email Automation. The goal is to reduce bulky cards/buttons and make automation setup feel like a structured email campaign builder.
+
+Implemented:
+- Rebuilt Admin > Marketing / Email Automation UI into a compact composer.
+- Header is smaller and operational, with compact stat pills.
+- Automation setup is now laid out as:
+  - Automation name
+  - Trigger
+  - Delay/schedule behaviour
+  - Recipients/audience summary
+  - Template dropdown
+  - Subject
+  - Compact email editor
+  - CTA fields
+  - Preview/save controls
+- Template selection is now dropdown-based:
+  - Search templates
+  - Filter template type
+  - Apply selected template
+  - Add new template from current email
+  - Edit/manage selected template
+- Editor toolbar is compact and email-composer style:
+  - Bold
+  - Italic
+  - Underline
+  - Font size markup
+  - Navy/accent colour markup
+  - Preview
+- Live preview is retained but moved into a compact side preview and modal preview.
+- Automation rules list is now more compact and table-like.
+- Recent automation logs are cleaner and smaller.
+- Draft template create/edit form is collapsible instead of permanently occupying a large page block.
+
+Important:
+- This phase is UI/UX refinement only.
+- Existing automation backend and trigger logic are preserved.
+- Persistent per-rule lead/manual recipient targeting is not added here because the current EmailAutomationRule schema does not yet store audience selection fields. The recipient field currently explains the existing trigger/preference audience model.
+- If the user wants automations to persist lead/manual audience targeting like Custom Email, that should be a separate schema-backed phase requiring Prisma db push and updates to scheduled automation sending logic.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Marketing.
+2. Confirm compact header and stat pills.
+3. Create a new automation using the compact form.
+4. Open Template dropdown, search, apply template.
+5. Add new template from current email.
+6. Edit an existing rule.
+7. Preview automation email.
+8. Save/activate automation.
+9. Confirm rules table and recent logs still display.
