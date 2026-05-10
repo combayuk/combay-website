@@ -315,7 +315,7 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
     await loadAddresses();
   }
 
-  const paidOrders = portalOrders.filter((order) => order.paymentStatus === "PAID").length;
+  const activeOrders = portalOrders.filter((order) => ["PAYMENT_RECEIVED", "PROCESSING", "DISPATCHED", "DELIVERED"].includes(order.status)).length;
   const trackedOrders = portalOrders.filter((order) => order.tracking).length;
   const activeReturns = portalReturns.filter((item) => !["REFUNDED", "CLOSED", "REJECTED"].includes(item.status)).length;
   const openReturnRequests = portalReturns.filter((item) => ["AWAITING_APPROVAL", "REQUESTED"].includes(item.status)).length;
@@ -336,7 +336,7 @@ export default function PortalClient({ initialSection = "orders" }: { initialSec
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{portalOrders.length} orders</span>
-            <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{paidOrders} paid</span>
+            <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{activeOrders} active</span>
             <span className="rounded-full bg-blue-50 px-3 py-1.5 font-900 text-blue-700">{trackedOrders} tracking uploaded</span>
             <span className="rounded-full bg-amber-50 px-3 py-1.5 font-900 text-amber-700">{openReturnRequests} awaiting return approval</span>
             <span className="rounded-full bg-purple-50 px-3 py-1.5 font-900 text-purple-700">{activeReturns} active returns</span>

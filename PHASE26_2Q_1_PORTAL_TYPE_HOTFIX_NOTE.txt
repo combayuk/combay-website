@@ -1,0 +1,26 @@
+Phase 26.2Q.1 — Customer portal TypeScript build hotfix
+
+Context:
+Vercel failed after Phase 26.2Q with:
+Property 'paymentStatus' does not exist on type 'PortalOrder'.
+
+Cause:
+The new portal stats strip counted paid orders using order.paymentStatus, but PortalOrder only exposes status/tracking fields in the current type.
+
+Fixed:
+- src/components/portal/PortalClient.tsx
+- Replaced the paid-orders stat with an active-orders stat using existing PortalOrder.status values:
+  - PAYMENT_RECEIVED
+  - PROCESSING
+  - DISPATCHED
+  - DELIVERED
+- Updated the label from "paid" to "active".
+
+No functional backend changes.
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Deploy and confirm Vercel build passes.
+2. Customer portal loads.
+3. Portal stats strip shows orders / active / tracking uploaded / return approval / active returns.
