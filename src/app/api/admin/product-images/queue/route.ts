@@ -67,7 +67,6 @@ export async function POST(req: NextRequest) {
     if (action === "park-v2-cleanup") {
       const result = await parkImageProcessingForV2();
       return NextResponse.json({
-        ok: true,
         ...result,
         message: `Image processing parked for V2. Rejected ${result.jobsUpdated} old queued/review/failed job(s) and marked ${result.imagesUpdated} image status record(s) as parked.`,
       });
