@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
+import { requireAdminApiSession } from "@/lib/apiAccess";
 
 function normaliseInteraction(item: any) {
   return {
@@ -38,6 +39,9 @@ function normaliseLead(lead: any) {
 }
 
 export async function GET(request: NextRequest) {
+  const access = await requireAdminApiSession();
+  if (!access.ok) return access.response;
+
   const q = (request.nextUrl.searchParams.get("q") || "").trim().toLowerCase();
   const source = request.nextUrl.searchParams.get("source") || "";
 

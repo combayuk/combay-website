@@ -1,0 +1,55 @@
+Phase 26.1 — Custom email recipient targeting
+
+Context:
+The user requested the Send custom email admin page to support:
+- sending to all leads
+- sending to specific selected leads
+- adding new/manual email addresses
+- sending only to new/manual email addresses
+with a minimal but complete UI.
+
+Implemented:
+1. Admin UI
+   File: src/app/admin/marketing/broadcast/page.tsx
+   - Adds recipient mode cards:
+     - Registered customers
+     - All leads
+     - Specific leads
+     - Only new/manual emails
+   - Adds lead search and checkbox selection for specific leads.
+   - Adds manual email textarea that accepts commas, spaces, semicolons or one-address-per-line.
+   - Shows selected lead chips.
+   - Shows estimated recipient summary.
+   - Keeps the existing content editor, quick templates, CTA label/URL and preview.
+   - Keeps the UI minimal and launch-oriented.
+
+2. Broadcast API
+   File: src/app/api/marketing/broadcast/route.ts
+   - Supports recipientMode:
+     - customers
+     - all-leads
+     - selected-leads
+     - manual-only
+   - Supports selectedLeadIds.
+   - Supports manualEmails.
+   - Deduplicates recipients across users/leads/manual entries before sending.
+   - Applies marketing preferences/unsubscribe checks to registered customers.
+   - Logs lead/manual sends in EmailAutomationLog with broadcast category/source.
+   - Keeps CTA buttons in outgoing broadcast emails.
+
+3. Leads API protection
+   File: src/app/api/leads/route.ts
+   - GET /api/leads now requires an admin session because it exposes lead contact data.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Marketing > Send custom email.
+2. Select Registered customers + add a manual address; send to one safe test address first if possible.
+3. Select All leads and confirm estimated count is shown.
+4. Select Specific leads, search and tick several leads.
+5. Select Only new/manual emails and enter a new address.
+6. Confirm duplicate manual emails are counted once.
+7. Confirm broadcast API response shows checked/sent/skipped/failed.
+8. Confirm Admin > Leads still loads because /api/leads now requires admin session.
