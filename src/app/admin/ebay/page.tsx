@@ -37,7 +37,7 @@ export default function EbayAdminPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | "backgrounds" | "queueImages" | "backupImages" | null>(null);
+  const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | "remapCategories" | "backgrounds" | "queueImages" | "backupImages" | null>(null);
   const [syncProgress, setSyncProgress] = useState<any>(null);
 
   async function load() {
@@ -145,6 +145,22 @@ export default function EbayAdminPage() {
       setMessage(`${result.message || "Refresh complete."} Updated ${result.updated || 0}, skipped ${result.skipped || 0}.`);
     } catch (error: any) {
       setMessage(error.message || "Could not refresh eBay categories and overviews.");
+    } finally {
+      setSyncing(null);
+      await load();
+    }
+  }
+
+  async function remapCategoriesOnly() {
+    setSyncing("remapCategories");
+    setMessage("Remapping all visible products into the Combay public category taxonomy and cleaning unused noisy marketplace categories.");
+    try {
+      const response = await fetch("/api/ebay/remap-categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 5000 }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.errors?.join(" ") || result.error || "Category remap failed.");
+      setMessage(result.message || `Category remap complete. Updated ${result.updated || 0}; skipped ${result.skipped || 0}.`);
+    } catch (error: any) {
+      setMessage(error.message || "Could not remap product categories.");
     } finally {
       setSyncing(null);
       await load();
@@ -267,6 +283,9 @@ export default function EbayAdminPage() {
           </button>
           <button onClick={refreshCategoriesAndOverviews} disabled={!!syncing || !connected} className="btn-secondary text-sm py-2 disabled:opacity-50">
             <RefreshCw size={14} className={syncing === "refresh" ? "animate-spin" : ""} /> Refresh categories/overviews
+          </button>
+          <button onClick={remapCategoriesOnly} disabled={!!syncing} className="btn-secondary text-sm py-2 disabled:opacity-50" title="No eBay call required. Reassigns products to Combay public master categories and hides/deletes unused noisy marketplace categories.">
+            <RefreshCw size={14} className={syncing === "remapCategories" ? "animate-spin" : ""} /> Remap categories only
           </button>
           <button type="button" disabled className="btn-secondary text-sm py-2 opacity-50 cursor-not-allowed" title="Background removal is parked for V2 after quality testing.">
             <RefreshCw size={14} /> Image processing parked for V2
@@ -417,7 +436,7 @@ export default function EbayAdminPage() {
             <p>The sync still uses one unified engine: Sell Inventory API first, then Active Listings fallback if the inventory API returns no records.</p>
             <p>Use <strong>Test sync 10</strong> before a full import. Then use <strong>Sync first 50</strong> to check mapping, descriptions and images before running all listings.</p>
             <p><strong>Sync all</strong> now runs in safe 50-listing batches. This avoids one long Vercel request and is designed for larger inventories, including 5,000+ listings.</p>
-            <p><strong>Repair missing details</strong> scans all imported eBay products, then repairs shallow records that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories. It repairs a safe batch at a time; run again if the message says products remain queued.</p><p><strong>Refresh categories/overviews</strong> remaps eBay imports into the closest website category and rebuilds shorter, more precise overview text. It processes a safe batch at a time.</p>
+            <p><strong>Repair missing details</strong> scans all imported eBay products, then repairs shallow records that still have missing images, fallback descriptions, missing specifics or generic eBay Import categories. It repairs a safe batch at a time; run again if the message says products remain queued.</p><p><strong>Refresh categories/overviews</strong> remaps eBay imports into the closest website category and rebuilds shorter, more precise overview text. It processes a safe batch at a time.</p><p><strong>Remap categories only</strong> does not call eBay. It quickly reassigns products into the public Combay master taxonomy and clears unused noisy marketplace category records.</p>
             <p>Existing Combay products are updated by eBay item ID or SKU. New listings are created as published products, including title, price, stock, images, item specifics and cleaned description where available.</p>
             <p>Products marked as sync-excluded are skipped. Ended/out-of-stock listings are kept, not deleted. Reset stuck sync marks old running jobs as failed if Vercel/browser state gets stuck.</p><p><strong>Image background removal is parked for V2.</strong> The queue/worker infrastructure remains in the codebase, but bulk background removal is disabled in the admin UI because the first quality test was not acceptable for industrial/eBay source photos.</p>
           </div>

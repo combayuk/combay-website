@@ -16,6 +16,7 @@ type ShopPageProps = {
   searchParams?: {
     q?: string;
     category?: string;
+    cat?: string;
   };
 };
 
@@ -25,7 +26,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     <main>
       <TopBar />
       <Navigation />
-      <ShopClient initialQuery={searchParams?.q ?? ""} initialCategory={searchParams?.category ?? ""} promotions={promotions} />
+      <ShopClient initialQuery={searchParams?.q ?? ""} initialCategory={searchParams?.category ?? searchParams?.cat ?? ""} promotions={promotions} />
       <Footer />
     </main>
   );

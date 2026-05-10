@@ -10,7 +10,7 @@ const SHOP_CATS = PUBLIC_CATEGORY_GROUPS.map((group) => ({
   name: group.label,
   slug: group.slug,
   image: group.image,
-  items: group.subcategories.slice(0, 3).map((item) => ({ name: item.label, slug: item.slug })),
+  items: group.subcategories.slice(0, 2).map((item) => ({ name: item.label, slug: item.slug })),
 }));
 
 const NAV = [
@@ -65,23 +65,23 @@ export default function Navigation() {
                 Shop <ChevronDown size={14} className={`transition-transform ${shopOpen ? "rotate-180" : ""}`} />
               </button>
               {shopOpen && (
-                <div className="absolute left-0 top-full max-h-[calc(100vh-84px)] w-[860px] overflow-y-auto rounded-b-xl border border-slate-200 bg-white shadow-2xl">
-                  <div className="grid grid-cols-4 gap-px bg-slate-100 p-px">
+                <div className="absolute left-0 top-full max-h-[calc(100vh-120px)] w-[780px] overflow-y-auto rounded-b-xl border border-slate-200 bg-white shadow-2xl">
+                  <div className="grid grid-cols-3 gap-px bg-slate-100 p-px">
                     {SHOP_CATS.map((cat) => (
-                      <div key={cat.slug} className="group bg-white p-3 transition-colors hover:bg-slate-50">
-                        <Link href={`/shop?category=${cat.slug}`} className="mb-1.5 flex items-center gap-2">
-                          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-slate-50">
-                            <img src={cat.image} alt="" className="h-9 w-9 object-contain" />
+                      <div key={cat.slug} className="group bg-white p-2.5 transition-colors hover:bg-slate-50">
+                        <Link href={`/shop?category=${cat.slug}`} className="mb-1 flex items-center gap-2">
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-slate-50">
+                            <img src={cat.image} alt="" className="h-8 w-8 object-contain" />
                           </span>
-                          <span className="font-display text-[13px] font-900 leading-tight text-[#2D4F7A] group-hover:text-[#C9872F]">{cat.name}</span>
+                          <span className="font-display text-[12px] font-900 leading-tight text-[#2D4F7A] group-hover:text-[#C9872F]">{cat.name}</span>
                         </Link>
-                        <ul className="space-y-0.5 pl-11">
-                          {cat.items.map((item) => <li key={item.slug}><Link href={`/shop?category=${item.slug}`} className="text-[11px] leading-4 text-slate-500 hover:text-[#2D4F7A]">{item.name}</Link></li>)}
+                        <ul className="space-y-0.5 pl-10">
+                          {cat.items.map((item) => <li key={item.slug}><Link href={`/shop?category=${item.slug}`} className="text-[10.5px] leading-3.5 text-slate-500 hover:text-[#2D4F7A]">{item.name}</Link></li>)}
                         </ul>
                       </div>
                     ))}
                   </div>
-                  <form action="/shop" method="get" onSubmit={(event) => { if (!megaSearch.trim()) { event.preventDefault(); setMegaSearchError(true); return; } setShopOpen(false); }} className="bg-slate-50 px-4 py-3">
+                  <form action="/shop" method="get" onSubmit={(event) => { if (!megaSearch.trim()) { event.preventDefault(); setMegaSearchError(true); return; } setShopOpen(false); }} className="bg-slate-50 px-3 py-2.5">
                     <div className="flex items-start justify-between gap-3">
                     <label className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-800 text-slate-500 shadow-sm focus-within:border-[#E8A44A] ${megaSearchError ? "border-red-500 ring-2 ring-red-100" : "border-slate-200"}`}>
                       <Search size={15} className="flex-shrink-0 text-[#C9872F]" />
@@ -129,7 +129,7 @@ export default function Navigation() {
         <div className="border-t border-slate-200 bg-white lg:hidden">
           <div className="site-shell py-4">
             <div className="grid gap-2">
-              <Link href="/shop" className="rounded-lg bg-slate-50 px-4 py-3 font-900 text-[#2D4F7A]">Shop equipment</Link>
+              <Link href="/shop" className="rounded-lg bg-slate-50 px-3 py-2.5 font-900 text-[#2D4F7A]">Shop equipment</Link>
               {NAV.map((item) => <Link key={item.href} href={item.href} className="rounded-lg px-4 py-3 font-800 text-slate-700 hover:bg-slate-50">{item.label}</Link>)}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Link href="/cart" className="btn-secondary">Cart {cartCount ? `(${cartCount})` : ""}</Link>

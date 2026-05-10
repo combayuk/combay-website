@@ -3,7 +3,7 @@ import { getProductsFromRepository, saveProductToRepository } from "@/lib/produc
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
-  const category = searchParams.get("category") ?? "";
+  const category = searchParams.get("category") ?? searchParams.get("cat") ?? "";
   const condition = searchParams.get("condition") ?? "";
   const status = searchParams.get("status") ?? "";
   const admin = searchParams.get("admin") === "1";

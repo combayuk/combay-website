@@ -1,0 +1,35 @@
+Phase 23 — Category taxonomy and shop filter hardening
+
+Context:
+The user reported that eBay imports were creating too many noisy item categories, products were not always showing under the correct category, the shop needed to support master-category filtering, and the mega menu was slightly too large.
+
+Implemented:
+- Expanded legacy/eBay category slug normalisation in src/lib/categoryTaxonomy.ts.
+- Added publicMasterCategorySlugs() helper.
+- Added backend category remap function:
+  remapProductsToPublicCategories(limit)
+- Added API route:
+  POST /api/ebay/remap-categories
+- Admin > eBay now has:
+  Remap categories only
+  This does not call eBay. It reassigns products into Combay public master categories and deletes unused non-public category records where safe.
+- Shop page now accepts both ?category= and legacy ?cat= parameters.
+- Products API now accepts both category and cat parameters.
+- Mega menu is slightly more compact:
+  - narrower dropdown
+  - three columns
+  - smaller category blocks
+  - fewer visible subcategory links per master category
+  - lower max-height to avoid covering the full first viewport.
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Deploy.
+2. Admin > eBay > click Remap categories only.
+3. Open /shop and verify filters show only public Combay categories.
+4. Click master category from mega menu and confirm it is visually selected in filters.
+5. Click a subcategory and confirm it is visually selected and nested under its master category.
+6. Verify legacy links like /shop?cat=lab-scientific still work.
+7. Verify the mega menu is shorter and does not cover more than the first viewport.

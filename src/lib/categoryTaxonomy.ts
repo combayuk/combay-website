@@ -115,6 +115,7 @@ export const PUBLIC_CATEGORY_LIST = [
 ];
 
 const LEGACY_SELECTED_SLUGS: Record<string, string> = {
+  // Older site slugs
   "test-detection": "test-measurement",
   "display-av": "av-broadcast",
   "audio-broadcast": "av-broadcast",
@@ -122,15 +123,39 @@ const LEGACY_SELECTED_SLUGS: Record<string, string> = {
   "oil-gas": "process-workshop",
   "lab-equipment": "lab-scientific",
   "industrial-automation-control": "automation-control",
+
+  // Noisy eBay/import category slugs that should never appear as standalone public filters
+  "ebay-import": "industrial-components-spares",
+  "uncategorised": "industrial-components-spares",
+  "uncategorized": "industrial-components-spares",
   "business-office-industrial": "industrial-components-spares",
+  "business-industrial": "industrial-components-spares",
+  "industrial-automation-motion-controls": "automation-control",
   "electrical-equipment-supplies": "electrical-components",
+  "electronic-components-semiconductors": "electrical-components",
+  "wire-cable-connectors": "cables-connectors",
+  "connectors-cables": "cables-connectors",
+  "healthcare-lab-dental": "lab-scientific",
   "medical-lab-equipment": "lab-scientific",
   "test-measurement-inspection": "test-measurement",
+  "computer-tablets-networking": "it-networking",
+  "enterprise-networking-servers": "it-networking",
+  "servers-clients-terminals": "servers-storage",
+  "switches-hubs": "switches-routers",
+  "pro-audio-equipment": "audio-equipment",
+  "tv-video-home-audio": "av-broadcast",
+  "cameras-photo": "broadcast-video",
+  "facility-maintenance-safety": "test-measurement",
 };
 
 export function normaliseSelectedCategorySlug(slug?: string | null) {
   const clean = String(slug || "").trim().toLowerCase();
   return LEGACY_SELECTED_SLUGS[clean] || clean;
+}
+
+
+export function publicMasterCategorySlugs() {
+  return PUBLIC_CATEGORY_GROUPS.map((group) => group.slug);
 }
 
 const slugToCanonical = new Map<string, CanonicalCategory>();

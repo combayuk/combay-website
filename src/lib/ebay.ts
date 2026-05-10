@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { saveProductToRepository } from "@/lib/productRepository";
 import { CATEGORIES } from "@/lib/catalog";
-import { canonicalCategoryForText } from "@/lib/categoryTaxonomy";
+import { canonicalCategoryForText, publicMasterCategorySlugs } from "@/lib/categoryTaxonomy";
 import { prepareImportedProductImages } from "@/lib/productImageProcessing";
 
 type EbayConfig = {
@@ -1115,6 +1115,109 @@ export async function repairMissingEbayDetailImports(limit = 75) {
   } catch (err: any) {
     await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay repair failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
     return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay repair failed."] };
+  }
+}
+
+
+export async function remapProductsToPublicCategories(limit = 1000) {
+  await markStaleEbayRuns();
+  const candidateLimit = Math.max(1, Math.min(5000, Number(limit || 1000)));
+  const run = await prisma.ebaySyncRun.create({
+    data: {
+      status: "RUNNING",
+      message: `Remapping up to ${candidateLimit} products into Combay public master categories.`,
+    } as any,
+  });
+
+  let updated = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  try {
+    const publicMasterSlugs = publicMasterCategorySlugs();
+    const products = await prisma.product.findMany({
+      where: {
+        syncExcluded: false,
+        status: { not: "ARCHIVED" },
+      },
+      include: {
+        category: true,
+        specs: { orderBy: { sortOrder: "asc" } },
+      },
+      orderBy: [{ source: "asc" }, { updatedAt: "asc" }],
+      take: candidateLimit,
+    });
+
+    for (const product of products) {
+      try {
+        const canonical = canonicalCategoryForText({
+          title: product.title,
+          category: product.category?.name,
+          categorySlug: product.category?.slug,
+          brand: product.brand,
+          manufacturer: product.manufacturer,
+          model: product.model,
+          mpn: product.mpn,
+          specsText: product.specs?.map((spec: any) => `${spec.label} ${spec.value}`).join(" "),
+        });
+
+        if (!canonical.groupSlug || !canonical.groupLabel) {
+          skipped++;
+          continue;
+        }
+
+        const category = await upsertWebsiteCategory(canonical.groupLabel, canonical.groupSlug);
+        if (product.categoryId !== category.id) {
+          await prisma.product.update({
+            where: { id: product.id },
+            data: { categoryId: category.id },
+          });
+          updated++;
+        } else {
+          skipped++;
+        }
+      } catch (error: any) {
+        skipped++;
+        errors.push(`${product.sku || product.id}: ${error.message || "category remap failed"}`);
+      }
+    }
+
+    const deletedUnused = await prisma.category.deleteMany({
+      where: {
+        slug: { notIn: publicMasterSlugs },
+        products: { none: {} },
+      },
+    }).catch(() => ({ count: 0 }));
+
+    const message = `Category remap complete. Checked ${products.length} product(s); updated ${updated}; unchanged/skipped ${skipped}; deleted ${deletedUnused.count || 0} unused non-public category record(s).`;
+    await prisma.ebaySyncRun.update({
+      where: { id: run.id },
+      data: {
+        status: errors.length ? "PARTIAL" : "SUCCESS",
+        mode: "category-remap",
+        records: products.length,
+        message,
+        updated,
+        skipped,
+        errors,
+        finishedAt: new Date(),
+      } as any,
+    });
+    return { ok: true, checked: products.length, updated, skipped, deletedUnusedCategories: deletedUnused.count || 0, errors, message };
+  } catch (error: any) {
+    await prisma.ebaySyncRun.update({
+      where: { id: run.id },
+      data: {
+        status: "FAILED",
+        mode: "category-remap",
+        message: error.message || "Category remap failed.",
+        updated,
+        skipped,
+        errors: [...errors, error.message || "Category remap failed."],
+        finishedAt: new Date(),
+      } as any,
+    });
+    return { ok: false, updated, skipped, errors: [...errors, error.message || "Category remap failed."] };
   }
 }
 
