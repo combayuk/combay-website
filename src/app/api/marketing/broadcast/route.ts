@@ -16,6 +16,12 @@ type Recipient = {
   source: "customer" | "lead" | "manual";
 };
 
+type BroadcastAttachment = {
+  filename: string;
+  content: string;
+  contentType?: string;
+};
+
 function cleanEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
@@ -39,6 +45,25 @@ function bodyHtml(value: string) {
     .filter(Boolean)
     .map((part) => `<p>${escapeHtml(part).replace(/\n/g, "<br/>")}</p>`)
     .join("");
+}
+
+function cleanAdminHtml(value: string) {
+  return String(value || "")
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*["'][\s\S]*?["']/gi, "")
+    .replace(/javascript:/gi, "");
+}
+
+function normaliseAttachments(value: unknown): BroadcastAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item: any) => ({
+      filename: String(item?.filename || "").trim(),
+      content: String(item?.content || "").trim(),
+      contentType: item?.contentType ? String(item.contentType).trim() : undefined,
+    }))
+    .filter((item) => item.filename && item.content)
+    .slice(0, 5);
 }
 
 function title(value: string) {
@@ -120,9 +145,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const subject = String(body.subject || "").trim();
   const rawBody = String(body.body || "").trim();
+  const rawBodyHtml = String(body.bodyHtml || "").trim();
   const ctaLabel = String(body.ctaLabel || "").trim();
   const ctaUrlRaw = String(body.ctaUrl || "").trim();
   const respect = body.respectPreferences !== false;
+  const attachments = normaliseAttachments(body.attachments);
 
   if (!subject || !rawBody) {
     return NextResponse.json({ ok: false, error: "Subject and body are required." }, { status: 400 });
@@ -166,6 +193,7 @@ export async function POST(request: Request) {
 
     const renderedSubject = render(subject, recipient);
     const renderedBody = render(rawBody, recipient);
+    const renderedBodyHtml = rawBodyHtml ? cleanAdminHtml(render(rawBodyHtml, recipient)) : bodyHtml(renderedBody);
     const ctaUrl = ctaUrlRaw ? resolveCtaUrl(ctaUrlRaw, recipient) : "";
     const token = prefs?.unsubscribeToken;
     const unsubscribe = token ? unsubscribeUrl(token, "BROADCAST") : `${siteUrl().replace(/\/$/, "")}/contact`;
@@ -173,7 +201,7 @@ export async function POST(request: Request) {
     const cta = ctaUrl && ctaLabel ? emailButton(ctaUrl, ctaLabel, "primary") : "";
     const html = htmlShell(
       renderedSubject,
-      `${bodyHtml(renderedBody)}${cta}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>${footer}`,
+      `${renderedBodyHtml}${cta}<p style="margin-bottom:0;">Kind regards,<br/><strong>Combay Limited</strong></p>${footer}`,
       renderedSubject,
     );
 
@@ -196,6 +224,7 @@ export async function POST(request: Request) {
       headers: token
         ? { "List-Unsubscribe": `<${unsubscribe}>`, "X-Combay-Email-Category": "broadcast" }
         : { "X-Combay-Email-Category": "broadcast" },
+      attachments,
     });
 
     response.sent ? sent++ : failed++;

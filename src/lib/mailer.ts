@@ -7,6 +7,12 @@ export type EmailSendResult = {
   error?: string;
 };
 
+export type EmailAttachment = {
+  filename: string;
+  content: string;
+  contentType?: string;
+};
+
 export type SendEmailInput = {
   to: string | string[];
   subject: string;
@@ -14,6 +20,7 @@ export type SendEmailInput = {
   text?: string;
   replyTo?: string;
   headers?: Record<string, string>;
+  attachments?: EmailAttachment[];
 };
 
 function cleanEmail(value: unknown) {
@@ -82,6 +89,7 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
           "X-Entity-Ref-ID": `combay-${Date.now()}`,
           ...(input.headers || {}),
         },
+        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       }),
     });
     const data = await response.json().catch(() => ({}));

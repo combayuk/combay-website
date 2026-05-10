@@ -1,0 +1,48 @@
+Phase 26.2A — Compact Gmail-style Custom Email composer
+
+Context:
+The previous custom email recipient-targeting patch added the core recipient logic, but the UI still felt bulky. The user asked for a compact Gmail/Outlook-style composer with recipient dropdowns, template dropdowns, rich-text controls, attachments, preview, and minimal spacing.
+
+Implemented:
+1. Rebuilt Admin > Marketing > Send custom email as a compact composer:
+   File: src/app/admin/marketing/broadcast/page.tsx
+   - Compact To field.
+   - Dropdown recipient selector.
+   - All registered leads selected by default.
+   - Searchable lead dropdown.
+   - Ability to exclude individual leads when sending to all leads.
+   - Specific-lead selection mode.
+   - Manual/new email addresses as removable chips.
+   - Manual-only send mode.
+   - Compact template dropdown.
+   - Template search.
+   - Add new template from current email without leaving the page.
+   - Compact subject field.
+   - Gmail-like rich-text toolbar.
+   - Bold, italic, font family, font size, colour, alignment, bullet list, numbered list, insert link, clear formatting.
+   - Attachment control.
+   - Attachment chips with remove buttons.
+   - Preview modal.
+   - Compact send bar.
+
+2. Broadcast API improvements:
+   File: src/app/api/marketing/broadcast/route.ts
+   - Accepts bodyHtml from the rich-text composer.
+   - Sanitises obvious script/event handler patterns from admin HTML before sending.
+   - Supports attachments.
+   - Keeps recipient modes from Phase 26.1:
+     customers, all-leads, selected-leads, manual-only.
+   - Keeps deduplication and logging.
+
+3. Mailer improvements:
+   File: src/lib/mailer.ts
+   - Adds attachment support to SendEmailInput.
+   - Passes attachments through to Resend payload when provided.
+
+No Prisma schema change.
+No db push required.
+
+Notes:
+- Attachment files are capped client-side to five files and 5MB per file before conversion.
+- For bulk campaigns, admin should avoid large attachments because each recipient receives the attachment payload.
+- This phase only updates Custom Email. Email Automation should receive the same composer pattern in Phase 26.2B.
