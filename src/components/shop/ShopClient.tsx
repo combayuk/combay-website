@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown, Search, SlidersHorizontal, X, ShoppingCart } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X, ShoppingCart, RotateCcw, AlertTriangle } from "lucide-react";
 import { CONDITION_LABELS, type CatalogProduct } from "@/lib/catalog";
 import { PUBLIC_CATEGORY_LIST, normaliseSelectedCategorySlug, selectedCategoryLabel, type PublicSubcategory } from "@/lib/categoryTaxonomy";
 import { addCartItem } from "@/lib/cart";
 import PublicPromotionCards, { type PromotionCardData } from "@/components/promotions/PublicPromotionCards";
 
 const CONDITIONS = [
-  { label: "All Conditions", value: "" },
+  { label: "All conditions", value: "" },
   { label: "New", value: "NEW" },
   { label: "New open box", value: "NEW_OPEN_BOX" },
   { label: "Used tested", value: "USED" },
@@ -23,43 +23,136 @@ const SORT_OPTIONS = [
   { label: "Name A–Z", value: "name_asc" },
 ];
 
-type ShopClientProps = { initialQuery?: string; initialCategory?: string; promotions?: PromotionCardData[] };
+type ShopClientProps = {
+  initialQuery?: string;
+  initialCategory?: string;
+  initialCondition?: string;
+  initialPriceMin?: string;
+  initialPriceMax?: string;
+  initialProducts?: CatalogProduct[];
+  initialCategories?: typeof PUBLIC_CATEGORY_LIST;
+  initialSource?: string;
+  promotions?: PromotionCardData[];
+};
 
-export default function ShopClient({ initialQuery = "", initialCategory = "", promotions = [] }: ShopClientProps) {
+function priceLabel(product: CatalogProduct) {
+  if (product.priceOnRequest || product.price === null) return "Request quote";
+  return `£${product.price.toLocaleString("en-GB")}`;
+}
+
+function productBrand(product: CatalogProduct) {
+  return product.brand || product.manufacturer || "Combay";
+}
+
+function dispatchCopy(product: CatalogProduct) {
+  const dispatch = product.dispatchNote || product.leadTime || "";
+  if (!dispatch) return product.warranty || "Warranty available";
+  if (dispatch.length > 64) return `${dispatch.slice(0, 61)}…`;
+  return dispatch;
+}
+
+function activeFilterLabel(type: string, value: string) {
+  if (type === "category") return selectedCategoryLabel(value);
+  if (type === "condition") return CONDITIONS.find((item) => item.value === value)?.label || value;
+  if (type === "min") return `Min £${value}`;
+  if (type === "max") return `Max £${value}`;
+  return value;
+}
+
+export default function ShopClient({
+  initialQuery = "",
+  initialCategory = "",
+  initialCondition = "",
+  initialPriceMin = "",
+  initialPriceMax = "",
+  initialProducts = [],
+  initialCategories = PUBLIC_CATEGORY_LIST,
+  initialSource = "",
+  promotions = [],
+}: ShopClientProps) {
   const initialCategoryNormalised = normaliseSelectedCategorySlug(initialCategory);
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState(() => initialCategoryNormalised);
-  const [condition, setCondition] = useState("");
+  const [condition, setCondition] = useState(initialCondition);
   const [sort, setSort] = useState("newest");
   const [showFilters, setShowFilters] = useState(false);
-  const [priceMin, setPriceMin] = useState("");
-  const [priceMax, setPriceMax] = useState("");
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [source, setSource] = useState("");
-  const [categories, setCategories] = useState(PUBLIC_CATEGORY_LIST);
-  const [openCategory, setOpenCategory] = useState(() => PUBLIC_CATEGORY_LIST.find((cat) => cat.slug === initialCategoryNormalised || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === initialCategoryNormalised))?.slug || "automation-control");
+  const [priceMin, setPriceMin] = useState(initialPriceMin);
+  const [priceMax, setPriceMax] = useState(initialPriceMax);
+  const [products, setProducts] = useState<CatalogProduct[]>(initialProducts);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [source, setSource] = useState(initialSource);
+  const [categories, setCategories] = useState(initialCategories.length ? initialCategories : PUBLIC_CATEGORY_LIST);
+  const [openCategory, setOpenCategory] = useState(() => initialCategories.find((cat) => cat.slug === initialCategoryNormalised || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === initialCategoryNormalised))?.slug || "automation-control");
+  const firstFetchSkipped = useRef(false);
 
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (query) params.set("q", query);
-      if (category) params.set("category", category);
-      if (condition) params.set("condition", condition);
-      if (priceMin) params.set("priceMin", priceMin);
-      if (priceMax) params.set("priceMax", priceMax);
+  function buildParams() {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (category) params.set("category", category);
+    if (condition) params.set("condition", condition);
+    if (priceMin) params.set("min", priceMin);
+    if (priceMax) params.set("max", priceMax);
+    return params;
+  }
+
+  function syncUrl() {
+    if (typeof window === "undefined") return;
+    const params = buildParams();
+    const nextUrl = params.toString() ? `/shop?${params.toString()}` : "/shop";
+    window.history.replaceState(null, "", nextUrl);
+  }
+
+  async function loadProducts() {
+    setLoading(true);
+    setError("");
+    const params = buildParams();
+    try {
       const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Inventory request failed");
       const result = await response.json();
       setProducts(result.products ?? []);
       setSource(result.source ?? "");
       if (Array.isArray(result.categories) && result.categories.length) setCategories(result.categories);
+    } catch {
+      setError("Inventory could not be loaded. Please refresh the page or contact sales@combay.co.uk.");
+    } finally {
       setLoading(false);
-    }, 160);
+    }
+  }
+
+  useEffect(() => {
+    function applyUrlState() {
+      const params = new URLSearchParams(window.location.search);
+      const nextCategory = normaliseSelectedCategorySlug(params.get("category") ?? params.get("cat") ?? "");
+      setQuery(params.get("q") ?? "");
+      setCategory(nextCategory);
+      setCondition(params.get("condition") ?? "");
+      setPriceMin(params.get("min") ?? params.get("priceMin") ?? "");
+      setPriceMax(params.get("max") ?? params.get("priceMax") ?? "");
+      if (nextCategory) {
+        const parent = categories.find((cat) => cat.slug === nextCategory || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === nextCategory));
+        if (parent?.slug) setOpenCategory(parent.slug);
+      }
+    }
+    window.addEventListener("popstate", applyUrlState);
+    return () => window.removeEventListener("popstate", applyUrlState);
+  }, [categories]);
+
+  useEffect(() => {
+    if (!firstFetchSkipped.current) {
+      firstFetchSkipped.current = true;
+      syncUrl();
+      return;
+    }
+    const timer = setTimeout(() => {
+      syncUrl();
+      loadProducts();
+    }, 180);
     return () => clearTimeout(timer);
   }, [category, condition, priceMax, priceMin, query]);
 
-  const filtered = useMemo(() => {
+  const sortedProducts = useMemo(() => {
     return [...products].sort((a, b) => {
       const priceA = a.priceOnRequest || a.price === null ? Number.POSITIVE_INFINITY : a.price;
       const priceB = b.priceOnRequest || b.price === null ? Number.POSITIVE_INFINITY : b.price;
@@ -70,9 +163,31 @@ export default function ShopClient({ initialQuery = "", initialCategory = "", pr
     });
   }, [products, sort]);
 
-  const clearFilters = () => { setQuery(""); setCategory(""); setCondition(""); setPriceMin(""); setPriceMax(""); };
+  const clearFilters = () => {
+    setQuery("");
+    setCategory("");
+    setCondition("");
+    setPriceMin("");
+    setPriceMax("");
+  };
+
   const hasFilters = Boolean(query || category || condition || priceMin || priceMax);
   const activeCategoryLabel = selectedCategoryLabel(category);
+  const activeFilters = [
+    query ? { key: "q", type: "search", value: query, label: `Search: ${query}` } : null,
+    category ? { key: "category", type: "category", value: category, label: activeFilterLabel("category", category) } : null,
+    condition ? { key: "condition", type: "condition", value: condition, label: activeFilterLabel("condition", condition) } : null,
+    priceMin ? { key: "min", type: "min", value: priceMin, label: activeFilterLabel("min", priceMin) } : null,
+    priceMax ? { key: "max", type: "max", value: priceMax, label: activeFilterLabel("max", priceMax) } : null,
+  ].filter(Boolean) as Array<{ key: string; type: string; value: string; label: string }>;
+
+  function removeFilter(key: string) {
+    if (key === "q") setQuery("");
+    if (key === "category") setCategory("");
+    if (key === "condition") setCondition("");
+    if (key === "min") setPriceMin("");
+    if (key === "max") setPriceMax("");
+  }
 
   function selectCategory(slug: string) {
     setCategory(slug);
@@ -83,49 +198,184 @@ export default function ShopClient({ initialQuery = "", initialCategory = "", pr
   }
 
   return (
-    <div>
-      <div className="bg-navy-950 text-white py-8 lg:py-10"><div className="max-w-7xl mx-auto px-4"><div className="grid lg:grid-cols-[1fr_360px] gap-5 items-end"><div><p className="font-mono text-xs tracking-widest uppercase text-accent mb-2">Inventory</p><h1 className="font-display font-900 text-2xl lg:text-4xl mb-2">Browse industrial equipment</h1><p className="text-gray-400 text-sm leading-6 max-w-2xl">Search tested automation, laboratory, test, AV, networking and process equipment by SKU, brand, MPN, model or manufacturer.</p></div>{promotions.length > 0 ? <div className="rounded-xl border border-white/10 bg-white/5 p-3"><div className="flex items-center justify-between gap-3 mb-3"><div><p className="font-display font-800 text-sm text-white">Current shop offers</p><p className="text-xs text-white/60">Copy a code and apply it at checkout.</p></div></div><div className="space-y-2"><PublicPromotionCards promotions={promotions} compact /></div></div> : null}</div></div></div>
-      <div className="bg-white border-b border-gray-200 py-3 sticky top-16 z-30"><div className="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-2.5 lg:items-center"><div className="relative flex-1 max-w-2xl"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search SKU, MPN, model, manufacturer, brand or product name..." className="input pl-9 py-2 text-sm" /></div><select value={sort} onChange={(event) => setSort(event.target.value)} className="select py-2 text-sm lg:w-auto">{SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button onClick={() => setShowFilters(!showFilters)} className={`flex items-center justify-center gap-1.5 border font-display font-800 text-xs px-3 py-2 rounded-lg transition-colors ${showFilters ? "bg-navy-900 text-white border-navy-900" : "border-gray-200 text-navy-900 hover:border-navy-900"}`}><SlidersHorizontal size={14} /> Filters {hasFilters && <span className="bg-accent text-navy-900 text-xs rounded-full w-4 h-4 flex items-center justify-center font-700">!</span>}</button>{hasFilters && <button onClick={clearFilters} className="flex items-center justify-center gap-1 text-red-500 text-sm font-600 hover:text-red-700"><X size={14} /> Clear</button>}</div></div>
-      <div className="max-w-7xl mx-auto px-4 py-6"><div className="flex flex-col gap-4 lg:flex-row lg:gap-5"><aside className={`${showFilters ? "block" : "hidden"} lg:block w-full lg:w-64 flex-shrink-0`}><div className="bg-white border border-gray-200 rounded-xl p-3 lg:sticky lg:top-32 space-y-4 shadow-sm"><div>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider">Category</p>
-                {category ? <span className="rounded-full bg-[#FFF8E8] px-2 py-0.5 text-[10px] font-900 text-[#2D4F7A]">Selected</span> : null}
+    <div className="bg-slate-50">
+      <section className="bg-navy-950 text-white">
+        <div className="mx-auto max-w-[1500px] px-4 py-6">
+          <div className="grid gap-4 lg:grid-cols-[1fr_340px] lg:items-end">
+            <div>
+              <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-accent">Industrial inventory</p>
+              <h1 className="mb-2 font-display text-2xl font-900 leading-tight lg:text-4xl">B2B industrial equipment catalogue</h1>
+              <p className="max-w-3xl text-sm leading-6 text-white/65">Search by SKU, MPN, model, manufacturer or product name. Filter stocked automation, laboratory, test, AV, networking and process equipment quickly.</p>
+            </div>
+            {promotions.length > 0 ? (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-display text-sm font-900 text-white">Current shop offers</p>
+                    <p className="text-[11px] text-white/60">Copy a code and apply it at checkout.</p>
+                  </div>
+                </div>
+                <PublicPromotionCards promotions={promotions} compact />
               </div>
-              <button onClick={() => selectCategory("")} className={`mb-2 w-full rounded-md px-2 py-2 text-left text-sm font-display font-800 transition-colors ${!category ? "bg-navy-900 text-white" : "bg-slate-50 text-gray-700 hover:bg-gray-100"}`}>All Categories</button>
-              <div className="space-y-1">
-                {categories.filter((cat) => cat.slug).map((cat) => {
-                  const isParentActive = category === cat.slug || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === category);
-                  const open = openCategory === cat.slug || isParentActive;
-                  return (
-                    <div key={cat.slug} className={`rounded-lg border ${isParentActive ? "border-[#E8A44A] bg-[#FFF8E8]" : "border-slate-200 bg-white"}`}>
-                      <div className="flex items-center">
-                        <button onClick={() => selectCategory(cat.slug)} className={`min-w-0 flex-1 rounded-l-lg px-2 py-2 text-left text-sm font-display font-800 transition-colors ${category === cat.slug ? "bg-[#2D4F7A] text-white" : "text-[#2D4F7A] hover:bg-slate-50"}`}>
-                          <span className="block leading-tight">{cat.label}</span>
-                          <span className={`mt-0.5 block text-[10px] font-700 ${category === cat.slug ? "text-white/70" : "text-slate-400"}`}>All in this category</span>
-                        </button>
-                        <button type="button" onClick={() => setOpenCategory(open ? "" : cat.slug)} className="flex h-9 w-9 items-center justify-center rounded-r-lg text-[#2D4F7A] hover:bg-slate-50" aria-label={`Toggle ${cat.label} sub-categories`}>
-                          <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
-                        </button>
-                      </div>
-                      {open && cat.subcategories?.length ? (
-                        <div className="border-t border-slate-200 px-2 py-2">
-                          {cat.subcategories.map((sub: PublicSubcategory) => (
-                            <button key={sub.slug} onClick={() => selectCategory(sub.slug)} className={`block w-full rounded px-2 py-1.5 text-left text-xs font-700 transition-colors ${category === sub.slug ? "bg-[#2D4F7A] text-white" : "text-slate-600 hover:bg-white"}`}>
-                              {sub.label}
-                            </button>
-                          ))}
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <div className="sticky top-16 z-30 border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-[1500px] flex-col gap-2 px-4 py-3 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search SKU, MPN, model, manufacturer, brand or product name..."
+              className="input h-10 pl-9 text-sm"
+            />
+          </div>
+          <select value={sort} onChange={(event) => setSort(event.target.value)} className="select h-10 text-sm lg:w-48">
+            {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <button onClick={() => setShowFilters(!showFilters)} className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-display font-900 transition-colors lg:hidden ${showFilters ? "bg-navy-900 text-white border-navy-900" : "border-gray-200 text-navy-900 hover:border-navy-900"}`}>
+            <SlidersHorizontal size={14} /> Filters {hasFilters ? <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] text-navy-900">{activeFilters.length}</span> : null}
+          </button>
+          {hasFilters ? <button onClick={clearFilters} className="hidden h-10 items-center justify-center gap-1 rounded-lg border border-red-100 px-3 text-xs font-900 text-red-600 hover:bg-red-50 lg:flex"><RotateCcw size={13} /> Reset</button> : null}
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-[1500px] px-4 py-5">
+        <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+          <aside className={`${showFilters ? "block" : "hidden"} lg:block`}>
+            <div className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-display text-sm font-900 text-navy-950">Filters</p>
+                  <p className="text-[11px] text-gray-400">Refine catalogue</p>
+                </div>
+                {hasFilters ? <button onClick={clearFilters} className="text-[11px] font-900 text-red-600 hover:text-red-700">Reset</button> : null}
+              </div>
+
+              <FilterGroup title="Categories" summary={category ? activeCategoryLabel : "All categories"} defaultOpen>
+                <button onClick={() => selectCategory("")} className={`mb-1.5 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-display font-900 transition-colors ${!category ? "bg-navy-950 text-white" : "text-slate-700 hover:bg-slate-50"}`}>
+                  <span>All inventory</span>
+                  <span className="text-[10px] opacity-70">View all</span>
+                </button>
+                <div className="divide-y divide-slate-100">
+                  {categories.filter((cat) => cat.slug).map((cat) => {
+                    const isParentActive = category === cat.slug || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === category);
+                    const open = openCategory === cat.slug || isParentActive;
+                    return (
+                      <div key={cat.slug} className="py-1">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => selectCategory(cat.slug)} className={`min-w-0 flex-1 rounded-md px-2 py-1.5 text-left text-xs font-display font-900 transition-colors ${category === cat.slug ? "bg-[#FFF8E8] text-[#2D4F7A]" : isParentActive ? "text-[#2D4F7A]" : "text-slate-700 hover:bg-slate-50"}`}>
+                            <span className="block truncate">{cat.label}</span>
+                          </button>
+                          <button type="button" onClick={() => setOpenCategory(open ? "" : cat.slug)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50" aria-label={`Toggle ${cat.label} sub-categories`}>
+                            <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+                          </button>
                         </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                        {open && cat.subcategories?.length ? (
+                          <div className="ml-3 mt-1 border-l border-slate-200 pl-2">
+                            <button onClick={() => selectCategory(cat.slug)} className={`mb-0.5 block w-full rounded px-2 py-1 text-left text-[11px] font-800 ${category === cat.slug ? "bg-[#2D4F7A] text-white" : "text-slate-500 hover:bg-slate-50"}`}>View all {cat.label}</button>
+                            {cat.subcategories.map((sub: PublicSubcategory) => (
+                              <button key={sub.slug} onClick={() => selectCategory(sub.slug)} className={`block w-full rounded px-2 py-1 text-left text-[11px] font-700 transition-colors ${category === sub.slug ? "bg-[#2D4F7A] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+                                {sub.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </FilterGroup>
+
+              <FilterGroup title="Condition" summary={condition ? activeFilterLabel("condition", condition) : "Any condition"} defaultOpen>
+                <div className="space-y-1">
+                  {CONDITIONS.map((cond) => (
+                    <button key={cond.value || "all"} onClick={() => setCondition(cond.value)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-display font-800 transition-colors ${condition === cond.value ? "bg-navy-950 text-white" : "text-slate-700 hover:bg-slate-50"}`}>
+                      <span>{cond.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </FilterGroup>
+
+              <FilterGroup title="Price range" summary={priceMin || priceMax ? `${priceMin ? `£${priceMin}` : "£0"} – ${priceMax ? `£${priceMax}` : "Any"}` : "Any price"} defaultOpen>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <input type="number" placeholder="Min" value={priceMin} onChange={(event) => setPriceMin(event.target.value)} className="input h-9 text-xs" />
+                  <span className="text-gray-400">–</span>
+                  <input type="number" placeholder="Max" value={priceMax} onChange={(event) => setPriceMax(event.target.value)} className="input h-9 text-xs" />
+                </div>
+              </FilterGroup>
+
+              <FilterGroup title="Future filters" summary="Brand, warranty, dispatch">
+                <p className="text-[11px] leading-4 text-gray-500">Brand, manufacturer, warranty and dispatch-time filters can be added here without changing the shop layout.</p>
+              </FilterGroup>
+            </div>
+          </aside>
+
+          <section className="min-w-0">
+            <div className="mb-3 rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  {loading ? (
+                    <p className="font-display text-sm font-900 text-navy-950">Loading inventory…</p>
+                  ) : error ? (
+                    <p className="font-display text-sm font-900 text-red-700">Inventory unavailable</p>
+                  ) : (
+                    <p className="font-display text-sm font-900 text-navy-950">{sortedProducts.length} product{sortedProducts.length === 1 ? "" : "s"}</p>
+                  )}
+                  <p className="mt-0.5 text-[11px] text-gray-400">{category ? `Showing ${activeCategoryLabel}` : "All published inventory"} {source ? `· Source: ${source}` : ""}</p>
+                </div>
+                <div className="hidden items-center gap-2 text-[11px] text-gray-400 md:flex">
+                  <span className="rounded-full bg-green-50 px-2 py-1 font-900 text-green-700">Stock-led catalogue</span>
+                  <span className="rounded-full bg-blue-50 px-2 py-1 font-900 text-blue-700">Quote or buy online</span>
+                </div>
               </div>
-            </div><div><p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Condition</p><div className="space-y-0.5">{CONDITIONS.map((cond) => <button key={cond.value || "all"} onClick={() => setCondition(cond.value)} className={`w-full text-left px-2 py-1.5 rounded text-sm font-display font-500 transition-colors ${condition === cond.value ? "bg-navy-900 text-white" : "text-gray-700 hover:bg-gray-50"}`}>{cond.label}</button>)}</div></div><div><p className="font-display font-700 text-xs text-gray-500 uppercase tracking-wider mb-2">Price Range (£)</p><div className="flex items-center gap-2"><input type="number" placeholder="Min" value={priceMin} onChange={(event) => setPriceMin(event.target.value)} className="input w-full text-sm" /><span className="text-gray-400 flex-shrink-0">–</span><input type="number" placeholder="Max" value={priceMax} onChange={(event) => setPriceMax(event.target.value)} className="input w-full text-sm" /></div></div></div></aside>
-        <div className="flex-1 min-w-0"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div>
-                  <p className="text-sm text-gray-500"><span className="font-display font-700 text-navy-900">{filtered.length}</span> items found {loading && "· loading…"}</p>
-                  {category ? <p className="mt-1 text-xs font-900 text-[#2D4F7A]">Showing category: <span className="rounded bg-[#FFF8E8] px-2 py-0.5 text-[#C9872F]">{activeCategoryLabel}</span></p> : null}
-                </div><p className="hidden md:block text-xs text-gray-400">Source: {source || "database"}</p></div>{filtered.length === 0 && !loading ? <div className="text-center py-20 text-gray-400"><div className="text-4xl mb-3">🔍</div><p className="font-display font-600 text-navy-900 mb-1">No items found</p><p className="text-sm mb-4">Try a brand, SKU, MPN, model or category.</p><button onClick={clearFilters} className="btn-secondary">Clear all filters</button></div> : <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{filtered.map((product) => <ProductCard key={product.id} product={product} />)}</div>}</div>
-      </div></div>
+
+              {activeFilters.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {activeFilters.map((item) => (
+                    <button key={item.key} onClick={() => removeFilter(item.key)} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-800 text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700">
+                      {item.label} <X size={11} />
+                    </button>
+                  ))}
+                  <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-1 text-[11px] font-900 text-red-600">Clear all</button>
+                </div>
+              ) : null}
+            </div>
+
+            {loading ? (
+              <LoadingGrid />
+            ) : error ? (
+              <ErrorState message={error} onRetry={loadProducts} />
+            ) : sortedProducts.length === 0 ? (
+              <EmptyState onClear={clearFilters} />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {sortedProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function FilterGroup({ title, summary, defaultOpen = false, children }: { title: string; summary?: string; defaultOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-t border-slate-100 py-3 first:border-t-0 first:pt-0">
+      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center justify-between gap-2 text-left">
+        <span>
+          <span className="block font-display text-xs font-900 uppercase tracking-wide text-navy-950">{title}</span>
+          {summary ? <span className="mt-0.5 block truncate text-[11px] text-gray-400">{summary}</span> : null}
+        </span>
+        <ChevronDown size={14} className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? <div className="mt-2">{children}</div> : null}
     </div>
   );
 }
@@ -134,41 +384,78 @@ function ProductCard({ product }: { product: CatalogProduct }) {
   const condition = CONDITION_LABELS[product.condition];
   const hasVariants = Boolean(product.variants?.length);
   const stockCopy = product.stockQty === 0 ? "Out of stock" : product.stockQty === 1 ? "Low stock" : `In stock (${product.stockQty})`;
+  const canBuy = !product.priceOnRequest && product.price !== null && product.stockQty > 0 && !hasVariants;
 
   return (
-    <div className="card card-hover flex min-w-0 flex-col overflow-hidden">
-      <div className="bg-gray-50 border-b border-gray-100 aspect-[5/4] flex items-center justify-center relative overflow-hidden">
-        {product.image ? <img src={product.image} alt={product.title} className="object-contain w-full h-full p-3" /> : <div className="text-gray-300 text-4xl">📦</div>}
-        <span className={`absolute top-2 left-2 badge border ${condition.color}`}>{condition.label}</span>
-        {hasVariants ? <span className="absolute top-2 right-2 badge border bg-white/95 text-[#2D4F7A] border-[#D8E0EA]">Options</span> : null}
-      </div>
-      <div className="p-3 flex flex-col flex-1">
-        <p className="mb-1 truncate font-mono text-[10.5px] text-gray-400">{product.sku} · {product.brand}</p>
-        <h3 className="mb-2 max-h-10 overflow-hidden font-display text-sm font-800 leading-5 text-navy-900">{product.title}</h3>
-        <div className="mb-3 space-y-1 text-[11px] text-gray-500">
-          <p className="truncate"><span className="text-gray-400">MPN:</span> {product.mpn}</p>
-          <p className="truncate"><span className="text-gray-400">Category:</span> {product.category}{product.subcategory ? ` / ${product.subcategory}` : ""}</p>
-          {hasVariants ? <p className="truncate"><span className="text-gray-400">Variations:</span> Choose option before purchase</p> : null}
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-md">
+      <Link href={`/shop/${product.slug}`} className="relative flex aspect-[4/3] items-center justify-center overflow-hidden border-b border-gray-100 bg-gray-50">
+        {product.image ? <img src={product.image} alt={product.title} loading="lazy" className="h-full w-full object-contain p-3 transition-transform group-hover:scale-[1.02]" /> : <div className="text-4xl text-gray-300">📦</div>}
+        <span className={`absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-900 ${condition.color}`}>{condition.label}</span>
+        {hasVariants ? <span className="absolute right-2 top-2 rounded-full border border-[#D8E0EA] bg-white/95 px-2 py-0.5 text-[10px] font-900 text-[#2D4F7A]">Options</span> : null}
+      </Link>
+
+      <div className="flex flex-1 flex-col p-3">
+        <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+          <p className="truncate font-mono text-[10.5px] text-gray-400">{product.sku}</p>
+          <span className={product.stockQty > 0 ? "shrink-0 text-[11px] font-900 text-green-700" : "shrink-0 text-[11px] font-900 text-red-600"}>{stockCopy}</span>
         </div>
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            {product.priceOnRequest || product.price === null ? <span className="font-display font-700 text-sm text-gray-600">Price on request</span> : <span className="font-display font-900 text-base text-navy-900">£{product.price.toLocaleString("en-GB")}</span>}
-            <p className="text-gray-400 text-xs mt-0.5">Excl. VAT · {product.warranty}</p>
+        <Link href={`/shop/${product.slug}`} className="mb-2 block max-h-10 overflow-hidden font-display text-sm font-900 leading-5 text-navy-950 hover:text-accent">{product.title}</Link>
+        <div className="mb-2 space-y-0.5 text-[11px] text-gray-500">
+          <p className="truncate"><span className="text-gray-400">Brand:</span> {productBrand(product)}</p>
+          <p className="truncate"><span className="text-gray-400">MPN:</span> {product.mpn || product.model || "—"}</p>
+          <p className="truncate"><span className="text-gray-400">Category:</span> {product.subcategory || product.category}</p>
+        </div>
+        <div className="mt-auto">
+          <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="font-display text-base font-900 text-navy-950">{priceLabel(product)}</p>
+              <p className="max-w-[180px] truncate text-[10.5px] text-gray-400">{dispatchCopy(product)}</p>
+            </div>
           </div>
-          <span className={product.stockQty > 0 ? "text-green-700 text-xs font-600" : "text-red-600 text-xs font-600"}>{stockCopy}</span>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <Link href={`/shop/${product.slug}`} className="text-center btn-secondary text-[11px] py-2 px-2">View</Link>
-          <Link href={`/shop/${product.slug}?quote=1`} className="text-center btn-primary text-[11px] py-2 px-2">Quote</Link>
-          {!product.priceOnRequest && product.price !== null && product.stockQty > 0 ? (
-            hasVariants ? (
-              <Link href={`/shop/${product.slug}`} className="col-span-2 text-center btn-secondary text-[11px] py-2 px-2">Choose option</Link>
+          <div className="grid grid-cols-2 gap-1.5">
+            {canBuy ? (
+              <button type="button" onClick={() => addCartItem(product, 1)} className="btn-primary py-2 px-2 text-[11px]"><ShoppingCart size={12} /> Buy now</button>
             ) : (
-              <button type="button" onClick={() => addCartItem(product, 1)} className="col-span-2 btn-secondary text-[11px] py-2 px-2"><ShoppingCart size={13} /> Add to cart</button>
-            )
-          ) : null}
+              <Link href={`/shop/${product.slug}?quote=1`} className="btn-primary py-2 px-2 text-center text-[11px]">Request quote</Link>
+            )}
+            <Link href={`/shop/${product.slug}`} className="btn-secondary py-2 px-2 text-center text-[11px]">View details</Link>
+            {hasVariants ? <Link href={`/shop/${product.slug}`} className="col-span-2 rounded-md border border-slate-200 px-2 py-1.5 text-center text-[11px] font-900 text-[#2D4F7A] hover:bg-slate-50">Choose option</Link> : null}
+          </div>
         </div>
       </div>
+    </article>
+  );
+}
+
+function LoadingGrid() {
+  return (
+    <div>
+      <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">Loading inventory…</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-[310px] animate-pulse rounded-xl border border-gray-200 bg-white shadow-sm"><div className="h-36 bg-slate-100" /><div className="space-y-3 p-3"><div className="h-3 w-24 rounded bg-slate-100" /><div className="h-4 rounded bg-slate-100" /><div className="h-4 w-3/4 rounded bg-slate-100" /><div className="h-8 rounded bg-slate-100" /></div></div>)}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ onClear }: { onClear: () => void }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-12 text-center shadow-sm">
+      <div className="mb-3 text-4xl">🔍</div>
+      <p className="mb-1 font-display text-lg font-900 text-navy-950">No products match your current filters.</p>
+      <p className="mb-5 text-sm text-gray-500">Try clearing filters or searching by SKU, brand, model or manufacturer.</p>
+      <button onClick={onClear} className="btn-secondary py-2 text-xs">Clear filters</button>
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-10 text-center shadow-sm">
+      <AlertTriangle className="mx-auto mb-3 text-red-600" size={28} />
+      <p className="mb-1 font-display text-lg font-900 text-red-800">Inventory could not be loaded</p>
+      <p className="mx-auto mb-5 max-w-xl text-sm text-red-700">{message}</p>
+      <button onClick={onRetry} className="rounded-lg bg-red-700 px-4 py-2 text-xs font-900 text-white hover:bg-red-800">Retry loading inventory</button>
     </div>
   );
 }

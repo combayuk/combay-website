@@ -7,8 +7,8 @@ export async function GET(req: Request) {
   const condition = searchParams.get("condition") ?? "";
   const status = searchParams.get("status") ?? "";
   const admin = searchParams.get("admin") === "1";
-  const priceMinRaw = searchParams.get("priceMin");
-  const priceMaxRaw = searchParams.get("priceMax");
+  const priceMinRaw = searchParams.get("priceMin") ?? searchParams.get("min");
+  const priceMaxRaw = searchParams.get("priceMax") ?? searchParams.get("max");
   const priceMin = priceMinRaw ? Number(priceMinRaw) : null;
   const priceMax = priceMaxRaw ? Number(priceMaxRaw) : null;
 

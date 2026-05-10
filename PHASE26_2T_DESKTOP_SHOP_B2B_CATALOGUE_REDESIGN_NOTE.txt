@@ -1,0 +1,151 @@
+Phase 26.2T — Desktop Shop B2B catalogue redesign
+
+Context:
+The user requested a stricter desktop shop redesign focused on serious B2B ecommerce catalogue UX, not cosmetic-only styling. Key requirements included:
+- compact sticky filter sidebar
+- categories/subcategories as refined catalogue navigation
+- condition and price filters visible near the top
+- applied filter chips
+- URL query filter state
+- compact product cards
+- no “0 items found · loading…” state
+- separated loading/empty/error states
+- server-rendered initial product results where possible
+- faster perceived product loading from local product database rather than marketplace sync
+
+Implemented:
+1. Server-rendered initial catalogue content
+   File: src/app/shop/page.tsx
+   - Shop page now fetches initial inventory on the server using getProductsFromRepository.
+   - Server accepts initial query params:
+     - q
+     - category / cat
+     - condition
+     - min / priceMin
+     - max / priceMax
+   - Initial products, categories and source are passed into ShopClient as props.
+   - This avoids the trust-damaging first-load “0 items found · loading…” issue and gives the page meaningful catalogue content immediately.
+
+2. Products API URL aliases
+   File: src/app/api/products/route.ts
+   - API now accepts:
+     - min as alias for priceMin
+     - max as alias for priceMax
+   - Existing priceMin/priceMax still work.
+
+3. Desktop shop layout redesign
+   File: src/components/shop/ShopClient.tsx
+   - Reworked shop into a compact B2B catalogue layout.
+   - Uses max-width 1500px for better desktop density.
+   - Hero is shorter and more procurement-focused.
+   - Product area uses:
+     - sticky search/sort toolbar
+     - sticky left filter sidebar
+     - compact result summary
+     - active filter chips
+     - compact grid
+
+4. Sticky sidebar filters
+   File: src/components/shop/ShopClient.tsx
+   - Sidebar is sticky on desktop.
+   - Sidebar has max viewport height and internal scrolling.
+   - Filter groups use compact accordions:
+     - Categories
+     - Condition
+     - Price range
+     - Future filters placeholder
+   - Category navigation is smaller and cleaner:
+     - parent categories collapse/expand
+     - subcategories are nested with indentation
+     - active category is subtly highlighted
+     - “View all” is compact, not a bulky repeated block
+   - Reset filters appears in the sidebar when filters are active.
+
+5. URL-synced filter state
+   File: src/components/shop/ShopClient.tsx
+   - Query, category, condition, min and max filters are written into /shop URL query parameters.
+   - popstate listener restores filter state from URL when browser navigation changes.
+   - Client-side filtering fetches from /api/products without full-page reload.
+
+6. Compact applied filter chips
+   File: src/components/shop/ShopClient.tsx
+   - Result area now shows active filters as small removable chips:
+     - search
+     - category
+     - condition
+     - min price
+     - max price
+   - “Clear all” is shown when filters are active.
+
+7. Proper loading / empty / error states
+   File: src/components/shop/ShopClient.tsx
+   - Loading state:
+     - “Loading inventory…”
+     - skeleton product cards
+     - never shows “0 items found” while loading
+   - Empty state:
+     - “No products match your current filters.”
+     - clear filters button
+   - Error state:
+     - professional message with sales@combay.co.uk
+     - retry button
+
+8. Compact B2B product cards
+   File: src/components/shop/ShopClient.tsx
+   - Product cards redesigned for higher density:
+     - compact image area
+     - title clamped/contained
+     - SKU, brand, MPN/category shown compactly
+     - condition badge
+     - stock/availability
+     - price or Request quote
+     - dispatch/warranty note
+     - primary action: Buy now or Request quote
+     - secondary action: View details
+   - Desktop grid can show up to 4 products per row on wide screens.
+   - Long SKU/title/category values are contained.
+
+Preserved:
+- search
+- sorting
+- categories/subcategories
+- condition filter
+- price filter
+- promotions
+- product links
+- quote links
+- add-to-cart / Buy now
+- variant products still route to product detail for option selection
+- local product database/API source
+- eBay sync logic unaffected
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Visit /shop with no filters:
+   - initial products should appear immediately from server-provided props
+   - no “0 items found · loading…” message
+2. Desktop:
+   - sidebar sticky
+   - sidebar scrolls internally if needed
+   - category/condition/price filters are near top
+   - product grid is compact
+   - 3–4 products per row depending on screen width
+3. Filters:
+   - category selection updates grid
+   - condition selection updates grid
+   - min/max price updates grid
+   - active filter chips appear
+   - removing chips works
+   - reset filters works
+   - URL query updates
+4. States:
+   - loading shows skeleton cards only
+   - no-results state appears only after loading
+   - error state has retry
+5. Actions:
+   - Buy now works
+   - Request quote opens product quote route
+   - View details works
+   - variant product routes to detail page
