@@ -1,0 +1,20 @@
+Phase 26.2X — eBay outbound publishing foundation
+
+This cumulative archive adds the controlled foundation for Combay-to-eBay publishing. It intentionally does not silently publish live eBay listings yet. It adds database fields, local drafts, branded eBay-safe HTML descriptions, validation, logs, approval jobs, default settings, SKU governance and safe imported-listing repair.
+
+New/changed areas:
+- Prisma schema: outbound eBay product fields, variation mapping fields, publishing defaults, logs, jobs, policy/category/aspect mapping tables, inventory locations and description templates.
+- /admin/ebay/publishing: default publishing settings, repair imported eBay listings, logs, approval jobs and template/location summary.
+- Product editor: new eBay Listing tab with mapping fields, branded description generator, HTML preview, validation, save draft and queue publish review.
+- APIs: /api/admin/ebay/publishing/settings, /product/[id], /repair-imported, /template.
+- Backend library: src/lib/ebayPublishing.ts for validation, description building, defaults, local drafts, queue jobs and repair.
+
+Required after extract:
+- npx prisma generate
+- npx prisma db push
+
+Safety:
+- Live eBay publish is not faked.
+- Queue publish review creates an approval job only after validation passes.
+- Variation products are blocked from publish review until the dedicated variation publishing phase is implemented.
+- Imported listing repair logs changes and does not silently overwrite live eBay listings.

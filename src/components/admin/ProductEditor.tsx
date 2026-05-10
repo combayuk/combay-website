@@ -7,9 +7,10 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, ImagePlus, Plus, Rota
 import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
 import { generateProductContent } from "@/lib/productContentAssistant";
+import EbayProductPublishingPanel from "@/components/admin/EbayProductPublishingPanel";
 
 type Props = { mode: "new" | "edit"; productId?: string };
-type Tab = "basic" | "content" | "images" | "logistics" | "shipping" | "variants" | "seo";
+type Tab = "basic" | "content" | "images" | "logistics" | "shipping" | "variants" | "ebay" | "seo";
 type ImageRow = { url: string; alt?: string | null; isPrimary?: boolean; sortOrder?: number };
 type VariantRow = { id?: string; label: string; sku?: string | null; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number };
 type ShippingPolicyOption = { id: string; name: string; packagingType?: string | null; maxWeightKg?: number | string | null; manualQuoteRequired?: boolean; collectionOnly?: boolean; rates?: Array<{ zone?: { name: string }; cost?: number | string | null; dispatchMinDays?: number; dispatchMaxDays?: number; deliveryMinDays?: number | null; deliveryMaxDays?: number | null; manualQuoteRequired?: boolean }> };
@@ -349,6 +350,7 @@ export default function ProductEditor({ mode, productId }: Props) {
     { id: "logistics", label: "Stock & logistics" },
     { id: "shipping", label: "Shipping" },
     { id: "variants", label: "Variations" },
+    { id: "ebay", label: "eBay Listing" },
     { id: "seo", label: "SEO & tags" },
   ];
 
@@ -509,6 +511,10 @@ export default function ProductEditor({ mode, productId }: Props) {
             <div className="flex justify-between items-center gap-3"><h2 className="font-display font-800 text-navy-950">Product variations</h2><button type="button" onClick={addVariantRow} className="btn-secondary text-sm"><Plus size={14} /> Add variation</button></div>
             <div className="overflow-x-auto border border-gray-200 rounded-xl"><table className="w-full text-sm"><thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide"><tr><th className="p-3 min-w-[220px]">Label</th><th className="p-3 min-w-[150px]">SKU</th><th className="p-3 min-w-[140px]">Option name</th><th className="p-3 min-w-[140px]">Option value</th><th className="p-3 w-28">Price</th><th className="p-3 w-24">Stock</th><th className="p-3 w-16"></th></tr></thead><tbody>{variantRows.map((row, index) => <tr key={row.id ?? index} className="border-t border-gray-100 align-top"><td className="p-3"><input value={row.label} onChange={(e) => updateVariant(index, { label: e.target.value })} className="input text-xs" placeholder="Size: 10cm" /></td><td className="p-3"><input value={row.sku ?? ""} onChange={(e) => updateVariant(index, { sku: e.target.value })} className="input font-mono text-xs" placeholder="SKU" /></td><td className="p-3"><input value={row.optionName ?? ""} onChange={(e) => updateVariant(index, { optionName: e.target.value })} className="input text-xs" placeholder="Size" /></td><td className="p-3"><input value={row.optionValue ?? ""} onChange={(e) => updateVariant(index, { optionValue: e.target.value })} className="input text-xs" placeholder="10cm" /></td><td className="p-3"><input type="number" value={row.price ?? ""} onChange={(e) => updateVariant(index, { price: e.target.value === "" ? null : Number(e.target.value) })} className="input text-xs" placeholder="0.00" /></td><td className="p-3"><input type="number" value={row.stockQty} onChange={(e) => updateVariant(index, { stockQty: Number(e.target.value || 0) })} className="input text-xs" /></td><td className="p-3"><button type="button" onClick={() => deleteVariantRow(index)} className="text-red-600 hover:text-red-800"><Trash2 size={16} /></button></td></tr>)}{!variantRows.length && <tr><td colSpan={7} className="p-5 text-sm text-gray-500">No variations. Add a row if this product has selectable options.</td></tr>}</tbody></table></div>
           </div>
+        )}
+
+        {tab === "ebay" && (
+          <EbayProductPublishingPanel productId={mode === "edit" ? product.id : undefined} currentSku={product.sku} title={product.title} />
         )}
 
         {tab === "seo" && (

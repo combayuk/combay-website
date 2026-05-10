@@ -177,6 +177,31 @@ model Product {
   ebayItemId       String?        @unique
   syncExcluded     Boolean       @default(false)
 
+  // eBay outbound publishing fields
+  ebayListingId    String?
+  ebayOfferId      String?
+  ebayInventoryItemSku String?
+  ebayMarketplaceId String?       @default("EBAY_GB")
+  ebayCategoryId   String?
+  ebayCategoryName String?
+  ebayPublishStatus String?       @default("NOT_LISTED")
+  ebayLastPushedAt DateTime?
+  ebayLastPulledAt DateTime?
+  ebayLastError    String?        @db.Text
+  ebayExcludedFromSync Boolean    @default(false)
+  ebaySourceOfTruth String?       @default("COMBAY")
+  ebayConditionId  String?
+  ebayConditionEnum String?
+  ebayFulfillmentPolicyId String?
+  ebayPaymentPolicyId String?
+  ebayReturnPolicyId String?
+  ebayInventoryLocationKey String?
+  ebayDescriptionHtml String?     @db.Text
+  ebayDescriptionTemplateId String?
+  ebaySpecificsJson Json?
+  ebayValidationErrorsJson Json?
+  ebaySkuLocked    Boolean       @default(false)
+
   // Shipping policy assignment and product-specific shipping controls
   shippingPolicyId String?
   shippingPolicy   ShippingPolicy? @relation(fields: [shippingPolicyId], references: [id])
@@ -213,6 +238,12 @@ model Product {
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+
+  @@index([ebayPublishStatus])
+  @@index([ebayMarketplaceId])
+  @@index([ebayCategoryId])
+  @@index([ebayExcludedFromSync])
+  @@index([ebayInventoryItemSku])
 }
 
 model ProductImage {
@@ -323,11 +354,19 @@ model ProductVariant {
   sortOrder   Int      @default(0)
   ebayVariationSku String?
   ebayVariationData Json?
+  ebaySku     String?
+  ebayOfferId String?
+  ebayInventoryItemGroupKey String?
+  ebayQuantity Int?
+  ebayPrice   Decimal? @db.Decimal(10, 2)
+  ebaySpecificsJson Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([productId])
   @@index([sku])
+  @@index([ebaySku])
+  @@index([ebayOfferId])
 }
 
 model Tag {
@@ -831,6 +870,20 @@ model EbaySyncConfig {
   syncPaused     Boolean @default(false)
   syncLastMessage String? @db.Text
   syncLastError   String? @db.Text
+
+  // Outbound publishing defaults
+  defaultInventoryLocationKey String?
+  defaultPaymentPolicyId String?
+  defaultReturnPolicyId String?
+  defaultFulfillmentPolicyId String?
+  defaultListingDuration String? @default("GTC")
+  defaultSkuPrefix String? @default("CBUK")
+  autoGenerateSku Boolean @default(true)
+  autoPublishToEbay Boolean @default(false)
+  manualApprovalBeforePublish Boolean @default(true)
+  defaultDescriptionTemplateId String?
+  defaultConditionMappingJson Json?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -855,6 +908,151 @@ model EbayAccountDeletionNotification {
   @@index([username])
   @@index([ebayUserId])
   @@index([receivedAt])
+}
+
+
+
+// ─── EBAY OUTBOUND PUBLISHING ─────────────────────────
+model EbaySyncLog {
+  id            String   @id @default(cuid())
+  productId     String?
+  sku           String?
+  productTitle  String?
+  actionType    String
+  status        String   @default("PENDING")
+  ebayListingId String?
+  ebayOfferId   String?
+  message       String?  @db.Text
+  errorMessage  String?  @db.Text
+  rawPayload    Json?
+  retryCount    Int      @default(0)
+  triggeredBy   String?
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+
+  @@index([productId])
+  @@index([sku])
+  @@index([actionType])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model EbayPolicyMapping {
+  id            String   @id @default(cuid())
+  type          String
+  combayKey     String?
+  ebayPolicyId  String
+  ebayPolicyName String?
+  marketplaceId String   @default("EBAY_GB")
+  isDefault     Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([type, marketplaceId])
+  @@index([combayKey])
+  @@index([isDefault])
+}
+
+model EbayCategoryMapping {
+  id                 String   @id @default(cuid())
+  combayCategorySlug String
+  combayCategoryName String?
+  ebayCategoryId     String
+  ebayCategoryName   String?
+  marketplaceId      String   @default("EBAY_GB")
+  confidence         Decimal? @db.Decimal(5, 2)
+  isDefault          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([combayCategorySlug, marketplaceId])
+  @@index([ebayCategoryId])
+}
+
+model EbayAspectMapping {
+  id              String   @id @default(cuid())
+  ebayCategoryId  String
+  combaySpecLabel String
+  ebayAspectName  String
+  isRequired      Boolean  @default(false)
+  marketplaceId   String   @default("EBAY_GB")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([ebayCategoryId, combaySpecLabel, marketplaceId])
+  @@index([ebayAspectName])
+}
+
+model EbayPublishJob {
+  id            String   @id @default(cuid())
+  productId     String
+  sku           String?
+  action        String
+  status        String   @default("QUEUED")
+  marketplaceId String   @default("EBAY_GB")
+  payload       Json?
+  errorMessage  String?  @db.Text
+  attempts      Int      @default(0)
+  queuedBy      String?
+  queuedAt      DateTime @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([productId])
+  @@index([sku])
+  @@index([action])
+  @@index([status])
+  @@index([queuedAt])
+}
+
+model EbayListingRevision {
+  id           String   @id @default(cuid())
+  productId    String
+  sku          String?
+  action       String
+  previousJson Json?
+  nextJson     Json?
+  reason       String?  @db.Text
+  createdBy    String?
+  createdAt    DateTime @default(now())
+
+  @@index([productId])
+  @@index([sku])
+  @@index([createdAt])
+}
+
+model EbayInventoryLocation {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  name         String
+  countryCode  String   @default("GB")
+  postcode     String?
+  addressLine1 String?
+  city         String?
+  isDefault    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isDefault])
+  @@index([isActive])
+}
+
+model EbayDescriptionTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  html        String   @db.Text
+  isDefault   Boolean  @default(false)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isDefault])
+  @@index([isSystem])
 }
 
 model EbaySyncRun {

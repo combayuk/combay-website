@@ -36,7 +36,7 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   videoUrl?: string | null;
   images?: { url: string; originalUrl?: string | null; alt?: string | null; isPrimary?: boolean; sortOrder?: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
   specs?: { label: string; value: string }[];
-  variants?: { id?: string; sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any }[];
+  variants?: { id?: string; sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any; ebaySku?: string | null; ebayOfferId?: string | null; ebayInventoryItemGroupKey?: string | null; ebayQuantity?: number | null; ebayPrice?: number | null; ebaySpecificsJson?: any }[];
   documents?: { name: string; url: string; fileType?: string }[];
 };
 
@@ -251,6 +251,12 @@ function relationPayload(input: ProductWriteInput) {
         sortOrder: variant.sortOrder ?? index,
         ebayVariationSku: variant.ebayVariationSku || variant.sku || null,
         ebayVariationData: variant.ebayVariationData ?? undefined,
+        ebaySku: variant.ebaySku || variant.ebayVariationSku || variant.sku || null,
+        ebayOfferId: variant.ebayOfferId || null,
+        ebayInventoryItemGroupKey: variant.ebayInventoryItemGroupKey || null,
+        ebayQuantity: variant.ebayQuantity === null || variant.ebayQuantity === undefined ? null : Number(variant.ebayQuantity),
+        ebayPrice: variant.ebayPrice === null || variant.ebayPrice === undefined ? null : Number(variant.ebayPrice),
+        ebaySpecificsJson: variant.ebaySpecificsJson ?? undefined,
       })),
   };
 }
