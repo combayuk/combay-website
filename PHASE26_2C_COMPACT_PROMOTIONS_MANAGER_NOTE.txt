@@ -1,0 +1,93 @@
+Phase 26.2C — Compact Promotions Manager
+
+Context:
+The current Promotions page had the right features but felt too bulky and form-heavy. The user requested a professional, compact campaign-management interface where existing promotions are shown first, and create/edit happens in a right-side drawer with tabs/stepper and compact eligibility rule management.
+
+Implemented:
+- Rebuilt Admin > Promotions into a compact promotion manager.
+- Main page now prioritises:
+  - compact header
+  - small stats strip
+  - search and filters
+  - promotion codes table
+  - New promotion button
+- Removed the large always-visible create form from the top of the page.
+- Create/edit now opens in a right-side drawer.
+- Drawer uses compact tabs:
+  - Offer
+  - Visibility
+  - Eligibility
+  - Review
+- Offer tab uses compact two-column fields:
+  - promotion name
+  - checkout code
+  - discount type
+  - value
+  - minimum order
+  - maximum uses
+  - start/end dates
+  - internal/customer note
+  - advanced display priority
+- Visibility tab uses compact toggle chips:
+  - checkout active
+  - homepage banner
+  - shop banner
+- Banner preview is smaller and more realistic.
+- Eligibility tab is now a compact rule builder:
+  - Products
+  - Categories
+  - Brands
+  - include-all toggles
+  - searchable selectors
+  - compact include/exclude status pills
+  - selected inclusions/exclusions shown as removable chips
+  - panels are collapsed by default and opened only when needed
+- Review tab summarises:
+  - code
+  - offer
+  - minimum order
+  - maximum uses
+  - dates
+  - visibility
+  - eligibility
+- Added visible Duplicate promotion action.
+- Added quick Activate/Pause action from the table.
+- Added drawer footer actions:
+  - Cancel
+  - Save draft
+  - Review
+  - Activate promotion
+  - Delete for existing promotions
+- Reduced card/input/button spacing and made the page feel more like a compact business operations tool.
+
+Preserved:
+- checkout codes
+- discount type/value
+- public banner text
+- checkout activation
+- homepage/shop visibility
+- product/category/brand eligibility rules
+- include-all logic
+- exclusions
+- dates
+- maximum paid uses
+- display priority
+- internal note/description
+- public banner preview
+- promotion list
+- server-side promotion recalculation logic
+
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Admin > Promotions.
+2. Confirm promotions table appears before the editor.
+3. Click New promotion and confirm right drawer opens.
+4. Complete Offer, Visibility, Eligibility, Review tabs.
+5. Save draft.
+6. Edit the draft and Activate promotion.
+7. Use Duplicate on an existing promotion and confirm a copy opens as inactive/draft.
+8. Search/filter the table.
+9. Test product/category/brand include/exclude chips.
+10. Confirm checkout promotion application still works.
