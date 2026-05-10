@@ -16,6 +16,11 @@ type Config = {
 type Run = {
   id: string;
   status: string;
+  mode?: string | null;
+  startPage?: number | null;
+  nextPage?: number | null;
+  totalPages?: number | null;
+  records?: number | null;
   message?: string | null;
   imported: number;
   updated: number;
@@ -34,19 +39,23 @@ export default function EbayAdminPage() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState<"test10" | "first50" | "all" | "repair" | "refresh" | "backgrounds" | "queueImages" | "backupImages" | null>(null);
   const [imageQueueStats, setImageQueueStats] = useState<any>(null);
+  const [syncProgress, setSyncProgress] = useState<any>(null);
 
   async function load() {
-    const [configRes, runsRes, queueRes] = await Promise.all([
+    const [configRes, runsRes, queueRes, progressRes] = await Promise.all([
       fetch("/api/ebay/config", { cache: "no-store" }),
       fetch("/api/ebay/runs", { cache: "no-store" }),
       fetch("/api/admin/product-images/queue", { cache: "no-store" }).catch(() => null),
+      fetch("/api/ebay/sync", { cache: "no-store" }).catch(() => null),
     ]);
     const configJson = await configRes.json();
     const runsJson = await runsRes.json();
     const queueJson = queueRes ? await queueRes.json().catch(() => null) : null;
+    const progressJson = progressRes ? await progressRes.json().catch(() => null) : null;
     if (configJson.config) setConfig(configJson.config);
     setRuns(runsJson.runs ?? []);
     if (queueJson?.ok) setImageQueueStats(queueJson);
+    if (progressJson?.ok) setSyncProgress(progressJson);
   }
 
   useEffect(() => { load().catch(() => setMessage("Could not load eBay settings.")); }, []);
@@ -75,10 +84,12 @@ export default function EbayAdminPage() {
     let totalUpdated = 0;
     let totalSkipped = 0;
     let totalRecords = 0;
-    let page = 1;
+    const savedCursor = Number(syncProgress?.config?.syncCursorPage || 1);
+    let page = mode === "all" && syncProgress?.config?.syncDone === false ? Math.max(1, savedCursor) : 1;
+    const startingPage = page;
     let done = false;
     const maxSafetyPages = mode === "all" ? 250 : 1; // 250 pages × 50 entries = 12,500 listings capacity.
-    const label = mode === "test10" ? "test sync of first 10 listings" : mode === "first50" ? "first 50 listings" : "all available listings in safe batches";
+    const label = mode === "test10" ? "test sync of first 10 listings" : mode === "first50" ? "first 50 listings" : mode === "all" && startingPage > 1 ? `all available listings from saved page ${startingPage}` : "all available listings in safe batches";
     setMessage(`Starting ${label}. Do not start another sync until this finishes.`);
 
     try {
@@ -102,7 +113,7 @@ export default function EbayAdminPage() {
         if (mode !== "all") break;
       }
 
-      setMessage(`Sync complete: ${totalImported} imported, ${totalUpdated} updated, ${totalSkipped} skipped, ${totalRecords} records processed.${mode === "all" ? " Full sync ran in safe 50-listing batches to reduce timeout failures." : ""}`);
+      setMessage(`Sync complete: ${totalImported} imported, ${totalUpdated} updated, ${totalSkipped} skipped, ${totalRecords} records processed.${mode === "all" ? ` Full sync ran in safe 50-listing batches${startingPage > 1 ? ` from saved page ${startingPage}` : ""}.` : ""}`);
     } catch (error: any) {
       setMessage(error.message || "eBay sync failed.");
     } finally {
@@ -177,10 +188,26 @@ export default function EbayAdminPage() {
   }
 
   async function resetSync() {
-    setMessage("Resetting stuck sync state...");
+    setMessage("Resetting stuck sync state and saved full-sync cursor...");
     const response = await fetch("/api/ebay/sync", { method: "DELETE" });
     const result = await response.json().catch(() => ({}));
-    setMessage(result.ok ? `Reset ${result.resetCount || 0} stuck sync run(s).` : result.error || "Could not reset sync state.");
+    setMessage(result.ok ? result.message || `Reset ${result.resetCount || 0} stuck sync run(s).` : result.error || "Could not reset sync state.");
+    await load();
+  }
+
+  async function pauseOrResumeFullSync(paused: boolean) {
+    setMessage(paused ? "Pausing full sync after the current page..." : "Resuming full sync.");
+    const response = await fetch("/api/ebay/sync", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: paused ? "pause" : "resume" }) });
+    const result = await response.json().catch(() => ({}));
+    setMessage(result.ok ? (paused ? "Full sync paused." : "Full sync resumed.") : result.error || "Could not update sync pause state.");
+    await load();
+  }
+
+  async function resetFullSyncProgress() {
+    setMessage("Resetting full-sync saved page to 1.");
+    const response = await fetch("/api/ebay/sync", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "reset-progress" }) });
+    const result = await response.json().catch(() => ({}));
+    setMessage(result.ok ? result.message || "Full-sync progress reset." : result.error || "Could not reset full-sync progress.");
     await load();
   }
 
@@ -255,6 +282,32 @@ export default function EbayAdminPage() {
             <p className="text-xs text-gray-400 uppercase tracking-widest">Needs review / failed</p>
             <p className="font-display font-800 text-navy-950 mt-1">{(imageQueueStats.stats?.jobs?.NEEDS_REVIEW || 0) + (imageQueueStats.stats?.jobs?.FAILED || 0)}</p>
             <p className="text-xs text-gray-500 mt-1">Review before applying poor cut-outs.</p>
+          </div>
+        </section>
+      ) : null}
+
+      {syncProgress ? (
+        <section className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="font-display font-800 text-navy-950 text-lg">Large inventory sync progress</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Saved page: <strong className="text-navy-950">{syncProgress.config?.syncDone === false ? syncProgress.config?.syncCursorPage || 1 : "Complete / ready from page 1"}</strong>
+                {syncProgress.config?.syncTotalPages ? <span> of {syncProgress.config.syncTotalPages}</span> : null}
+                {syncProgress.config?.syncPaused ? <span className="ml-2 text-amber-700 font-800">Paused</span> : null}
+              </p>
+              {syncProgress.config?.syncLastMessage ? <p className="text-xs text-gray-500 mt-2">{syncProgress.config.syncLastMessage}</p> : null}
+              {syncProgress.config?.syncLastError ? <p className="text-xs text-red-600 mt-2">{syncProgress.config.syncLastError}</p> : null}
+              {syncProgress.activeRun ? <p className="text-xs text-blue-700 mt-2">A sync run is currently marked RUNNING. Use Reset stuck sync only if it is stale.</p> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => pauseOrResumeFullSync(!syncProgress.config?.syncPaused)} className="btn-secondary text-sm py-2">
+                {syncProgress.config?.syncPaused ? "Resume full sync" : "Pause full sync"}
+              </button>
+              <button type="button" onClick={resetFullSyncProgress} className="btn-secondary text-sm py-2">
+                Reset full-sync page
+              </button>
+            </div>
           </div>
         </section>
       ) : null}
@@ -356,12 +409,13 @@ export default function EbayAdminPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full admin-table">
-            <thead><tr><th>Started</th><th>Status</th><th>Imported</th><th>Updated</th><th>Skipped</th><th>Message / errors</th></tr></thead>
+            <thead><tr><th>Started</th><th>Status</th><th>Mode / page</th><th>Imported</th><th>Updated</th><th>Skipped</th><th>Records</th><th>Message / errors</th></tr></thead>
             <tbody>{runs.map(run=>(
               <tr key={run.id}>
                 <td className="whitespace-nowrap text-xs text-gray-500">{new Date(run.startedAt).toLocaleString()}</td>
                 <td><span className={`badge border text-xs ${run.status === "SUCCESS" ? "bg-green-50 text-green-700 border-green-200" : run.status === "FAILED" ? "bg-red-50 text-red-700 border-red-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>{run.status}</span></td>
-                <td>{run.imported}</td><td>{run.updated}</td><td>{run.skipped}</td>
+                <td className="text-xs text-gray-500">{run.mode || "—"}{run.startPage ? ` / p.${run.startPage}` : ""}{run.nextPage ? ` → ${run.nextPage}` : ""}</td>
+                <td>{run.imported}</td><td>{run.updated}</td><td>{run.skipped}</td><td>{run.records || 0}</td>
                 <td className="text-xs text-gray-500 max-w-lg">{run.message}{run.errors?.length ? ` — ${run.errors.slice(0,3).join(" | ")}` : ""}</td>
               </tr>
             ))}</tbody>

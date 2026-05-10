@@ -1,0 +1,48 @@
+Phase 20C — eBay large-inventory sync reliability and resume controls
+
+Implemented:
+- Adds persistent eBay full-sync progress on EbaySyncConfig:
+  - syncCursorPage
+  - syncTotalPages
+  - syncLastMode
+  - syncLastBatchSize
+  - syncLastStartedAt
+  - syncLastCompletedAt
+  - syncDone
+  - syncPaused
+  - syncLastMessage
+  - syncLastError
+- Adds run metadata on EbaySyncRun:
+  - mode
+  - startPage
+  - nextPage
+  - totalPages
+  - records
+- Sync all now resumes from the saved page if a previous full sync stopped/failed before completion.
+- Each successful full-sync batch saves the next page to continue from.
+- Failed full-sync batch saves the failed page so retry resumes safely.
+- Adds /api/ebay/sync GET for sync progress.
+- Adds /api/ebay/sync PATCH actions:
+  - reset-progress
+  - pause
+  - resume
+- DELETE /api/ebay/sync now resets both stuck runs and saved full-sync cursor.
+- Admin > eBay now shows a large-inventory sync progress card:
+  - saved page
+  - total pages
+  - paused state
+  - last message/error
+  - active run warning
+  - pause/resume
+  - reset full-sync page
+- Recent sync runs now show mode/page/records.
+
+Prisma required:
+npx prisma db push
+
+Testing:
+1. Deploy and run db push.
+2. Admin > eBay should show Large inventory sync progress.
+3. Run Sync all. If interrupted, run Sync all again; it should continue from saved page.
+4. Use Reset full-sync page to force next Sync all to start from page 1.
+5. Use Reset stuck sync if a run is incorrectly stuck as RUNNING.

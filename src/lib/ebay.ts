@@ -907,7 +907,7 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
   if (activeRun) {
     return { ok: false, imported: 0, updated: 0, skipped: 0, errors: ["Another eBay sync is already running. Use Reset stuck sync if this is stale."], message: "Another eBay sync is already running." };
   }
-  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", message: `Starting unified eBay inventory sync (${options.mode}, page ${options.startPage}, max ${options.maxListings} listings).` } });
+  const run = await prisma.ebaySyncRun.create({ data: { status: "RUNNING", mode: options.mode, startPage: options.startPage, records: 0, message: `Starting unified eBay inventory sync (${options.mode}, page ${options.startPage}, max ${options.maxListings} listings).` } as any });
   let imported = 0, updated = 0, skipped = 0;
   let records = 0;
   let nextPage: number | undefined;
@@ -917,6 +917,26 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
   const notes: string[] = [];
   try {
     const { token, config } = await getEbayAccessToken();
+
+    if (options.mode === "all") {
+      const latestConfig = await prisma.ebaySyncConfig.findUnique({ where: { id: config.id } });
+      if ((latestConfig as any)?.syncPaused) {
+        throw new Error("Full eBay sync is paused. Resume or reset sync progress before continuing.");
+      }
+      await prisma.ebaySyncConfig.update({
+        where: { id: config.id },
+        data: {
+          syncLastMode: options.mode,
+          syncLastStartedAt: new Date(),
+          syncDone: false,
+          syncPaused: false,
+          syncCursorPage: options.startPage,
+          syncLastBatchSize: options.entriesPerPage,
+          syncLastError: null,
+          syncLastMessage: `Running full sync page ${options.startPage}.`,
+        } as any,
+      }).catch(() => null);
+    }
 
     const inventoryCounts = await syncInventoryApiItems(token, config, options);
     imported += inventoryCounts.imported;
@@ -947,13 +967,47 @@ export async function runEbayInventorySync(inputOptions: EbaySyncOptions = {}) {
       notes.push("If Active Listings fallback reports token/scope errors, reconnect eBay OAuth so the app receives the base eBay scope as well as Inventory scopes.");
     }
 
-    await prisma.ebaySyncConfig.update({ where: { id: config.id }, data: { lastSyncAt: new Date() } });
     const message = `Unified sync complete (${options.mode}, page ${options.startPage}, max ${options.maxListings} listings). ${notes.join(" ")}${done ? " Done." : ` Next page: ${nextPage}.`}`;
-    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", message, imported, updated, skipped, errors, finishedAt: new Date() } });
+    const now = new Date();
+    await prisma.ebaySyncConfig.update({
+      where: { id: config.id },
+      data: {
+        lastSyncAt: now,
+        ...(options.mode === "all" ? {
+          syncCursorPage: done ? 1 : (nextPage ?? options.startPage + 1),
+          syncTotalPages: totalPages ?? null,
+          syncLastMode: options.mode,
+          syncLastBatchSize: options.entriesPerPage,
+          syncDone: done,
+          syncPaused: false,
+          syncLastCompletedAt: done ? now : null,
+          syncLastMessage: message,
+          syncLastError: errors.length ? errors.slice(0, 3).join(" | ") : null,
+        } : {}),
+      } as any,
+    });
+    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: errors.length ? "PARTIAL" : "SUCCESS", mode: options.mode, startPage: options.startPage, nextPage: nextPage ?? null, totalPages: totalPages ?? null, records, message, imported, updated, skipped, errors, finishedAt: now } as any });
     return { ok: true, imported, updated, skipped, records, errors, message, nextPage, totalPages, done };
   } catch (err: any) {
-    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", message: err.message || "eBay sync failed.", imported, updated, skipped, errors, finishedAt: new Date() } });
-    return { ok: false, imported, updated, skipped, errors: [...errors, err.message || "eBay sync failed."] };
+    const message = err.message || "eBay sync failed.";
+    const now = new Date();
+    await prisma.ebaySyncRun.update({ where: { id: run.id }, data: { status: "FAILED", mode: options.mode, startPage: options.startPage, nextPage: nextPage ?? null, totalPages: totalPages ?? null, records, message, imported, updated, skipped, errors, finishedAt: now } as any });
+    if (options.mode === "all") {
+      await getEbayConfig().then((config) => prisma.ebaySyncConfig.update({
+        where: { id: config.id },
+        data: {
+          syncCursorPage: options.startPage,
+          syncTotalPages: totalPages ?? null,
+          syncLastMode: options.mode,
+          syncLastBatchSize: options.entriesPerPage,
+          syncDone: false,
+          syncPaused: false,
+          syncLastError: message,
+          syncLastMessage: `Full sync failed on page ${options.startPage}. Retry/resume will start from this page.`,
+        } as any,
+      })).catch(() => null);
+    }
+    return { ok: false, imported, updated, skipped, records, nextPage, totalPages, done: false, errors: [...errors, message] };
   }
 }
 
@@ -1169,6 +1223,73 @@ async function buildActiveListingIndex(token: string, config: EbayConfig, maxPag
   return index;
 }
 
+
+
+export async function getEbaySyncProgress() {
+  const config = await getEbayConfig();
+  const activeRun = await prisma.ebaySyncRun.findFirst({
+    where: { status: "RUNNING", finishedAt: null },
+    orderBy: { startedAt: "desc" },
+  }).catch(() => null);
+  const latestRun = await prisma.ebaySyncRun.findFirst({
+    orderBy: { startedAt: "desc" },
+  }).catch(() => null);
+
+  return {
+    ok: true,
+    config: {
+      syncCursorPage: (config as any).syncCursorPage ?? 1,
+      syncTotalPages: (config as any).syncTotalPages ?? null,
+      syncLastMode: (config as any).syncLastMode ?? null,
+      syncLastBatchSize: (config as any).syncLastBatchSize ?? 50,
+      syncLastStartedAt: (config as any).syncLastStartedAt ?? null,
+      syncLastCompletedAt: (config as any).syncLastCompletedAt ?? null,
+      syncDone: (config as any).syncDone ?? true,
+      syncPaused: (config as any).syncPaused ?? false,
+      syncLastMessage: (config as any).syncLastMessage ?? null,
+      syncLastError: (config as any).syncLastError ?? null,
+      lastSyncAt: config.lastSyncAt ?? null,
+    },
+    activeRun,
+    latestRun,
+  };
+}
+
+export async function resetEbaySyncProgress() {
+  const config = await getEbayConfig();
+  await prisma.ebaySyncConfig.update({
+    where: { id: config.id },
+    data: {
+      syncCursorPage: 1,
+      syncTotalPages: null,
+      syncLastMode: null,
+      syncLastBatchSize: 50,
+      syncLastStartedAt: null,
+      syncLastCompletedAt: null,
+      syncDone: true,
+      syncPaused: false,
+      syncLastMessage: "Sync progress reset by admin.",
+      syncLastError: null,
+    } as any,
+  });
+  const resetRuns = await prisma.ebaySyncRun.updateMany({
+    where: { status: "RUNNING", finishedAt: null },
+    data: { status: "FAILED", message: "Manually reset by admin.", finishedAt: new Date() },
+  });
+  return { ok: true, resetCount: resetRuns.count, message: "eBay sync progress reset. Next Sync all will start at page 1." };
+}
+
+export async function pauseEbaySyncProgress(paused = true) {
+  const config = await getEbayConfig();
+  const updated = await prisma.ebaySyncConfig.update({
+    where: { id: config.id },
+    data: {
+      syncPaused: paused,
+      syncLastMessage: paused ? "Full sync paused by admin." : "Full sync resumed by admin.",
+    } as any,
+  });
+  return { ok: true, paused: (updated as any).syncPaused };
+}
 
 export async function resetStuckEbaySyncRuns() {
   const result = await prisma.ebaySyncRun.updateMany({

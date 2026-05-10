@@ -688,6 +688,16 @@ model EbaySyncConfig {
   accessToken  String?   @db.Text
   accessTokenExpiresAt DateTime?
   lastSyncAt   DateTime?
+  syncCursorPage Int     @default(1)
+  syncTotalPages Int?
+  syncLastMode   String?
+  syncLastBatchSize Int  @default(50)
+  syncLastStartedAt DateTime?
+  syncLastCompletedAt DateTime?
+  syncDone       Boolean @default(true)
+  syncPaused     Boolean @default(false)
+  syncLastMessage String? @db.Text
+  syncLastError   String? @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -717,6 +727,11 @@ model EbayAccountDeletionNotification {
 model EbaySyncRun {
   id          String   @id @default(cuid())
   status      String
+  mode        String?
+  startPage   Int?
+  nextPage    Int?
+  totalPages  Int?
+  records     Int      @default(0)
   message     String?  @db.Text
   imported    Int      @default(0)
   updated     Int      @default(0)
@@ -724,6 +739,10 @@ model EbaySyncRun {
   errors      String[]
   startedAt   DateTime @default(now())
   finishedAt  DateTime?
+
+  @@index([mode])
+  @@index([status])
+  @@index([startedAt])
 }
 
 // ─── CONTENT ───────────────────────────────────────────
