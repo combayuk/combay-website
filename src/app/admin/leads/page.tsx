@@ -161,7 +161,7 @@ export default function AdminLeadsPage() {
               {!loading && filtered.length === 0 && <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-8">No leads found.</td></tr>}
             </tbody>
           </table>
-        </div>        </div>
+        </div>
       </div>
 
       {selectedLead && <LeadModal lead={selectedLead} onClose={() => setSelectedLead(null)} />}

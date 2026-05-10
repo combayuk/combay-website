@@ -325,7 +325,7 @@ export default function InvoicesPage() {
               )}
             </tbody>
           </table>
-        </div>        </div>
+        </div>
       </div>
     </div>
   );

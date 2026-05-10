@@ -1,0 +1,28 @@
+Phase 26.2G.1 — Build hotfix for admin table containment patch
+
+Context:
+Vercel failed after Phase 26.2G with JSX syntax errors in:
+- src/app/admin/invoices/page.tsx
+- src/app/admin/leads/page.tsx
+
+Cause:
+The table replacement left duplicated/extra closing </div> tags around the newly compact table wrappers.
+
+Fixed:
+1. src/app/admin/invoices/page.tsx
+   - Removed the extra closing div after the compact invoices table.
+   - Kept the no-horizontal-scroll combined-column table.
+
+2. src/app/admin/leads/page.tsx
+   - Removed the extra closing div that closed the main page container before the selected lead drawer conditional.
+   - Kept the no-horizontal-scroll combined-column table.
+
+No feature changes.
+No Prisma schema change.
+No db push required.
+
+Testing:
+1. Deploy and confirm Vercel build passes.
+2. Admin > Invoices loads.
+3. Admin > Leads loads.
+4. Confirm both tables still fit without horizontal scroll.
