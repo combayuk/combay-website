@@ -1,0 +1,9 @@
+Phase 26.2X.13 — eBay Inventory Location Verification Fix
+
+Fixes live eBay publishing failure 25002: Location information not found.
+
+The previous flow could save/show a local Combay inventory location row, but eBay createOffer requires that the same merchantLocationKey exists as a live eBay Inventory API location on the connected seller account.
+
+This phase verifies the selected merchantLocationKey on eBay before createOffer. If the location is missing, it creates a simple ENABLED WAREHOUSE location using safe UK defaults, logs the action, stores the live key locally, then uses that verified key in the offer payload.
+
+No Prisma/schema changes.
