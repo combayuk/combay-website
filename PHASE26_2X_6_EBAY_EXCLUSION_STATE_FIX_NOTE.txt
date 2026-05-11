@@ -1,0 +1,24 @@
+Phase 26.2X.6 — eBay exclusion state persistence fix
+
+Fixes a bug where the eBay Listing tab checkbox could be unchecked and saved, but the product continued to validate as excluded from eBay sync/publishing.
+
+Root cause:
+The project had two related exclusion flags:
+- Product.syncExcluded
+- Product.ebayExcludedFromSync
+
+The eBay Listing tab only saved ebayExcludedFromSync. Older imported/admin products could still have syncExcluded=true, so validation continued to block publishing even after the visible eBay checkbox was unchecked.
+
+Fix:
+- eBay draft save now persists the checkbox state to both ebayExcludedFromSync and syncExcluded.
+- Product repository now maps ebayExcludedFromSync into admin product data.
+- Main product save keeps both flags aligned.
+- Stock & logistics checkbox now clearly says Exclude from eBay sync/publish and toggles both flags.
+
+Expected test:
+1. Open Admin > Products > Edit product > eBay Listing.
+2. Untick Exclude from eBay sync/publish.
+3. Save eBay draft.
+4. Refresh product editor.
+5. Checkbox should remain unticked.
+6. Validation should no longer show Product is excluded from eBay sync/publishing.

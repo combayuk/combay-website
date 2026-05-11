@@ -12,6 +12,7 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   hsCode?: string;
   ebayItemId?: string;
   syncExcluded?: boolean;
+  ebayExcludedFromSync?: boolean;
   shippingPolicyId?: string | null;
   packedWeightKg?: string | null;
   packedLengthCm?: string | null;
@@ -154,6 +155,7 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     seoKeywords: (product as any).seoKeywords ?? "",
     ebayItemId: product.ebayItemId ?? "",
     syncExcluded: product.syncExcluded ?? false,
+    ebayExcludedFromSync: (product as any).ebayExcludedFromSync ?? product.syncExcluded ?? false,
     rawEbayDescription: (product as any).rawEbayDescription ?? "",
     titleLocked: (product as any).titleLocked ?? false,
     priceLocked: (product as any).priceLocked ?? false,
@@ -416,7 +418,8 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       seoDescription: (input as any).seoDescription ?? null,
       seoKeywords: (input as any).seoKeywords ?? (Array.isArray(input.tags) ? input.tags.join(", ") : null),
       ebayItemId: (input as any).ebayItemId ?? null,
-      syncExcluded: Boolean((input as any).syncExcluded),
+      syncExcluded: Boolean((input as any).syncExcluded ?? (input as any).ebayExcludedFromSync),
+      ebayExcludedFromSync: Boolean((input as any).ebayExcludedFromSync ?? (input as any).syncExcluded),
       shippingPolicyId: (input as any).shippingPolicyId || null,
       packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
       packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,

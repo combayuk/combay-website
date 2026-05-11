@@ -1096,6 +1096,7 @@ export async function saveEbayProductDraft(productId: string, input: any) {
       ebaySpecificsJson: input.ebaySpecificsJson || product.ebaySpecificsJson || null,
       ebaySourceOfTruth: input.ebaySourceOfTruth || "COMBAY",
       ebayExcludedFromSync: Boolean(input.ebayExcludedFromSync),
+      syncExcluded: Boolean(input.ebayExcludedFromSync),
       ebayPublishStatus: input.ebayPublishStatus || product.ebayPublishStatus || "DRAFTED_FOR_EBAY",
     };
     const validation = validateEbayProductRecord({ ...product, ...data });
