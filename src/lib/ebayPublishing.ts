@@ -792,6 +792,7 @@ export function validateEbaySafeHtml(html: string) {
 
 export async function ensureEbayPublishingDefaults() {
   await ensureEbayPublishingDatabaseSchema();
+  await prisma.product.updateMany({ where: { ebayConditionEnum: "USED" }, data: { ebayConditionEnum: "USED_EXCELLENT", ebayConditionId: "3000" } }).catch(() => null);
   const template = await prisma.ebayDescriptionTemplate.findFirst({ where: { isDefault: true } });
   const defaultTemplate = template || await prisma.ebayDescriptionTemplate.create({
     data: {
@@ -985,12 +986,49 @@ async function getProductForEbay(id: string) {
   });
 }
 
+const EBAY_CONDITION_BY_ID: Record<string, string> = {
+  "1000": "NEW",
+  "1500": "NEW_OTHER",
+  "1750": "NEW_WITH_DEFECTS",
+  "2000": "CERTIFIED_REFURBISHED",
+  "2010": "EXCELLENT_REFURBISHED",
+  "2020": "VERY_GOOD_REFURBISHED",
+  "2030": "GOOD_REFURBISHED",
+  "2500": "SELLER_REFURBISHED",
+  "2750": "LIKE_NEW",
+  "2990": "PRE_OWNED_EXCELLENT",
+  "3000": "USED_EXCELLENT",
+  "3010": "PRE_OWNED_FAIR",
+  "4000": "USED_VERY_GOOD",
+  "5000": "USED_GOOD",
+  "6000": "USED_ACCEPTABLE",
+  "7000": "FOR_PARTS_OR_NOT_WORKING",
+};
+
+const EBAY_VALID_CONDITIONS = new Set(Object.values(EBAY_CONDITION_BY_ID));
+
+export function normaliseEbayConditionEnum(value: any, fallback = "USED_EXCELLENT") {
+  const text = String(value || "").trim().toUpperCase();
+  if (!text) return fallback;
+  if (EBAY_VALID_CONDITIONS.has(text)) return text;
+  if (EBAY_CONDITION_BY_ID[text]) return EBAY_CONDITION_BY_ID[text];
+  if (text === "USED") return "USED_EXCELLENT";
+  if (text === "OPEN_BOX" || text === "NEW_OPEN_BOX") return "NEW_OTHER";
+  if (text === "FOR_PARTS" || text === "PARTS" || text === "NOT_WORKING") return "FOR_PARTS_OR_NOT_WORKING";
+  if (text === "REFURBISHED") return "SELLER_REFURBISHED";
+  return fallback;
+}
+
+function conditionIdForEnum(conditionEnum: string) {
+  return Object.entries(EBAY_CONDITION_BY_ID).find(([, enumValue]) => enumValue === conditionEnum)?.[0] || "3000";
+}
+
 export function mapConditionToEbay(product: EbayProductRecord) {
   const condition = String(product.condition || "USED").toUpperCase();
   if (condition === "NEW") return { conditionEnum: "NEW", conditionId: "1000", note: defaultConditionNote(product) };
   if (condition === "NEW_OPEN_BOX") return { conditionEnum: "NEW_OTHER", conditionId: "1500", note: defaultConditionNote(product) };
   if (condition === "FOR_PARTS") return { conditionEnum: "FOR_PARTS_OR_NOT_WORKING", conditionId: "7000", note: defaultConditionNote(product) };
-  return { conditionEnum: "USED", conditionId: "3000", note: defaultConditionNote(product) };
+  return { conditionEnum: "USED_EXCELLENT", conditionId: "3000", note: defaultConditionNote(product) };
 }
 
 function imageValidation(images: Array<{ url: string }>) {
@@ -1085,8 +1123,8 @@ export async function saveEbayProductDraft(productId: string, input: any) {
       ebayListingId: input.ebayListingId || null,
       ebayOfferId: input.ebayOfferId || null,
       ebayInventoryItemSku: input.ebayInventoryItemSku || product.sku,
-      ebayConditionId: input.ebayConditionId || condition.conditionId,
-      ebayConditionEnum: input.ebayConditionEnum || condition.conditionEnum,
+      ebayConditionId: conditionIdForEnum(normaliseEbayConditionEnum(input.ebayConditionEnum || condition.conditionEnum)),
+      ebayConditionEnum: normaliseEbayConditionEnum(input.ebayConditionEnum || condition.conditionEnum),
       ebayFulfillmentPolicyId: input.ebayFulfillmentPolicyId || null,
       ebayPaymentPolicyId: input.ebayPaymentPolicyId || null,
       ebayReturnPolicyId: input.ebayReturnPolicyId || null,
@@ -1123,8 +1161,8 @@ export async function generateEbayDescriptionForProduct(productId: string, templ
       data: {
         ebayDescriptionHtml: html,
         ebayDescriptionTemplateId: template?.id ?? null,
-        ebayConditionId: product.ebayConditionId || mapConditionToEbay(product).conditionId,
-        ebayConditionEnum: product.ebayConditionEnum || mapConditionToEbay(product).conditionEnum,
+        ebayConditionId: conditionIdForEnum(normaliseEbayConditionEnum(product.ebayConditionEnum || mapConditionToEbay(product).conditionEnum)),
+        ebayConditionEnum: normaliseEbayConditionEnum(product.ebayConditionEnum || mapConditionToEbay(product).conditionEnum),
         ebayValidationErrorsJson: validation,
         ebayPublishStatus: validation.valid ? "READY_TO_PUBLISH" : "VALIDATION_FAILED",
       },
@@ -1264,6 +1302,9 @@ function livePublishValidation(product: EbayProductRecord) {
   if (categoryId && !/^\d+$/.test(categoryId)) add("eBay category ID must be numeric. Use the category assistant rather than free text.");
   if (!marketplaceId.startsWith("EBAY_")) add("Marketplace must be a valid eBay marketplace ID such as EBAY_GB.");
   if (!Number.isFinite(price) || price <= 0) add("eBay price must be a positive numeric value.");
+  const conditionEnum = normaliseEbayConditionEnum(product.ebayConditionEnum || mapConditionToEbay(product).conditionEnum);
+  if (!EBAY_VALID_CONDITIONS.has(conditionEnum)) add("eBay condition must be a valid Inventory API condition enum. Save the eBay draft again so Combay can normalise the condition mapping.");
+  if (String(product.ebayConditionEnum || "").toUpperCase() === "USED") warn("This product had the old invalid eBay condition enum USED. The live publish payload will send USED_EXCELLENT / condition ID 3000 instead.");
   if (String(product.ebayDescriptionHtml || "").length > 490000) warn("eBay description is very large. If eBay rejects the request, shorten the HTML description.");
   if (String(product.title || "").length > 80) warn("eBay title will be truncated to 80 characters for Inventory API publishing.");
   if (product.shippingManualQuoteRequired || product.shippingCollectionOnly || product.shippingPolicy?.manualQuoteRequired) {
@@ -1368,7 +1409,7 @@ function inventoryItemPayload(product: EbayProductRecord) {
         quantity: Math.max(0, Number(product.stockQty || 0)),
       },
     },
-    condition: product.ebayConditionEnum || condition.conditionEnum,
+    condition: normaliseEbayConditionEnum(product.ebayConditionEnum || condition.conditionEnum),
     product: {
       title: truncateText(product.title, 80),
       description: truncateText(product.description || product.productOverview || product.title, 4000),
@@ -1608,8 +1649,9 @@ export async function repairImportedEbayListings(limit = 100) {
         notes.push("Generated branded eBay description for placeholder/missing description.");
       }
       const condition = mapConditionToEbay(product);
-      if (!product.ebayConditionId) data.ebayConditionId = condition.conditionId;
-      if (!product.ebayConditionEnum) data.ebayConditionEnum = condition.conditionEnum;
+      const repairedConditionEnum = normaliseEbayConditionEnum(product.ebayConditionEnum || condition.conditionEnum);
+      if (!product.ebayConditionId || product.ebayConditionId === "3000") data.ebayConditionId = conditionIdForEnum(repairedConditionEnum);
+      if (!product.ebayConditionEnum || product.ebayConditionEnum === "USED") data.ebayConditionEnum = repairedConditionEnum;
       if (Object.keys(data).length) {
         const updated = await prisma.product.update({ where: { id: product.id }, data });
         const validation = validateEbayProductRecord(updated);

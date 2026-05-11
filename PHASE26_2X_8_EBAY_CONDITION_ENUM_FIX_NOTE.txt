@@ -1,0 +1,17 @@
+Phase 26.2X.8 — eBay Inventory API condition enum fix
+
+Fixes live publish failure:
+2004 — ACCESS/REQUEST — Invalid request — Could not serialize field [condition]
+
+Root cause:
+The live Inventory API payload sent condition: "USED" for used/tested products. eBay Inventory API does not accept "USED" as a ConditionEnum. Condition ID 3000 maps to USED_EXCELLENT.
+
+Changes:
+- Map Combay USED / Used tested to eBay condition enum USED_EXCELLENT with condition ID 3000.
+- Keep NEW -> NEW, NEW_OPEN_BOX -> NEW_OTHER, FOR_PARTS -> FOR_PARTS_OR_NOT_WORKING.
+- Normalise any legacy saved ebayConditionEnum value of USED before sending the live API payload.
+- Runtime repair changes existing Product.ebayConditionEnum = USED to USED_EXCELLENT.
+- Save eBay draft now persists a valid Inventory API condition enum.
+- Live publish validation now warns when it sees legacy USED condition data and sends the corrected enum.
+
+No Prisma schema changes. No prisma db push required.
