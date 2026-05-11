@@ -44,6 +44,26 @@ function Badge({ children, tone = "slate" }: { children: React.ReactNode; tone?:
   return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-900 whitespace-nowrap ${classes}`}>{children}</span>;
 }
 
+
+function summariseLogPayload(payload: any) {
+  if (!payload) return "";
+  const source = payload?.eBayResponse || payload?.rawPayload || payload;
+  const errors = Array.isArray(source?.errors) ? source.errors : [];
+  if (errors.length) {
+    return errors.map((error: any) => {
+      const params = Array.isArray(error.parameters) ? error.parameters.map((p: any) => `${p.name}: ${p.value}`).join("; ") : "";
+      return [error.errorId, error.domain, error.category, error.message, error.longMessage, params].filter(Boolean).join(" — " );
+    }).join(" | " );
+  }
+  if (payload?.endpoint) return `${payload.endpoint}${payload.httpStatus ? ` · HTTP ${payload.httpStatus}` : ""}`;
+  return "";
+}
+
+function formatLogTime(value: any) {
+  if (!value) return "—";
+  try { return new Date(value).toLocaleString("en-GB"); } catch { return "—"; }
+}
+
 function SelectField({ label, value, onChange, options, placeholder = "Select option" }: { label: string; value: string; onChange: (value: string) => void; options: SelectOption[]; placeholder?: string }) {
   return (
     <label className="block">
@@ -145,6 +165,8 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
   const returnOptions = optionState.returnPolicies || [];
   const fulfillmentOptions = optionState.fulfillmentPolicies || [];
   const recentJobs = useMemo(() => state.jobs || [], [state.jobs]);
+  const recentLogs = useMemo(() => state.logs || [], [state.logs]);
+  const latestFailure = recentLogs.find((log: any) => String(log.status || "").toUpperCase() === "FAILED" || String(log.errorMessage || "").trim());
   const specificsJson = useMemo(() => aspectValuesFromText(specificsText), [specificsText]);
   const requiredAspects = aspectMetadata.filter((aspect) => aspect.required);
   const recommendedAspects = aspectMetadata.filter((aspect) => !aspect.required && aspect.recommended).slice(0, 12);
@@ -239,6 +261,18 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
         <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[10px] font-900 uppercase text-gray-400">Validation</p><p className={`mt-1 text-sm font-900 ${ready ? "text-green-700" : "text-amber-700"}`}>{ready ? "Ready" : "Needs review"}</p></div>
       </section>
 
+      {latestFailure && <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-800">
+        <div className="flex items-start gap-2">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <h3 className="font-display text-sm font-900 text-red-900">Latest eBay publish/API failure</h3>
+            <p className="mt-1 break-words font-900">{latestFailure.errorMessage || latestFailure.message || "eBay rejected the request."}</p>
+            {summariseLogPayload(latestFailure.rawPayload) && <p className="mt-2 break-words text-red-700">{summariseLogPayload(latestFailure.rawPayload)}</p>}
+            <p className="mt-2 text-red-700">Time: {formatLogTime(latestFailure.finishedAt || latestFailure.startedAt)}</p>
+          </div>
+        </div>
+      </section>}
+
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div><h3 className="font-display text-lg font-900 text-navy-950">Listing mapping</h3><p className="mt-1 text-xs text-gray-500">Seller policies and listing IDs. Category selection is handled by the eBay category assistant below.</p></div>
@@ -324,7 +358,27 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="font-display text-lg font-900 text-navy-950">Recent jobs</h3>
-          <div className="mt-3 space-y-2">{recentJobs.map((job: any) => <div key={job.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-900 text-navy-950">{job.action}</span><Badge tone={job.status === "AWAITING_MANUAL_APPROVAL" ? "amber" : "slate"}>{job.status}</Badge></div><p className="mt-1 text-gray-500">{job.queuedAt ? new Date(job.queuedAt).toLocaleString("en-GB") : "—"}</p></div>)}{!recentJobs.length && <p className="text-sm text-gray-500">No eBay publish jobs yet.</p>}</div>
+          <div className="mt-3 space-y-2">{recentJobs.map((job: any) => <div key={job.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-900 text-navy-950">{job.action}</span><Badge tone={job.status === "AWAITING_MANUAL_APPROVAL" ? "amber" : job.status === "FAILED" ? "red" : "slate"}>{job.status}</Badge></div><p className="mt-1 text-gray-500">{job.queuedAt ? new Date(job.queuedAt).toLocaleString("en-GB") : "—"}</p>{job.errorMessage && <p className="mt-1 break-words text-red-700">{job.errorMessage}</p>}</div>)}{!recentJobs.length && <p className="text-sm text-gray-500">No eBay publish jobs yet.</p>}</div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="font-display text-lg font-900 text-navy-950">Recent eBay API logs</h3>
+        <p className="mt-1 text-xs text-gray-500">Use this when eBay returns a generic error such as 2004. The log now shows the exact endpoint and returned parameters where eBay provides them.</p>
+        <div className="mt-3 space-y-2">
+          {recentLogs.slice(0, 8).map((log: any) => (
+            <div key={log.id} className={`rounded-lg border px-3 py-2 text-xs ${log.status === "FAILED" ? "border-red-200 bg-red-50" : "border-slate-200 bg-slate-50"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-900 text-navy-950">{log.actionType || "eBay action"}</span>
+                <Badge tone={log.status === "FAILED" ? "red" : log.status === "SUCCESS" ? "green" : "slate"}>{log.status || "LOG"}</Badge>
+              </div>
+              <p className="mt-1 text-gray-600">{log.message || "—"}</p>
+              {log.errorMessage && <p className="mt-1 break-words font-900 text-red-700">{log.errorMessage}</p>}
+              {summariseLogPayload(log.rawPayload) && <p className="mt-1 break-words text-gray-600">{summariseLogPayload(log.rawPayload)}</p>}
+              <p className="mt-1 text-gray-400">{formatLogTime(log.finishedAt || log.startedAt)}</p>
+            </div>
+          ))}
+          {!recentLogs.length && <p className="text-sm text-gray-500">No eBay API logs yet.</p>}
         </div>
       </section>
 

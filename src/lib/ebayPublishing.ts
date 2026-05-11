@@ -1246,6 +1246,12 @@ function livePublishValidation(product: EbayProductRecord) {
   const errors = [...(base.errors || [])];
   const warnings = [...(base.warnings || [])];
   const add = (message: string) => { if (!errors.includes(message)) errors.push(message); };
+  const warn = (message: string) => { if (!warnings.includes(message)) warnings.push(message); };
+
+  const sku = String(product.ebayInventoryItemSku || product.sku || "").trim();
+  const categoryId = String(product.ebayCategoryId || "").trim();
+  const marketplaceId = String(product.ebayMarketplaceId || MARKETPLACE).trim();
+  const price = Number(product.price);
 
   if (!product.ebayDescriptionHtml?.trim()) add("Generate and save the branded eBay HTML description before live publish.");
   if (!product.ebayPaymentPolicyId) add("Select a valid eBay payment policy before live publish.");
@@ -1253,18 +1259,71 @@ function livePublishValidation(product: EbayProductRecord) {
   if (!product.ebayFulfillmentPolicyId && !product.shippingPolicy?.ebayFulfillmentPolicyId) add("Select a valid eBay fulfilment policy before live publish.");
   if (!product.ebayInventoryLocationKey) add("Select an eBay inventory location before live publish.");
   if (!publicImageUrls(product).length) add("At least one HTTPS product image is required before live publish.");
+  if (!sku) add("A Combay/eBay SKU is required before live publish.");
+  if (sku.length > 50) add("eBay SKU must be 50 characters or fewer.");
+  if (categoryId && !/^\d+$/.test(categoryId)) add("eBay category ID must be numeric. Use the category assistant rather than free text.");
+  if (!marketplaceId.startsWith("EBAY_")) add("Marketplace must be a valid eBay marketplace ID such as EBAY_GB.");
+  if (!Number.isFinite(price) || price <= 0) add("eBay price must be a positive numeric value.");
+  if (String(product.ebayDescriptionHtml || "").length > 490000) warn("eBay description is very large. If eBay rejects the request, shorten the HTML description.");
+  if (String(product.title || "").length > 80) warn("eBay title will be truncated to 80 characters for Inventory API publishing.");
   if (product.shippingManualQuoteRequired || product.shippingCollectionOnly || product.shippingPolicy?.manualQuoteRequired) {
     add("Manual quote or collection-only shipping products are blocked from live publish until a suitable eBay freight/collection fulfilment policy is selected and manually reviewed.");
   }
   return { valid: errors.length === 0, errors, warnings };
 }
 
+class EbayInventoryApiError extends Error {
+  status: number;
+  method: string;
+  path: string;
+  marketplaceId: string;
+  requestPayload: any;
+  responsePayload: any;
+
+  constructor(args: { status: number; method: string; path: string; marketplaceId: string; requestPayload?: any; responsePayload: any; message: string }) {
+    super(args.message);
+    this.name = "EbayInventoryApiError";
+    this.status = args.status;
+    this.method = args.method;
+    this.path = args.path;
+    this.marketplaceId = args.marketplaceId;
+    this.requestPayload = args.requestPayload;
+    this.responsePayload = args.responsePayload;
+  }
+}
+
+function ebayErrorParameters(error: any) {
+  const params = Array.isArray(error?.parameters) ? error.parameters : [];
+  return params
+    .map((param: any) => `${param?.name || "parameter"}: ${param?.value || ""}`.trim())
+    .filter(Boolean);
+}
+
 function ebayErrorMessage(body: any, fallback: string) {
   const errors = Array.isArray(body?.errors) ? body.errors : [];
   if (errors.length) {
-    return errors.map((error: any) => [error.errorId, error.message, error.longMessage].filter(Boolean).join(" — ")).join(" | ");
+    return errors.map((error: any) => {
+      const parts = [
+        error.errorId,
+        error.domain || error.category ? `${error.domain || "eBay"}/${error.category || "ERROR"}` : null,
+        error.message,
+        error.longMessage,
+        ...ebayErrorParameters(error),
+        Array.isArray(error.inputRefIds) && error.inputRefIds.length ? `input: ${error.inputRefIds.join(", ")}` : null,
+      ].filter(Boolean);
+      return parts.join(" — ");
+    }).join(" | ");
   }
   return body?.message || body?.error_description || body?.error || fallback;
+}
+
+function ebayRequestLanguage(marketplace: string) {
+  if (marketplace === "EBAY_GB") return "en-GB";
+  if (marketplace === "EBAY_DE") return "de-DE";
+  if (marketplace === "EBAY_FR") return "fr-FR";
+  if (marketplace === "EBAY_IT") return "it-IT";
+  if (marketplace === "EBAY_ES") return "es-ES";
+  return "en-US";
 }
 
 async function ebayInventoryApiRequest(path: string, method: string, body?: any, marketplaceId?: string | null) {
@@ -1277,8 +1336,7 @@ async function ebayInventoryApiRequest(path: string, method: string, body?: any,
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
       "Content-Type": "application/json",
-      "Content-Language": marketplace === "EBAY_GB" ? "en-GB" : "en-US",
-      "Accept-Language": marketplace === "EBAY_GB" ? "en-GB" : "en-US",
+      "Content-Language": ebayRequestLanguage(marketplace),
       "X-EBAY-C-MARKETPLACE-ID": marketplace,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -1287,7 +1345,17 @@ async function ebayInventoryApiRequest(path: string, method: string, body?: any,
   const text = await response.text();
   let parsed: any = {};
   try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text }; }
-  if (!response.ok) throw new Error(ebayErrorMessage(parsed, `eBay Inventory API ${method} ${path} failed with ${response.status}`));
+  if (!response.ok) {
+    throw new EbayInventoryApiError({
+      status: response.status,
+      method,
+      path,
+      marketplaceId: marketplace,
+      requestPayload: body,
+      responsePayload: parsed,
+      message: ebayErrorMessage(parsed, `eBay Inventory API ${method} ${path} failed with ${response.status}`),
+    });
+  }
   return parsed;
 }
 
@@ -1473,9 +1541,22 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
       return { product: updated, offerId, listingId, validation, jobId: job.id };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Live eBay publish failed.";
-      if (job?.id) await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "FAILED", errorMessage, finishedAt: new Date() } }).catch(() => null);
+      const apiError = error instanceof EbayInventoryApiError ? error : null;
+      const diagnosticPayload = apiError
+        ? {
+            endpoint: `${apiError.method} ${apiError.path}`,
+            marketplaceId: apiError.marketplaceId,
+            httpStatus: apiError.status,
+            eBayResponse: apiError.responsePayload,
+            requestPayload: apiError.requestPayload,
+            offerId,
+            listingId,
+            note: "This raw diagnostic payload is stored for admin/debugging so the exact eBay rejection field can be identified.",
+          }
+        : { offerId, listingId };
+      if (job?.id) await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "FAILED", errorMessage, finishedAt: new Date(), payload: diagnosticPayload } }).catch(() => null);
       await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "SYNC_FAILED", ebayLastError: errorMessage } }).catch(() => null);
-      await logEbayPublishEvent(product, "LIVE_EBAY_PUBLISH_FAILED", "FAILED", "Live eBay publish/update failed.", { offerId, listingId }, errorMessage, offerId || null, listingId || null);
+      await logEbayPublishEvent(product, "LIVE_EBAY_PUBLISH_FAILED", "FAILED", apiError ? `Live eBay publish/update failed at ${apiError.method} ${apiError.path}.` : "Live eBay publish/update failed.", diagnosticPayload, errorMessage, offerId || null, listingId || null);
       throw error;
     }
   });

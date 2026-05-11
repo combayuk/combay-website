@@ -1,0 +1,13 @@
+Phase 26.2X.7 — eBay live publish diagnostics and stricter preflight validation
+
+This cumulative build keeps the live eBay publish worker but improves handling of eBay's generic 2004 Invalid request response.
+
+Changes:
+- eBay Inventory API errors now preserve the endpoint, HTTP status, request payload, and raw eBay response payload.
+- eBay error formatting now includes domain/category, longMessage, parameters, and inputRefIds where eBay provides them.
+- Product eBay Listing tab now displays the latest eBay API failure in a clear diagnostic panel.
+- Product eBay Listing tab now includes recent eBay API logs, including endpoint and failure detail.
+- Live publish validation now checks SKU length, numeric category ID, marketplace ID format, positive numeric price, and large-description warning before making live API calls.
+- The generic 2004 error should now be followed by the exact eBay parameter/reason when eBay returns one, so the next issue can be fixed precisely rather than guessing.
+
+No Prisma schema change in this phase.
