@@ -805,11 +805,22 @@ export async function ensureEbayPublishingDefaults() {
   });
 
   const location = await prisma.ebayInventoryLocation.findFirst({ where: { isDefault: true } });
-  const defaultLocation = location || await prisma.ebayInventoryLocation.create({
-    data: {
+  const defaultLocation = location || await prisma.ebayInventoryLocation.upsert({
+    where: { key: "COMBAY-UK-MAIN" },
+    create: {
       key: "COMBAY-UK-MAIN",
       name: "Combay UK dispatch location",
       countryCode: "GB",
+      postcode: "CM17",
+      city: "Chelmsford",
+      isDefault: true,
+      isActive: true,
+    },
+    update: {
+      name: "Combay UK dispatch location",
+      countryCode: "GB",
+      postcode: "CM17",
+      city: "Chelmsford",
       isDefault: true,
       isActive: true,
     },

@@ -1,0 +1,5 @@
+Phase 26.2X.17 — eBay inventory-location unique validation fix
+
+Fixes a validation-screen crash where ensureEbayPublishingDefaults tried to create the default EbayInventoryLocation row even when COMBAY-UK-MAIN already existed but was not marked as default. Prisma then raised: Unique constraint failed on the fields: (`key`).
+
+The default-location initialiser now uses upsert on key COMBAY-UK-MAIN, updates the existing row to active/default, and preserves the cumulative eBay publish flow from 26.2X.16. No Prisma/schema change is required.
