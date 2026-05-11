@@ -1,9 +1,154 @@
 import { prisma, withDatabase } from "@/lib/db";
+import { getEbayAccessToken } from "@/lib/ebay";
 
 type EbayProductRecord = any;
 
 const SKU_PREFIX = "CBUK";
 const MARKETPLACE = "EBAY_GB";
+
+
+export const EBAY_MARKETPLACE_OPTIONS = [
+  { value: "EBAY_GB", label: "United Kingdom (EBAY_GB)" },
+  { value: "EBAY_US", label: "United States (EBAY_US)" },
+  { value: "EBAY_IE", label: "Ireland (EBAY_IE)" },
+  { value: "EBAY_DE", label: "Germany (EBAY_DE)" },
+  { value: "EBAY_FR", label: "France (EBAY_FR)" },
+  { value: "EBAY_IT", label: "Italy (EBAY_IT)" },
+  { value: "EBAY_ES", label: "Spain (EBAY_ES)" },
+  { value: "EBAY_AU", label: "Australia (EBAY_AU)" },
+  { value: "EBAY_CA", label: "Canada (EBAY_CA)" },
+];
+
+export const EBAY_LISTING_DURATION_OPTIONS = [
+  { value: "GTC", label: "Good 'Til Cancelled (recommended fixed-price default)" },
+  { value: "DAYS_30", label: "30 days" },
+  { value: "DAYS_10", label: "10 days" },
+  { value: "DAYS_7", label: "7 days" },
+  { value: "DAYS_5", label: "5 days" },
+  { value: "DAYS_3", label: "3 days" },
+];
+
+type EbayOption = { id: string; name: string; marketplaceId?: string; isDefault?: boolean; raw?: any };
+
+type EbayPublishingOptionState = {
+  marketplaceOptions: typeof EBAY_MARKETPLACE_OPTIONS;
+  listingDurationOptions: typeof EBAY_LISTING_DURATION_OPTIONS;
+  paymentPolicies: EbayOption[];
+  returnPolicies: EbayOption[];
+  fulfillmentPolicies: EbayOption[];
+  inventoryLocations: EbayOption[];
+  fetchedFromEbay: boolean;
+  fetchMessage: string;
+};
+
+function missingSchemaMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/does not exist in the current database|does not exist|Unknown column|column .* does not exist|table .* does not exist/i.test(message)) {
+    return `Database update required before eBay publishing can be used. Run npm install, then npx --yes prisma@5.22.0 generate and npx --yes prisma@5.22.0 db push against the same DATABASE_URL used by this deployment. Original database message: ${message}`;
+  }
+  return null;
+}
+
+function apiRootForEnvironment(environment?: string | null) {
+  return environment === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
+}
+
+function policyName(policy: any, fallback: string) {
+  return String(policy?.name || policy?.policyName || policy?.description || fallback || "Unnamed policy");
+}
+
+function mapBusinessPolicy(policy: any, type: "payment" | "return" | "fulfillment"): EbayOption | null {
+  const id = policy?.paymentPolicyId || policy?.returnPolicyId || policy?.fulfillmentPolicyId || policy?.policyId || policy?.id;
+  if (!id) return null;
+  return {
+    id: String(id),
+    name: policyName(policy, `${type} policy ${id}`),
+    marketplaceId: policy?.marketplaceId,
+    isDefault: Boolean(policy?.categoryTypes?.some?.((item: any) => item?.default === true) || policy?.isDefault),
+    raw: policy,
+  };
+}
+
+function mapInventoryLocation(location: any): EbayOption | null {
+  const id = location?.merchantLocationKey || location?.key || location?.id;
+  if (!id) return null;
+  const address = location?.location?.address || location?.address || {};
+  const city = address?.city || location?.city || "";
+  const country = address?.country || location?.countryCode || "";
+  return {
+    id: String(id),
+    name: [location?.name || location?.merchantLocationKey || id, city, country].filter(Boolean).join(" · "),
+    isDefault: Boolean(location?.isDefault),
+    raw: location,
+  };
+}
+
+async function getJsonOrEmpty(url: string, token: string, marketplaceId?: string | null) {
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-EBAY-C-MARKETPLACE-ID": marketplaceId || MARKETPLACE,
+    },
+    cache: "no-store",
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.errors?.[0]?.message || body?.error_description || body?.message || `eBay API returned ${response.status}`);
+  return body;
+}
+
+async function fetchLiveEbayPublishingOptions(marketplaceId = MARKETPLACE): Promise<Partial<EbayPublishingOptionState>> {
+  const { token, config } = await getEbayAccessToken();
+  const marketplace = marketplaceId || config.marketplaceId || MARKETPLACE;
+  const root = apiRootForEnvironment(config.environment);
+  const params = `marketplace_id=${encodeURIComponent(marketplace)}`;
+
+  const [payments, returns, fulfillments, locations] = await Promise.all([
+    getJsonOrEmpty(`${root}/sell/account/v1/payment_policy?${params}`, token, marketplace),
+    getJsonOrEmpty(`${root}/sell/account/v1/return_policy?${params}`, token, marketplace),
+    getJsonOrEmpty(`${root}/sell/account/v1/fulfillment_policy?${params}`, token, marketplace),
+    getJsonOrEmpty(`${root}/sell/inventory/v1/location?limit=200&offset=0`, token, marketplace),
+  ]);
+
+  return {
+    paymentPolicies: (payments.paymentPolicies || []).map((item: any) => mapBusinessPolicy(item, "payment")).filter(Boolean),
+    returnPolicies: (returns.returnPolicies || []).map((item: any) => mapBusinessPolicy(item, "return")).filter(Boolean),
+    fulfillmentPolicies: (fulfillments.fulfillmentPolicies || []).map((item: any) => mapBusinessPolicy(item, "fulfillment")).filter(Boolean),
+    inventoryLocations: (locations.locations || []).map(mapInventoryLocation).filter(Boolean),
+    fetchedFromEbay: true,
+    fetchMessage: "Fetched live eBay business policies and inventory locations from the connected seller account.",
+  };
+}
+
+async function getLocalPolicyOptions(marketplaceId = MARKETPLACE): Promise<Partial<EbayPublishingOptionState>> {
+  const [payment, ret, fulfillment, locations] = await Promise.all([
+    prisma.ebayPolicyMapping.findMany({ where: { type: "payment", marketplaceId, isActive: true }, orderBy: [{ isDefault: "desc" }, { ebayPolicyName: "asc" }] }).catch(() => []),
+    prisma.ebayPolicyMapping.findMany({ where: { type: "return", marketplaceId, isActive: true }, orderBy: [{ isDefault: "desc" }, { ebayPolicyName: "asc" }] }).catch(() => []),
+    prisma.ebayPolicyMapping.findMany({ where: { type: "fulfillment", marketplaceId, isActive: true }, orderBy: [{ isDefault: "desc" }, { ebayPolicyName: "asc" }] }).catch(() => []),
+    prisma.ebayInventoryLocation.findMany({ where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }).catch(() => []),
+  ]);
+  return {
+    paymentPolicies: payment.map((item: any) => ({ id: item.ebayPolicyId, name: item.ebayPolicyName || item.ebayPolicyId, marketplaceId: item.marketplaceId, isDefault: item.isDefault })),
+    returnPolicies: ret.map((item: any) => ({ id: item.ebayPolicyId, name: item.ebayPolicyName || item.ebayPolicyId, marketplaceId: item.marketplaceId, isDefault: item.isDefault })),
+    fulfillmentPolicies: fulfillment.map((item: any) => ({ id: item.ebayPolicyId, name: item.ebayPolicyName || item.ebayPolicyId, marketplaceId: item.marketplaceId, isDefault: item.isDefault })),
+    inventoryLocations: locations.map((item: any) => ({ id: item.key, name: `${item.name} (${item.key})`, isDefault: item.isDefault, raw: item })),
+  };
+}
+
+async function upsertFetchedOptions(options: Partial<EbayPublishingOptionState>, marketplaceId = MARKETPLACE) {
+  await Promise.all([
+    ...(options.paymentPolicies || []).map((policy) => prisma.ebayPolicyMapping.upsert({ where: { id: `payment_${marketplaceId}_${policy.id}` }, create: { id: `payment_${marketplaceId}_${policy.id}`, type: "payment", ebayPolicyId: policy.id, ebayPolicyName: policy.name, marketplaceId, isDefault: Boolean(policy.isDefault), isActive: true }, update: { ebayPolicyName: policy.name, isDefault: Boolean(policy.isDefault), isActive: true } }).catch(() => null)),
+    ...(options.returnPolicies || []).map((policy) => prisma.ebayPolicyMapping.upsert({ where: { id: `return_${marketplaceId}_${policy.id}` }, create: { id: `return_${marketplaceId}_${policy.id}`, type: "return", ebayPolicyId: policy.id, ebayPolicyName: policy.name, marketplaceId, isDefault: Boolean(policy.isDefault), isActive: true }, update: { ebayPolicyName: policy.name, isDefault: Boolean(policy.isDefault), isActive: true } }).catch(() => null)),
+    ...(options.fulfillmentPolicies || []).map((policy) => prisma.ebayPolicyMapping.upsert({ where: { id: `fulfillment_${marketplaceId}_${policy.id}` }, create: { id: `fulfillment_${marketplaceId}_${policy.id}`, type: "fulfillment", ebayPolicyId: policy.id, ebayPolicyName: policy.name, marketplaceId, isDefault: Boolean(policy.isDefault), isActive: true }, update: { ebayPolicyName: policy.name, isDefault: Boolean(policy.isDefault), isActive: true } }).catch(() => null)),
+    ...(options.inventoryLocations || []).map((location) => prisma.ebayInventoryLocation.upsert({ where: { key: location.id }, create: { key: location.id, name: location.name || location.id, countryCode: location.raw?.location?.address?.country || location.raw?.countryCode || "GB", isDefault: Boolean(location.isDefault), isActive: true }, update: { name: location.name || location.id, isDefault: Boolean(location.isDefault), isActive: true } }).catch(() => null)),
+  ]);
+}
+
+function pickDefault(options: EbayOption[], current?: string | null) {
+  if (current && options.some((item) => item.id === current)) return current;
+  return options.find((item) => item.isDefault)?.id || options[0]?.id || current || "";
+}
 
 const DEFAULT_EBAY_TEMPLATE = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222; line-height: 1.5; max-width: 900px; margin: 0 auto; border: 1px solid #e5e7eb; background: #ffffff;">
   <div style="background: #2D4F7A; padding: 18px 22px; color: #ffffff;">
@@ -183,6 +328,7 @@ export async function ensureEbayPublishingDefaults() {
         defaultInventoryLocationKey: config.defaultInventoryLocationKey || defaultLocation.key,
         marketplaceId: config.marketplaceId || MARKETPLACE,
         defaultSkuPrefix: config.defaultSkuPrefix || SKU_PREFIX,
+        defaultListingDuration: config.defaultListingDuration || "GTC",
         autoGenerateSku: config.autoGenerateSku ?? true,
         manualApprovalBeforePublish: config.manualApprovalBeforePublish ?? true,
       },
@@ -194,6 +340,7 @@ export async function ensureEbayPublishingDefaults() {
         defaultDescriptionTemplateId: defaultTemplate.id,
         defaultInventoryLocationKey: defaultLocation.key,
         defaultSkuPrefix: SKU_PREFIX,
+        defaultListingDuration: "GTC",
         autoGenerateSku: true,
         manualApprovalBeforePublish: true,
         autoPublishToEbay: false,
@@ -205,38 +352,119 @@ export async function ensureEbayPublishingDefaults() {
 
 export async function getEbayPublishingSettings() {
   return withDatabase(async () => {
-    await ensureEbayPublishingDefaults();
-    const [config, templates, locations, logs, jobs] = await Promise.all([
-      prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } }),
-      prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] }),
-      prisma.ebayInventoryLocation.findMany({ orderBy: [{ isDefault: "desc" }, { name: "asc" }] }),
-      prisma.ebaySyncLog.findMany({ orderBy: { startedAt: "desc" }, take: 25 }),
-      prisma.ebayPublishJob.findMany({ orderBy: { queuedAt: "desc" }, take: 25 }),
-    ]);
-    return { config, templates, locations, logs, jobs };
+    try {
+      await ensureEbayPublishingDefaults();
+      const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
+      const marketplaceId = config?.marketplaceId || MARKETPLACE;
+
+      let localOptions = await getLocalPolicyOptions(marketplaceId);
+      let liveOptions: Partial<EbayPublishingOptionState> = {};
+      try {
+        liveOptions = await fetchLiveEbayPublishingOptions(marketplaceId);
+        await upsertFetchedOptions(liveOptions, marketplaceId);
+        localOptions = await getLocalPolicyOptions(marketplaceId);
+      } catch (error) {
+        liveOptions = {
+          fetchedFromEbay: false,
+          fetchMessage: error instanceof Error
+            ? `Could not fetch live eBay business policies yet: ${error.message}`
+            : "Could not fetch live eBay business policies yet.",
+        };
+      }
+
+      const [templates, locations, logs, jobs] = await Promise.all([
+        prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] }),
+        prisma.ebayInventoryLocation.findMany({ orderBy: [{ isDefault: "desc" }, { name: "asc" }] }),
+        prisma.ebaySyncLog.findMany({ orderBy: { startedAt: "desc" }, take: 25 }),
+        prisma.ebayPublishJob.findMany({ orderBy: { queuedAt: "desc" }, take: 25 }),
+      ]);
+
+      const options: EbayPublishingOptionState = {
+        marketplaceOptions: EBAY_MARKETPLACE_OPTIONS,
+        listingDurationOptions: EBAY_LISTING_DURATION_OPTIONS,
+        paymentPolicies: localOptions.paymentPolicies?.length ? localOptions.paymentPolicies : (liveOptions.paymentPolicies || []),
+        returnPolicies: localOptions.returnPolicies?.length ? localOptions.returnPolicies : (liveOptions.returnPolicies || []),
+        fulfillmentPolicies: localOptions.fulfillmentPolicies?.length ? localOptions.fulfillmentPolicies : (liveOptions.fulfillmentPolicies || []),
+        inventoryLocations: [
+          ...locations.map((item: any) => ({ id: item.key, name: `${item.name} (${item.key})`, isDefault: item.isDefault, raw: item })),
+          ...(liveOptions.inventoryLocations || []).filter((live) => !locations.some((local: any) => local.key === live.id)),
+        ],
+        fetchedFromEbay: Boolean(liveOptions.fetchedFromEbay),
+        fetchMessage: liveOptions.fetchMessage || "Using locally saved eBay publishing options.",
+      };
+
+      const autoDefaults = {
+        defaultInventoryLocationKey: pickDefault(options.inventoryLocations, config?.defaultInventoryLocationKey),
+        defaultPaymentPolicyId: pickDefault(options.paymentPolicies, config?.defaultPaymentPolicyId),
+        defaultReturnPolicyId: pickDefault(options.returnPolicies, config?.defaultReturnPolicyId),
+        defaultFulfillmentPolicyId: pickDefault(options.fulfillmentPolicies, config?.defaultFulfillmentPolicyId),
+        defaultDescriptionTemplateId: pickDefault(templates.map((item: any) => ({ id: item.id, name: item.name, isDefault: item.isDefault })), config?.defaultDescriptionTemplateId),
+      };
+
+      return { schemaReady: true, config: { ...config, ...autoDefaults }, templates, locations, logs, jobs, options };
+    } catch (error) {
+      const schemaMessage = missingSchemaMessage(error);
+      if (schemaMessage) {
+        return {
+          schemaReady: false,
+          schemaMessage,
+          config: {
+            marketplaceId: MARKETPLACE,
+            defaultListingDuration: "GTC",
+            defaultSkuPrefix: SKU_PREFIX,
+            autoGenerateSku: true,
+            manualApprovalBeforePublish: true,
+            autoPublishToEbay: false,
+          },
+          templates: [],
+          locations: [],
+          logs: [],
+          jobs: [],
+          options: {
+            marketplaceOptions: EBAY_MARKETPLACE_OPTIONS,
+            listingDurationOptions: EBAY_LISTING_DURATION_OPTIONS,
+            paymentPolicies: [],
+            returnPolicies: [],
+            fulfillmentPolicies: [],
+            inventoryLocations: [],
+            fetchedFromEbay: false,
+            fetchMessage: "eBay policy fetch is paused until the database schema is updated.",
+          },
+        };
+      }
+      throw error;
+    }
   });
 }
 
 export async function saveEbayPublishingSettings(input: any) {
   return withDatabase(async () => {
-    await ensureEbayPublishingDefaults();
-    const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
-    const payload = {
-      marketplaceId: input.marketplaceId || config?.marketplaceId || MARKETPLACE,
-      defaultInventoryLocationKey: input.defaultInventoryLocationKey || null,
-      defaultPaymentPolicyId: input.defaultPaymentPolicyId || null,
-      defaultReturnPolicyId: input.defaultReturnPolicyId || null,
-      defaultFulfillmentPolicyId: input.defaultFulfillmentPolicyId || null,
-      defaultListingDuration: input.defaultListingDuration || "GTC",
-      defaultSkuPrefix: input.defaultSkuPrefix || SKU_PREFIX,
-      autoGenerateSku: input.autoGenerateSku !== false,
-      autoPublishToEbay: Boolean(input.autoPublishToEbay),
-      manualApprovalBeforePublish: input.manualApprovalBeforePublish !== false,
-      defaultDescriptionTemplateId: input.defaultDescriptionTemplateId || null,
-    };
-    return config
-      ? prisma.ebaySyncConfig.update({ where: { id: config.id }, data: payload })
-      : prisma.ebaySyncConfig.create({ data: { ...payload, environment: "production" } });
+    try {
+      await ensureEbayPublishingDefaults();
+      const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
+      const marketplaceId = EBAY_MARKETPLACE_OPTIONS.some((item) => item.value === input.marketplaceId) ? input.marketplaceId : (config?.marketplaceId || MARKETPLACE);
+      const listingDuration = EBAY_LISTING_DURATION_OPTIONS.some((item) => item.value === input.defaultListingDuration) ? input.defaultListingDuration : "GTC";
+      const payload = {
+        marketplaceId,
+        defaultInventoryLocationKey: input.defaultInventoryLocationKey || null,
+        defaultPaymentPolicyId: input.defaultPaymentPolicyId || null,
+        defaultReturnPolicyId: input.defaultReturnPolicyId || null,
+        defaultFulfillmentPolicyId: input.defaultFulfillmentPolicyId || null,
+        defaultListingDuration: listingDuration,
+        defaultSkuPrefix: String(input.defaultSkuPrefix || SKU_PREFIX).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || SKU_PREFIX,
+        autoGenerateSku: input.autoGenerateSku !== false,
+        autoPublishToEbay: Boolean(input.autoPublishToEbay),
+        manualApprovalBeforePublish: input.manualApprovalBeforePublish !== false,
+        defaultDescriptionTemplateId: input.defaultDescriptionTemplateId || null,
+      };
+      return config
+        ? prisma.ebaySyncConfig.update({ where: { id: config.id }, data: payload })
+        : prisma.ebaySyncConfig.create({ data: { ...payload, environment: "production" } });
+    } catch (error) {
+      const schemaMessage = missingSchemaMessage(error);
+      if (schemaMessage) throw new Error(schemaMessage);
+      throw error;
+    }
   });
 }
 
@@ -323,10 +551,20 @@ export async function getEbayProductPublishingState(productId: string) {
     const logs = await prisma.ebaySyncLog.findMany({ where: { productId: product.id }, orderBy: { startedAt: "desc" }, take: 20 });
     const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: product.id }, orderBy: { queuedAt: "desc" }, take: 10 });
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
+    const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
     const templates = await prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] });
     const locations = await prisma.ebayInventoryLocation.findMany({ where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] });
+    const localOptions = await getLocalPolicyOptions(marketplaceId);
+    const options = {
+      marketplaceOptions: EBAY_MARKETPLACE_OPTIONS,
+      listingDurationOptions: EBAY_LISTING_DURATION_OPTIONS,
+      paymentPolicies: localOptions.paymentPolicies || [],
+      returnPolicies: localOptions.returnPolicies || [],
+      fulfillmentPolicies: localOptions.fulfillmentPolicies || [],
+      inventoryLocations: locations.map((item: any) => ({ id: item.key, name: `${item.name} (${item.key})`, isDefault: item.isDefault, raw: item })),
+    };
     const validation = validateEbayProductRecord(product);
-    return { product, logs, jobs, config, templates, locations, validation };
+    return { product, logs, jobs, config, templates, locations, options, validation };
   });
 }
 
@@ -479,12 +717,20 @@ export async function repairImportedEbayListings(limit = 100) {
 
 export async function createOrUpdateEbayTemplate(input: any) {
   return withDatabase(async () => {
-    const html = stripUnsafeHtml(String(input.html || DEFAULT_EBAY_TEMPLATE));
-    const unsafeErrors = validateEbaySafeHtml(html);
-    if (unsafeErrors.length) throw new Error(unsafeErrors.join(" "));
-    if (input.id) {
-      return prisma.ebayDescriptionTemplate.update({ where: { id: input.id }, data: { name: input.name || "Combay eBay template", description: input.description || null, html, isDefault: Boolean(input.isDefault) } });
+    try {
+      const html = stripUnsafeHtml(String(input.html || DEFAULT_EBAY_TEMPLATE));
+      const unsafeErrors = validateEbaySafeHtml(html);
+      if (unsafeErrors.length) throw new Error(unsafeErrors.join(" "));
+      const isDefault = Boolean(input.isDefault);
+      if (isDefault) await prisma.ebayDescriptionTemplate.updateMany({ data: { isDefault: false } });
+      if (input.id) {
+        return prisma.ebayDescriptionTemplate.update({ where: { id: input.id }, data: { name: input.name || "Combay eBay template", description: input.description || null, html, isDefault } });
+      }
+      return prisma.ebayDescriptionTemplate.create({ data: { name: input.name || "Combay eBay template", description: input.description || null, html, isDefault, isSystem: false } });
+    } catch (error) {
+      const schemaMessage = missingSchemaMessage(error);
+      if (schemaMessage) throw new Error(schemaMessage);
+      throw error;
     }
-    return prisma.ebayDescriptionTemplate.create({ data: { name: input.name || "Combay eBay template", description: input.description || null, html, isDefault: Boolean(input.isDefault), isSystem: false } });
   });
 }

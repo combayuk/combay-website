@@ -1,0 +1,26 @@
+Phase 26.2X.2 — eBay publishing settings and schema-safety refinement
+
+This cumulative full-project archive keeps Phase 26.2X eBay publishing foundation and refines it based on live admin feedback.
+
+Fixes included:
+- eBay publishing page no longer hard-crashes when the new eBay publishing tables have not yet been pushed to the active database.
+- The page now shows a clear database-schema warning with the exact Prisma 5 db push commands.
+- Marketplace is now a select dropdown, not a free-text input.
+- Listing duration is now a select dropdown, not a free-text input.
+- Payment, return and fulfilment policy fields are dropdowns populated from eBay business policies where possible.
+- Inventory location dropdown uses saved/fetched inventory locations instead of showing only "Select option".
+- eBay HTML template area now has a New template flow.
+- Settings now have clear Save settings buttons and save feedback.
+- Product editor eBay Listing tab uses the same dropdown-based options for marketplace, location, payment policy, return policy and fulfilment policy.
+- eBay OAuth scope includes Sell Account API scope so the app can fetch seller business policies.
+
+Important deployment note:
+The reported error `public.EbayDescriptionTemplate does not exist` means the production database did not receive the 26.2X schema changes yet. After extracting this cumulative archive, run:
+
+npm install
+npx --yes prisma@5.22.0 generate
+npx --yes prisma@5.22.0 db push
+
+after confirming the DATABASE_URL points to the same database used by the deployed Vercel project.
+
+If eBay policy dropdowns are still empty after this deploy, reconnect eBay OAuth because the saved refresh token may not include the newly added Sell Account API scope.

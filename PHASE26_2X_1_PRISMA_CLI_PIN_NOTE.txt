@@ -1,0 +1,19 @@
+Phase 26.2X.1 — Prisma CLI Version Pin / Local DB Push Guard
+
+This cumulative archive pins Prisma CLI and @prisma/client to 5.22.0 in package.json so local database commands do not accidentally run Prisma 7.x via npx.
+
+Reason:
+- Prisma 7 rejects the legacy datasource url = env("DATABASE_URL") schema format.
+- This project is currently built on Prisma 5.x conventions and package-lock already resolves Prisma to 5.22.0.
+- If node_modules is missing, npx prisma can fetch the latest CLI instead of using the project-local locked version.
+
+Correct local commands after extracting this cumulative archive:
+1. npm install
+2. npx prisma generate
+3. npx prisma db push
+
+Alternative explicit commands:
+- npx --yes prisma@5.22.0 generate
+- npx --yes prisma@5.22.0 db push
+
+No application functionality was removed. This is a tooling/version-pin correction for the eBay publishing foundation deployment.

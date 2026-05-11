@@ -83,7 +83,8 @@ type NormalizedEbayListing = {
 const EBAY_BASE_SCOPE = "https://api.ebay.com/oauth/api_scope";
 const INVENTORY_READONLY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory.readonly";
 const INVENTORY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory";
-const EBAY_SCOPES = `${EBAY_BASE_SCOPE} ${INVENTORY_READONLY_SCOPE} ${INVENTORY_SCOPE}`;
+const ACCOUNT_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.account";
+const EBAY_SCOPES = `${EBAY_BASE_SCOPE} ${INVENTORY_READONLY_SCOPE} ${INVENTORY_SCOPE} ${ACCOUNT_SCOPE}`;
 
 function apiRoot(environment?: string) {
   return environment === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";

@@ -6,6 +6,20 @@ import { AlertTriangle, CheckCircle2, Eye, FileCode2, RefreshCw, Save, ShieldChe
 
 type Props = { productId?: string; currentSku?: string; title?: string };
 
+type SelectOption = { id?: string; value?: string; name?: string; label?: string; isDefault?: boolean };
+
+const FALLBACK_MARKETPLACES = [
+  { value: "EBAY_GB", label: "United Kingdom (EBAY_GB)" },
+  { value: "EBAY_US", label: "United States (EBAY_US)" },
+  { value: "EBAY_IE", label: "Ireland (EBAY_IE)" },
+  { value: "EBAY_DE", label: "Germany (EBAY_DE)" },
+  { value: "EBAY_FR", label: "France (EBAY_FR)" },
+  { value: "EBAY_IT", label: "Italy (EBAY_IT)" },
+  { value: "EBAY_ES", label: "Spain (EBAY_ES)" },
+  { value: "EBAY_AU", label: "Australia (EBAY_AU)" },
+  { value: "EBAY_CA", label: "Canada (EBAY_CA)" },
+];
+
 type State = {
   product?: any;
   config?: any;
@@ -14,6 +28,7 @@ type State = {
   logs?: any[];
   jobs?: any[];
   validation?: { valid: boolean; errors: string[]; warnings: string[] };
+  options?: { marketplaceOptions?: SelectOption[]; paymentPolicies?: SelectOption[]; returnPolicies?: SelectOption[]; fulfillmentPolicies?: SelectOption[]; inventoryLocations?: SelectOption[] };
 };
 
 function Badge({ children, tone = "slate" }: { children: React.ReactNode; tone?: "slate" | "green" | "amber" | "red" | "blue" }) {
@@ -25,6 +40,22 @@ function Badge({ children, tone = "slate" }: { children: React.ReactNode; tone?:
     blue: "bg-blue-50 text-blue-700 border-blue-200",
   }[tone];
   return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-900 whitespace-nowrap ${classes}`}>{children}</span>;
+}
+
+
+function SelectField({ label, value, onChange, options, placeholder = "Select option" }: { label: string; value: string; onChange: (value: string) => void; options: SelectOption[]; placeholder?: string }) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      <select value={value || ""} onChange={(e) => onChange(e.target.value)} className="input py-2 text-sm">
+        <option value="">{placeholder}</option>
+        {options.map((option) => {
+          const optionValue = String(option.value || option.id || "");
+          return <option key={optionValue} value={optionValue}>{option.label || option.name || optionValue}{option.isDefault ? " — default" : ""}</option>;
+        })}
+      </select>
+    </label>
+  );
 }
 
 function stringifySpecifics(value: any) {
@@ -60,6 +91,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     }
     setState(result);
     const product = result.product || {};
+    const options = result.options || {};
     const nextForm = {
       ebayMarketplaceId: product.ebayMarketplaceId || result.config?.marketplaceId || "EBAY_GB",
       ebayCategoryId: product.ebayCategoryId || "",
@@ -67,10 +99,10 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
       ebayListingId: product.ebayListingId || product.ebayItemId || "",
       ebayOfferId: product.ebayOfferId || "",
       ebayInventoryItemSku: product.ebayInventoryItemSku || product.sku || currentSku || "",
-      ebayFulfillmentPolicyId: product.ebayFulfillmentPolicyId || result.config?.defaultFulfillmentPolicyId || product.shippingPolicy?.ebayFulfillmentPolicyId || "",
-      ebayPaymentPolicyId: product.ebayPaymentPolicyId || result.config?.defaultPaymentPolicyId || "",
-      ebayReturnPolicyId: product.ebayReturnPolicyId || result.config?.defaultReturnPolicyId || "",
-      ebayInventoryLocationKey: product.ebayInventoryLocationKey || result.config?.defaultInventoryLocationKey || "",
+      ebayFulfillmentPolicyId: product.ebayFulfillmentPolicyId || result.config?.defaultFulfillmentPolicyId || product.shippingPolicy?.ebayFulfillmentPolicyId || options.fulfillmentPolicies?.find((item: any) => item.isDefault)?.id || options.fulfillmentPolicies?.[0]?.id || "",
+      ebayPaymentPolicyId: product.ebayPaymentPolicyId || result.config?.defaultPaymentPolicyId || options.paymentPolicies?.find((item: any) => item.isDefault)?.id || options.paymentPolicies?.[0]?.id || "",
+      ebayReturnPolicyId: product.ebayReturnPolicyId || result.config?.defaultReturnPolicyId || options.returnPolicies?.find((item: any) => item.isDefault)?.id || options.returnPolicies?.[0]?.id || "",
+      ebayInventoryLocationKey: product.ebayInventoryLocationKey || result.config?.defaultInventoryLocationKey || options.inventoryLocations?.find((item: any) => item.isDefault)?.id || options.inventoryLocations?.[0]?.id || "",
       ebayDescriptionTemplateId: product.ebayDescriptionTemplateId || result.config?.defaultDescriptionTemplateId || result.templates?.find((template: any) => template.isDefault)?.id || "",
       ebayDescriptionHtml: product.ebayDescriptionHtml || "",
       ebaySourceOfTruth: product.ebaySourceOfTruth || "COMBAY",
@@ -85,6 +117,12 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
 
   const validation = state.validation || state.product?.ebayValidationErrorsJson || { valid: false, errors: [], warnings: [] };
   const ready = Boolean(validation.valid);
+  const optionState = state.options || {};
+  const marketplaceOptions = optionState.marketplaceOptions?.length ? optionState.marketplaceOptions : FALLBACK_MARKETPLACES;
+  const inventoryOptions = optionState.inventoryLocations || [];
+  const paymentOptions = optionState.paymentPolicies || [];
+  const returnOptions = optionState.returnPolicies || [];
+  const fulfillmentOptions = optionState.fulfillmentPolicies || [];
 
   const recentJobs = useMemo(() => state.jobs || [], [state.jobs]);
 
@@ -151,15 +189,15 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"><div><h3 className="font-display text-lg font-900 text-navy-950">Listing mapping</h3><p className="mt-1 text-xs text-gray-500">Local eBay draft fields. These are saved to the product and used by the publish worker later.</p></div>{form.ebayExcludedFromSync && <Badge tone="red">Excluded from eBay</Badge>}</div>
         <div className="grid gap-3 lg:grid-cols-3">
-          <label className="block"><span className="label">Marketplace</span><input value={form.ebayMarketplaceId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayMarketplaceId: e.target.value }))} className="input py-2 text-sm" /></label>
+          <SelectField label="Marketplace" value={form.ebayMarketplaceId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayMarketplaceId: value }))} options={marketplaceOptions} />
           <label className="block"><span className="label">eBay SKU</span><input value={form.ebayInventoryItemSku || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayInventoryItemSku: e.target.value }))} className="input py-2 text-sm font-mono" /></label>
           <label className="block"><span className="label">Source of truth</span><select value={form.ebaySourceOfTruth || "COMBAY"} onChange={(e) => setForm((c: any) => ({ ...c, ebaySourceOfTruth: e.target.value }))} className="input py-2 text-sm"><option value="COMBAY">Combay controls listing</option><option value="EBAY">eBay controls listing</option><option value="MANUAL_REVIEW">Manual review</option></select></label>
           <label className="block"><span className="label">eBay category ID</span><input value={form.ebayCategoryId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayCategoryId: e.target.value }))} className="input py-2 text-sm" placeholder="e.g. 181730" /></label>
           <label className="block"><span className="label">eBay category name</span><input value={form.ebayCategoryName || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayCategoryName: e.target.value }))} className="input py-2 text-sm" /></label>
-          <label className="block"><span className="label">Inventory location</span><select value={form.ebayInventoryLocationKey || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayInventoryLocationKey: e.target.value }))} className="input py-2 text-sm"><option value="">Select location</option>{(state.locations ?? []).map((location: any) => <option key={location.id} value={location.key}>{location.name} ({location.key})</option>)}</select></label>
-          <label className="block"><span className="label">Fulfilment policy ID</span><input value={form.ebayFulfillmentPolicyId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayFulfillmentPolicyId: e.target.value }))} className="input py-2 text-sm" /></label>
-          <label className="block"><span className="label">Payment policy ID</span><input value={form.ebayPaymentPolicyId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayPaymentPolicyId: e.target.value }))} className="input py-2 text-sm" /></label>
-          <label className="block"><span className="label">Return policy ID</span><input value={form.ebayReturnPolicyId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayReturnPolicyId: e.target.value }))} className="input py-2 text-sm" /></label>
+          <SelectField label="Inventory location" value={form.ebayInventoryLocationKey || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayInventoryLocationKey: value }))} options={inventoryOptions} placeholder="No inventory location found" />
+          <SelectField label="Fulfilment policy" value={form.ebayFulfillmentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayFulfillmentPolicyId: value }))} options={fulfillmentOptions} placeholder="No fulfilment policy found" />
+          <SelectField label="Payment policy" value={form.ebayPaymentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayPaymentPolicyId: value }))} options={paymentOptions} placeholder="No payment policy found" />
+          <SelectField label="Return policy" value={form.ebayReturnPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayReturnPolicyId: value }))} options={returnOptions} placeholder="No return policy found" />
           <label className="block"><span className="label">Listing ID</span><input value={form.ebayListingId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayListingId: e.target.value }))} className="input py-2 text-sm" /></label>
           <label className="block"><span className="label">Offer ID</span><input value={form.ebayOfferId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayOfferId: e.target.value }))} className="input py-2 text-sm" /></label>
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-900 text-navy-950 self-end"><input type="checkbox" checked={Boolean(form.ebayExcludedFromSync)} onChange={(e) => setForm((c: any) => ({ ...c, ebayExcludedFromSync: e.target.checked }))} /> Exclude from eBay sync/publish</label>

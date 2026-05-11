@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getEbayPublishingSettings, saveEbayPublishingSettings } from "@/lib/ebayPublishing";
 
 export async function GET() {

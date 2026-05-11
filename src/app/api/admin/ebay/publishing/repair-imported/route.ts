@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { repairImportedEbayListings } from "@/lib/ebayPublishing";
 
 export async function POST(req: Request) {

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { generateEbayDescriptionForProduct, getEbayProductPublishingState, queueEbayPublishReview, saveEbayProductDraft, validateEbayProduct } from "@/lib/ebayPublishing";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {

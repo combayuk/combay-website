@@ -2,15 +2,50 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileCode2, PackageCheck, RefreshCw, Save, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileCode2, PackageCheck, Plus, RefreshCw, Save, Wrench } from "lucide-react";
+
+type Option = { id?: string; value?: string; name?: string; label?: string; isDefault?: boolean };
 
 type SettingsPayload = {
+  schemaReady?: boolean;
+  schemaMessage?: string;
   config?: any;
   templates?: any[];
   locations?: any[];
   logs?: any[];
   jobs?: any[];
+  options?: {
+    marketplaceOptions?: Option[];
+    listingDurationOptions?: Option[];
+    paymentPolicies?: Option[];
+    returnPolicies?: Option[];
+    fulfillmentPolicies?: Option[];
+    inventoryLocations?: Option[];
+    fetchedFromEbay?: boolean;
+    fetchMessage?: string;
+  };
 };
+
+const FALLBACK_MARKETPLACES = [
+  { value: "EBAY_GB", label: "United Kingdom (EBAY_GB)" },
+  { value: "EBAY_US", label: "United States (EBAY_US)" },
+  { value: "EBAY_IE", label: "Ireland (EBAY_IE)" },
+  { value: "EBAY_DE", label: "Germany (EBAY_DE)" },
+  { value: "EBAY_FR", label: "France (EBAY_FR)" },
+  { value: "EBAY_IT", label: "Italy (EBAY_IT)" },
+  { value: "EBAY_ES", label: "Spain (EBAY_ES)" },
+  { value: "EBAY_AU", label: "Australia (EBAY_AU)" },
+  { value: "EBAY_CA", label: "Canada (EBAY_CA)" },
+];
+
+const FALLBACK_DURATIONS = [
+  { value: "GTC", label: "Good 'Til Cancelled" },
+  { value: "DAYS_30", label: "30 days" },
+  { value: "DAYS_10", label: "10 days" },
+  { value: "DAYS_7", label: "7 days" },
+  { value: "DAYS_5", label: "5 days" },
+  { value: "DAYS_3", label: "3 days" },
+];
 
 function StatusBadge({ children, tone = "slate" }: { children: React.ReactNode; tone?: "slate" | "green" | "amber" | "red" | "blue" }) {
   const classes = {
@@ -23,6 +58,57 @@ function StatusBadge({ children, tone = "slate" }: { children: React.ReactNode; 
   return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-900 whitespace-nowrap ${classes}`}>{children}</span>;
 }
 
+function SelectField({ label, value, onChange, options, placeholder = "Select option", disabled = false }: { label: string; value: string; onChange: (value: string) => void; options: Option[]; placeholder?: string; disabled?: boolean }) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      <select value={value || ""} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="input py-2 text-sm">
+        <option value="">{placeholder}</option>
+        {options.map((option) => {
+          const optionValue = String(option.value || option.id || "");
+          return <option key={optionValue} value={optionValue}>{option.label || option.name || optionValue}{option.isDefault ? " — default" : ""}</option>;
+        })}
+      </select>
+    </label>
+  );
+}
+
+function Toggle({ label, checked, onChange, disabled = false, help }: { label: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean; help?: string }) {
+  return (
+    <label className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 ${disabled ? "opacity-60" : ""}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 rounded border-slate-300" />
+      <span><span className="block text-xs font-900 text-navy-950">{label}</span>{help && <span className="mt-0.5 block text-[11px] leading-4 text-gray-500">{help}</span>}</span>
+    </label>
+  );
+}
+
+const blankTemplate = {
+  name: "",
+  description: "",
+  html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222; line-height: 1.5; max-width: 900px; margin: 0 auto; border: 1px solid #e5e7eb; background: #ffffff;">
+  <div style="background: #2D4F7A; padding: 18px 22px; color: #ffffff;">
+    <h1 style="margin: 0; font-size: 22px; line-height: 1.3;">{{productTitle}}</h1>
+    <p style="margin: 6px 0 0; color: #f4f4f4;">Industrial equipment supplied by Combay Limited</p>
+  </div>
+  <div style="height: 4px; background: #E8A44A;"></div>
+  <div style="padding: 22px;">
+    <h2 style="color: #2D4F7A; font-size: 18px; margin-top: 0;">Product Overview</h2>
+    <p>{{overview}}</p>
+    <h2 style="color: #2D4F7A; font-size: 18px;">Key Details</h2>
+    {{keyDetailsTable}}
+    <h2 style="color: #2D4F7A; font-size: 18px;">Description</h2>
+    <p>{{description}}</p>
+    <h2 style="color: #2D4F7A; font-size: 18px;">Technical Specifications</h2>
+    {{specificationsTable}}
+    <h2 style="color: #2D4F7A; font-size: 18px;">Condition & Testing</h2>
+    <p>{{conditionDescription}}</p>
+    <h2 style="color: #2D4F7A; font-size: 18px;">Shipping & Returns</h2>
+    <p>{{shippingSummary}}</p>
+  </div>
+</div>`,
+  isDefault: false,
+};
+
 export default function EbayPublishingPage() {
   const [payload, setPayload] = useState<SettingsPayload>({});
   const [form, setForm] = useState<any>({});
@@ -30,6 +116,9 @@ export default function EbayPublishingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateForm, setTemplateForm] = useState<any>(blankTemplate);
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -37,35 +126,51 @@ export default function EbayPublishingPage() {
     const result = await response.json().catch(() => ({}));
     if (result.ok) {
       setPayload(result);
+      const config = result.config || {};
+      const options = result.options || {};
       setForm({
-        marketplaceId: result.config?.marketplaceId || "EBAY_GB",
-        defaultInventoryLocationKey: result.config?.defaultInventoryLocationKey || result.locations?.[0]?.key || "",
-        defaultPaymentPolicyId: result.config?.defaultPaymentPolicyId || "",
-        defaultReturnPolicyId: result.config?.defaultReturnPolicyId || "",
-        defaultFulfillmentPolicyId: result.config?.defaultFulfillmentPolicyId || "",
-        defaultListingDuration: result.config?.defaultListingDuration || "GTC",
-        defaultSkuPrefix: result.config?.defaultSkuPrefix || "CBUK",
-        defaultDescriptionTemplateId: result.config?.defaultDescriptionTemplateId || result.templates?.[0]?.id || "",
-        autoGenerateSku: result.config?.autoGenerateSku !== false,
-        autoPublishToEbay: Boolean(result.config?.autoPublishToEbay),
-        manualApprovalBeforePublish: result.config?.manualApprovalBeforePublish !== false,
+        marketplaceId: config.marketplaceId || "EBAY_GB",
+        defaultInventoryLocationKey: config.defaultInventoryLocationKey || options.inventoryLocations?.find((item: any) => item.isDefault)?.id || options.inventoryLocations?.[0]?.id || result.locations?.[0]?.key || "",
+        defaultPaymentPolicyId: config.defaultPaymentPolicyId || options.paymentPolicies?.find((item: any) => item.isDefault)?.id || options.paymentPolicies?.[0]?.id || "",
+        defaultReturnPolicyId: config.defaultReturnPolicyId || options.returnPolicies?.find((item: any) => item.isDefault)?.id || options.returnPolicies?.[0]?.id || "",
+        defaultFulfillmentPolicyId: config.defaultFulfillmentPolicyId || options.fulfillmentPolicies?.find((item: any) => item.isDefault)?.id || options.fulfillmentPolicies?.[0]?.id || "",
+        defaultListingDuration: config.defaultListingDuration || "GTC",
+        defaultSkuPrefix: config.defaultSkuPrefix || "CBUK",
+        defaultDescriptionTemplateId: config.defaultDescriptionTemplateId || result.templates?.find((template: any) => template.isDefault)?.id || result.templates?.[0]?.id || "",
+        autoGenerateSku: config.autoGenerateSku !== false,
+        autoPublishToEbay: Boolean(config.autoPublishToEbay),
+        manualApprovalBeforePublish: config.manualApprovalBeforePublish !== false,
       });
+      if (result.schemaReady === false) setMessage(result.schemaMessage || "Database update required before eBay publishing can be used.");
+      else setMessage(result.options?.fetchMessage || "");
     } else setMessage(result.error || "Could not load eBay publishing settings.");
     setLoading(false);
   }
 
-  useEffect(() => { load().catch(() => setMessage("Could not load eBay publishing settings.")); }, []);
+  useEffect(() => { load().catch(() => { setMessage("Could not load eBay publishing settings."); setLoading(false); }); }, []);
+
+  const options = payload.options || {};
+  const schemaReady = payload.schemaReady !== false;
+  const marketplaceOptions = options.marketplaceOptions?.length ? options.marketplaceOptions : FALLBACK_MARKETPLACES;
+  const durationOptions = options.listingDurationOptions?.length ? options.listingDurationOptions : FALLBACK_DURATIONS;
+  const inventoryOptions = options.inventoryLocations || [];
+  const paymentOptions = options.paymentPolicies || [];
+  const returnOptions = options.returnPolicies || [];
+  const fulfillmentOptions = options.fulfillmentPolicies || [];
 
   const stats = useMemo(() => {
     const logs = payload.logs ?? [];
     const jobs = payload.jobs ?? [];
     return {
       templates: payload.templates?.length ?? 0,
-      locations: payload.locations?.length ?? 0,
+      locations: inventoryOptions.length,
+      payment: paymentOptions.length,
+      returns: returnOptions.length,
+      fulfillment: fulfillmentOptions.length,
       failedLogs: logs.filter((log: any) => String(log.status).includes("FAILED")).length,
       pendingJobs: jobs.filter((job: any) => ["QUEUED", "AWAITING_MANUAL_APPROVAL"].includes(String(job.status))).length,
     };
-  }, [payload]);
+  }, [payload, inventoryOptions.length, paymentOptions.length, returnOptions.length, fulfillmentOptions.length]);
 
   async function save() {
     setSaving(true);
@@ -77,8 +182,22 @@ export default function EbayPublishingPage() {
       setMessage(result.error || "Could not save eBay publishing settings.");
       return;
     }
-    setMessage("eBay publishing defaults saved.");
     await load();
+    setMessage("eBay publishing defaults saved.");
+  }
+
+  async function createTemplate() {
+    if (!templateForm.name?.trim()) { setMessage("Template name is required."); return; }
+    setCreatingTemplate(true);
+    setMessage("");
+    const response = await fetch("/api/admin/ebay/publishing/template", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(templateForm) });
+    const result = await response.json().catch(() => ({}));
+    setCreatingTemplate(false);
+    if (!result.ok) { setMessage(result.error || "Could not create template."); return; }
+    setTemplateOpen(false);
+    setTemplateForm(blankTemplate);
+    await load();
+    setMessage("New eBay HTML template saved.");
   }
 
   async function repairImported() {
@@ -104,61 +223,81 @@ export default function EbayPublishingPage() {
           <div>
             <p className="font-mono text-[11px] uppercase tracking-widest text-gray-400">eBay outbound publishing</p>
             <h1 className="font-display text-2xl font-900 text-navy-950">Publishing foundation</h1>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">Prepare Combay products for eBay with SKU control, policy defaults, branded HTML descriptions, validation, draft state, approval jobs and logs. Live publish remains blocked until the product validates and the dedicated eBay publish worker is enabled.</p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">Combay is the master inventory system. Configure eBay marketplace, policy defaults, inventory location, HTML templates, validation and approval workflow before enabling live publishing.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={load} className="btn-secondary text-xs py-2"><RefreshCw size={14} /> Refresh</button>
-            <button onClick={save} disabled={saving} className="btn-primary text-xs py-2"><Save size={14} /> {saving ? "Saving…" : "Save defaults"}</button>
+            <button onClick={load} className="btn-secondary text-xs py-2"><RefreshCw size={14} /> Refresh / fetch eBay options</button>
+            <button onClick={save} disabled={saving || !schemaReady} className="btn-primary text-xs py-2"><Save size={14} /> {saving ? "Saving…" : "Save settings"}</button>
           </div>
         </div>
       </section>
 
-      {message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-700 text-amber-900">{message}</div>}
+      {message && <div className={`rounded-xl border px-4 py-2 text-sm font-700 ${schemaReady ? "border-blue-200 bg-blue-50 text-blue-900" : "border-red-200 bg-red-50 text-red-900"}`}>{message}</div>}
 
-      <section className="grid gap-3 md:grid-cols-4">
+      {!schemaReady && <section className="rounded-xl border border-red-200 bg-white p-4 shadow-sm">
+        <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 text-red-600" size={18} /><div><h2 className="font-display text-base font-900 text-red-900">Database schema update required</h2><p className="mt-1 text-sm leading-6 text-red-800">The page is protected from crashing, but the eBay publishing tables are not available in the active database yet. Run the Prisma generate and db push commands below against the same DATABASE_URL used by Vercel, then redeploy.</p><pre className="mt-3 overflow-x-auto rounded-lg bg-red-950 p-3 text-xs text-red-50">npm install{`\n`}npx --yes prisma@5.22.0 generate{`\n`}npx --yes prisma@5.22.0 db push</pre></div></div>
+      </section>}
+
+      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Templates</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.templates}</p></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Inventory locations</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.locations}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Locations</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.locations}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Payment policies</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.payment}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Return policies</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.returns}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Fulfilment</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.fulfillment}</p></div>
         <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Approval jobs</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.pendingJobs}</p></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[11px] font-900 uppercase text-gray-400">Failed logs</p><p className="mt-1 text-xl font-900 text-navy-950">{stats.failedLogs}</p></div>
       </section>
 
       <section className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div><h2 className="font-display text-lg font-900 text-navy-950">Default publishing controls</h2><p className="mt-1 text-xs text-gray-500">These defaults are used by the product editor eBay tab and future live publish worker.</p></div>
-              <StatusBadge tone="blue">Marketplace {form.marketplaceId || "EBAY_GB"}</StatusBadge>
+            <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div><h2 className="font-display text-lg font-900 text-navy-950">Default publishing settings</h2><p className="mt-1 text-xs text-gray-500">Dropdowns are used for controlled fields. Policy and location options are pulled from the connected eBay account where possible and saved locally.</p></div>
+              <div className="flex flex-wrap gap-1.5"><StatusBadge tone="blue">{form.marketplaceId || "EBAY_GB"}</StatusBadge><StatusBadge tone={options.fetchedFromEbay ? "green" : "amber"}>{options.fetchedFromEbay ? "eBay options fetched" : "local/fallback options"}</StatusBadge></div>
             </div>
+
             <div className="grid gap-3 lg:grid-cols-3">
-              <label className="block"><span className="label">Marketplace</span><input value={form.marketplaceId || ""} onChange={(e) => setForm((c: any) => ({ ...c, marketplaceId: e.target.value }))} className="input py-2 text-sm" /></label>
-              <label className="block"><span className="label">SKU prefix</span><input value={form.defaultSkuPrefix || ""} onChange={(e) => setForm((c: any) => ({ ...c, defaultSkuPrefix: e.target.value }))} className="input py-2 text-sm font-mono" /></label>
-              <label className="block"><span className="label">Listing duration</span><input value={form.defaultListingDuration || ""} onChange={(e) => setForm((c: any) => ({ ...c, defaultListingDuration: e.target.value }))} className="input py-2 text-sm" /></label>
-              <label className="block"><span className="label">Inventory location</span><select value={form.defaultInventoryLocationKey || ""} onChange={(e) => setForm((c: any) => ({ ...c, defaultInventoryLocationKey: e.target.value }))} className="input py-2 text-sm"><option value="">Select location</option>{(payload.locations ?? []).map((loc: any) => <option key={loc.id} value={loc.key}>{loc.name} ({loc.key})</option>)}</select></label>
-              <label className="block"><span className="label">Payment policy ID</span><input value={form.defaultPaymentPolicyId || ""} onChange={(e) => setForm((c: any) => ({ ...c, defaultPaymentPolicyId: e.target.value }))} className="input py-2 text-sm" /></label>
-              <label className="block"><span className="label">Return policy ID</span><input value={form.defaultReturnPolicyId || ""} onChange={(e) => setForm((c: any) => ({ ...c, defaultReturnPolicyId: e.target.value }))} className="input py-2 text-sm" /></label>
-              <label className="block"><span className="label">Fulfilment policy ID</span><input value={form.defaultFulfillmentPolicyId || ""} onChange={(e) => setForm((c: any) => ({ ...c, defaultFulfillmentPolicyId: e.target.value }))} className="input py-2 text-sm" /></label>
-              <label className="block lg:col-span-2"><span className="label">Default eBay HTML template</span><select value={form.defaultDescriptionTemplateId || ""} onChange={(e) => setForm((c: any) => ({ ...c, defaultDescriptionTemplateId: e.target.value }))} className="input py-2 text-sm"><option value="">System default</option>{(payload.templates ?? []).map((template: any) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+              <SelectField label="Marketplace" value={form.marketplaceId || ""} onChange={(value) => setForm((c: any) => ({ ...c, marketplaceId: value }))} options={marketplaceOptions} disabled={!schemaReady} />
+              <label className="block"><span className="label">SKU prefix</span><input value={form.defaultSkuPrefix || ""} disabled={!schemaReady} onChange={(e) => setForm((c: any) => ({ ...c, defaultSkuPrefix: e.target.value }))} className="input py-2 text-sm font-mono" /></label>
+              <SelectField label="Listing duration" value={form.defaultListingDuration || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultListingDuration: value }))} options={durationOptions} disabled={!schemaReady} />
+              <SelectField label="Inventory location" value={form.defaultInventoryLocationKey || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultInventoryLocationKey: value }))} options={inventoryOptions} placeholder="No eBay inventory location found" disabled={!schemaReady} />
+              <SelectField label="Payment policy" value={form.defaultPaymentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultPaymentPolicyId: value }))} options={paymentOptions} placeholder="Fetch/select payment policy" disabled={!schemaReady} />
+              <SelectField label="Return policy" value={form.defaultReturnPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultReturnPolicyId: value }))} options={returnOptions} placeholder="Fetch/select return policy" disabled={!schemaReady} />
+              <SelectField label="Fulfilment policy" value={form.defaultFulfillmentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultFulfillmentPolicyId: value }))} options={fulfillmentOptions} placeholder="Fetch/select fulfilment policy" disabled={!schemaReady} />
+              <div className="lg:col-span-2 flex items-end gap-2">
+                <div className="flex-1"><SelectField label="Default eBay HTML template" value={form.defaultDescriptionTemplateId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultDescriptionTemplateId: value }))} options={(payload.templates ?? []).map((template: any) => ({ id: template.id, name: template.name, isDefault: template.isDefault }))} placeholder="System default" disabled={!schemaReady} /></div>
+                <button type="button" onClick={() => setTemplateOpen((value) => !value)} disabled={!schemaReady} className="btn-secondary mb-0.5 whitespace-nowrap py-2 text-xs"><Plus size={14} /> New template</button>
+              </div>
             </div>
-            <div className="mt-4 grid gap-2 md:grid-cols-3">
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-800 text-navy-950"><input type="checkbox" checked={form.autoGenerateSku !== false} onChange={(e) => setForm((c: any) => ({ ...c, autoGenerateSku: e.target.checked }))} /> Auto-generate SKU</label>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-800 text-navy-950"><input type="checkbox" checked={form.manualApprovalBeforePublish !== false} onChange={(e) => setForm((c: any) => ({ ...c, manualApprovalBeforePublish: e.target.checked }))} /> Manual approval before publish</label>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-800 text-navy-950"><input type="checkbox" checked={Boolean(form.autoPublishToEbay)} onChange={(e) => setForm((c: any) => ({ ...c, autoPublishToEbay: e.target.checked }))} /> Auto-publish off by default</label>
+
+            <div className="mt-4 grid gap-2 lg:grid-cols-3">
+              <Toggle label="Auto-generate Combay SKU" checked={form.autoGenerateSku !== false} disabled={!schemaReady} onChange={(checked) => setForm((c: any) => ({ ...c, autoGenerateSku: checked }))} help="Required for controlled Combay → eBay publishing." />
+              <Toggle label="Manual approval before publish" checked={form.manualApprovalBeforePublish !== false} disabled={!schemaReady} onChange={(checked) => setForm((c: any) => ({ ...c, manualApprovalBeforePublish: checked }))} help="Recommended. Prevents accidental live listings." />
+              <Toggle label="Auto-publish to eBay" checked={Boolean(form.autoPublishToEbay)} disabled={!schemaReady} onChange={(checked) => setForm((c: any) => ({ ...c, autoPublishToEbay: checked }))} help="Keep off until publish worker is fully validated." />
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+              <p className="text-xs text-gray-500">Settings save into the eBay sync configuration and are reused by the product eBay Listing tab.</p>
+              <button onClick={save} disabled={saving || !schemaReady} className="btn-primary text-xs py-2"><Save size={14} /> {saving ? "Saving…" : "Save settings"}</button>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div><h2 className="font-display text-lg font-900 text-navy-950">Imported listing repair</h2><p className="mt-1 text-xs text-gray-500">Safely repairs local Combay records imported from eBay: SKU mapping, branded description fallback, listing ID mapping and validation logs. It does not silently overwrite live eBay listings.</p></div>
-              <button onClick={repairImported} disabled={repairing} className="btn-secondary text-xs py-2"><Wrench size={14} /> {repairing ? "Repairing…" : "Repair imported eBay listings"}</button>
+          {templateOpen && <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="font-display text-lg font-900 text-navy-950">Create eBay HTML template</h2><p className="mt-1 text-xs text-gray-500">Use eBay-safe inline HTML only. Tokens such as {"{{productTitle}}"}, {"{{sku}}"}, {"{{overview}}"}, {"{{specificationsTable}}"} and {"{{shippingSummary}}"} are supported.</p></div><button type="button" onClick={() => setTemplateOpen(false)} className="btn-secondary py-2 text-xs">Cancel</button></div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block"><span className="label">Template name</span><input value={templateForm.name} onChange={(e) => setTemplateForm((c: any) => ({ ...c, name: e.target.value }))} className="input py-2 text-sm" /></label>
+              <label className="flex items-center gap-2 pt-6 text-xs font-900 text-navy-950"><input type="checkbox" checked={Boolean(templateForm.isDefault)} onChange={(e) => setTemplateForm((c: any) => ({ ...c, isDefault: e.target.checked }))} /> Set as default</label>
+              <label className="block md:col-span-2"><span className="label">Description</span><input value={templateForm.description} onChange={(e) => setTemplateForm((c: any) => ({ ...c, description: e.target.value }))} className="input py-2 text-sm" /></label>
+              <label className="block md:col-span-2"><span className="label">HTML</span><textarea value={templateForm.html} onChange={(e) => setTemplateForm((c: any) => ({ ...c, html: e.target.value }))} className="input min-h-[260px] py-2 font-mono text-xs" /></label>
             </div>
-          </div>
+            <div className="mt-3 flex justify-end"><button onClick={createTemplate} disabled={creatingTemplate} className="btn-primary py-2 text-xs"><Save size={14} /> {creatingTemplate ? "Saving…" : "Save template"}</button></div>
+          </div>}
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between"><h2 className="font-display text-lg font-900 text-navy-950">Recent publishing logs</h2><StatusBadge>{payload.logs?.length || 0} shown</StatusBadge></div>
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full min-w-[780px] text-left text-xs">
-                <thead className="bg-slate-50 text-[10px] uppercase tracking-widest text-gray-400"><tr><th className="px-3 py-2">Action</th><th className="px-3 py-2">SKU</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Message</th><th className="px-3 py-2">Date</th></tr></thead>
-                <tbody>{(payload.logs ?? []).map((log: any) => <tr key={log.id} className="border-t border-slate-100"><td className="px-3 py-2 font-900 text-navy-950 whitespace-nowrap">{log.actionType}</td><td className="px-3 py-2 font-mono whitespace-nowrap">{log.sku || "—"}</td><td className="px-3 py-2"><StatusBadge tone={String(log.status).includes("SUCCESS") ? "green" : String(log.status).includes("FAILED") ? "red" : "amber"}>{log.status}</StatusBadge></td><td className="max-w-[360px] px-3 py-2 text-gray-500 truncate">{log.message || log.errorMessage || "—"}</td><td className="px-3 py-2 whitespace-nowrap text-gray-400">{log.startedAt ? new Date(log.startedAt).toLocaleString("en-GB") : "—"}</td></tr>)}{!(payload.logs ?? []).length && <tr><td colSpan={5} className="px-3 py-5 text-center text-gray-500">No publishing logs yet.</td></tr>}</tbody>
+            <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="font-display text-lg font-900 text-navy-950">Recent publishing logs</h2><p className="mt-1 text-xs text-gray-500">Validation, draft, repair and future publish events are recorded here.</p></div><button onClick={repairImported} disabled={repairing || !schemaReady} className="btn-secondary text-xs py-2"><Wrench size={14} /> {repairing ? "Repairing…" : "Repair imported eBay listings"}</button></div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-gray-500"><tr><th className="px-3 py-2">SKU</th><th className="px-3 py-2">Action</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Message</th><th className="px-3 py-2">Date</th></tr></thead>
+                <tbody className="divide-y divide-slate-100">{(payload.logs ?? []).map((log: any) => <tr key={log.id}><td className="px-3 py-2 font-mono text-[11px] text-navy-950">{log.sku || "—"}</td><td className="px-3 py-2 font-800 text-gray-700">{log.actionType}</td><td className="px-3 py-2"><StatusBadge tone={String(log.status).includes("FAILED") ? "red" : String(log.status).includes("SUCCESS") ? "green" : "amber"}>{log.status}</StatusBadge></td><td className="max-w-[360px] truncate px-3 py-2 text-gray-500">{log.errorMessage || log.message || "—"}</td><td className="px-3 py-2 whitespace-nowrap text-gray-400">{log.startedAt ? new Date(log.startedAt).toLocaleString("en-GB") : "—"}</td></tr>)}{!(payload.logs ?? []).length && <tr><td colSpan={5} className="px-3 py-5 text-center text-gray-500">No publishing logs yet.</td></tr>}</tbody>
               </table>
             </div>
           </div>
@@ -169,27 +308,27 @@ export default function EbayPublishingPage() {
             <div className="flex items-center gap-2"><PackageCheck size={18} className="text-accent" /><h2 className="font-display text-lg font-900 text-navy-950">Product workflow</h2></div>
             <ol className="mt-3 space-y-2 text-xs leading-5 text-gray-600">
               <li>1. Open a product in <Link href="/admin/products" className="font-900 text-navy-950 underline">Products</Link>.</li>
-              <li>2. Use the new <strong>eBay Listing</strong> tab.</li>
-              <li>3. Fill category, policy and mapping fields.</li>
+              <li>2. Use the <strong>eBay Listing</strong> tab.</li>
+              <li>3. Fill category, policies and mapping fields.</li>
               <li>4. Generate the branded eBay description.</li>
               <li>5. Validate and save local eBay draft.</li>
-              <li>6. Queue for manual publish approval when valid.</li>
+              <li>6. Queue for manual publish approval only when valid.</li>
             </ol>
           </section>
 
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <div className="flex items-center gap-2 text-amber-900"><AlertTriangle size={17} /><h2 className="font-display text-sm font-900">Live publish safety</h2></div>
-            <p className="mt-2 text-xs leading-5 text-amber-900">This phase prepares products and creates approval jobs. It does not silently push live listings. Live eBay publish should be enabled only after category/aspect/policy fetch and inventory-location verification are complete.</p>
+            <div className="flex items-center gap-2 text-amber-900"><AlertTriangle size={17} /><h2 className="font-display text-sm font-900">Policy fetch note</h2></div>
+            <p className="mt-2 text-xs leading-5 text-amber-900">Payment, return and fulfilment policy dropdowns are fetched from the connected eBay seller account. If they are empty, refresh after confirming eBay OAuth is connected and the token has Sell Account API scope.</p>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2"><FileCode2 size={17} className="text-accent" /><h2 className="font-display text-sm font-900 text-navy-950">Templates</h2></div>
-            <div className="mt-3 space-y-2">{(payload.templates ?? []).map((template: any) => <div key={template.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><div className="flex items-center justify-between gap-2"><p className="truncate text-xs font-900 text-navy-950">{template.name}</p>{template.isDefault && <StatusBadge tone="green">Default</StatusBadge>}</div><p className="mt-1 truncate text-[11px] text-gray-500">{template.description || "Combay eBay-safe HTML template"}</p></div>)}</div>
+            <div className="mt-3 space-y-2">{(payload.templates ?? []).map((template: any) => <div key={template.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><div className="flex items-center justify-between gap-2"><p className="truncate text-xs font-900 text-navy-950">{template.name}</p>{template.isDefault && <StatusBadge tone="green">Default</StatusBadge>}</div><p className="mt-1 truncate text-[11px] text-gray-500">{template.description || "Combay eBay-safe HTML template"}</p></div>)}{!(payload.templates ?? []).length && <p className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-gray-500">Templates will appear after the database schema is updated.</p>}</div>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2"><CheckCircle2 size={17} className="text-green-600" /><h2 className="font-display text-sm font-900 text-navy-950">Foundation added</h2></div>
-            <div className="mt-3 flex flex-wrap gap-1.5"><StatusBadge>SKU governance</StatusBadge><StatusBadge>Validation</StatusBadge><StatusBadge>Drafts</StatusBadge><StatusBadge>Logs</StatusBadge><StatusBadge>HTML builder</StatusBadge><StatusBadge>Approval jobs</StatusBadge></div>
+            <div className="flex items-center gap-2"><CheckCircle2 size={17} className="text-green-600" /><h2 className="font-display text-sm font-900 text-navy-950">Foundation status</h2></div>
+            <div className="mt-3 flex flex-wrap gap-1.5"><StatusBadge>SKU governance</StatusBadge><StatusBadge>Validation</StatusBadge><StatusBadge>Drafts</StatusBadge><StatusBadge>Logs</StatusBadge><StatusBadge>HTML builder</StatusBadge><StatusBadge>Policy dropdowns</StatusBadge></div>
           </section>
         </aside>
       </section>
