@@ -2009,6 +2009,52 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
   });
 }
 
+
+export async function endEbayListingForProduct(productId: string, input: { confirmEndListing?: boolean; triggeredBy?: string } = {}) {
+  return withDatabase(async () => {
+    await ensureEbayPublishingDefaults();
+    if (!input.confirmEndListing) throw new Error("Ending an eBay listing requires explicit confirmation.");
+    const product = await getProductForEbay(productId);
+    if (!product) throw new Error("Product not found.");
+    const offerId = String(product.ebayOfferId || "").trim();
+    const listingId = String(product.ebayListingId || "").trim();
+    const marketplaceId = product.ebayMarketplaceId || MARKETPLACE;
+    if (!offerId) throw new Error("This product does not have an eBay offer ID. End-listing cannot be safely called from Combay.");
+
+    await logEbayPublishEvent(product, "LIVE_EBAY_END_STARTED", "RUNNING", "Started controlled eBay listing end/withdraw action.", { offerId, listingId, marketplaceId, triggeredBy: input.triggeredBy || "admin" }, null, offerId, listingId || null);
+    try {
+      const response = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/withdraw`, "POST", undefined, marketplaceId);
+      const previousJson = { ebayListingId: product.ebayListingId, ebayOfferId: product.ebayOfferId, ebayPublishStatus: product.ebayPublishStatus };
+      const updated = await prisma.product.update({
+        where: { id: product.id },
+        data: {
+          ebayPublishStatus: "ENDED",
+          ebayLastPushedAt: new Date(),
+          ebayLastError: null,
+        },
+      });
+      await prisma.ebayListingRevision.create({
+        data: {
+          productId: product.id,
+          sku: product.sku,
+          action: "END_EBAY_LISTING",
+          previousJson,
+          nextJson: { ebayListingId: listingId, ebayOfferId: offerId, marketplaceId, withdrawResponse: response },
+          reason: "Admin ended/withdrew the eBay listing from Combay. Product remains in Combay catalogue.",
+          createdBy: input.triggeredBy || "admin",
+        },
+      }).catch(() => null);
+      await logEbayPublishEvent(updated, "LIVE_EBAY_END_COMPLETE", "SUCCESS", "eBay listing ended/withdrawn successfully. The Combay product remains available for audit and possible relisting.", { offerId, listingId, withdrawResponse: response }, null, offerId, listingId || null);
+      return { product: updated, offerId, listingId, response };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "eBay listing end failed.";
+      await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "SYNC_FAILED", ebayLastError: errorMessage } }).catch(() => null);
+      await logEbayPublishEvent(product, "LIVE_EBAY_END_FAILED", "FAILED", "eBay listing end/withdraw action failed.", { offerId, listingId, error: errorMessage }, errorMessage, offerId, listingId || null);
+      throw error;
+    }
+  });
+}
+
 export async function processNextApprovedEbayPublishJob() {
   return withDatabase(async () => {
     await ensureEbayPublishingDefaults();

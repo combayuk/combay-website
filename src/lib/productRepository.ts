@@ -206,20 +206,20 @@ async function getCategoryId(input?: { category?: string; categorySlug?: string;
 }
 
 async function nextSku() {
+  // Phase 27 rule: new products use highest existing CBUK number + 1.
+  // This avoids reusing historical gaps that may have existed in eBay, invoices, quotes, logs or deleted drafts.
   const existing = await prisma.product.findMany({
     where: { sku: { startsWith: "CBUK" } },
-    select: { sku: true, status: true, ebayListingId: true, ebayOfferId: true, ebayItemId: true },
-    orderBy: { sku: "asc" },
+    select: { sku: true },
+    orderBy: { sku: "desc" },
     take: 10000,
   });
-  const used = new Set<number>();
+  let highest = 0;
   for (const item of existing as Array<{ sku: string }>) {
     const match = item.sku.match(/^CBUK(\d{5})$/i);
-    if (match) used.add(Number(match[1]));
+    if (match) highest = Math.max(highest, Number(match[1]));
   }
-  let next = 1;
-  while (used.has(next)) next += 1;
-  return `CBUK${String(next).padStart(5, "0")}`;
+  return `CBUK${String(highest + 1).padStart(5, "0")}`;
 }
 
 function relationPayload(input: ProductWriteInput) {
@@ -367,6 +367,95 @@ export async function getProductsFromRepository(params: {
     total: products.length,
     categories: PUBLIC_CATEGORY_LIST,
   };
+}
+
+export async function getAdminProductsListFromRepository(params: {
+  query?: string;
+  category?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const page = Math.max(1, Number(params.page || 1));
+  const pageSize = Math.min(100, Math.max(10, Number(params.pageSize || 50)));
+  const dbResult = await withDatabase(async () => {
+    const where: any = {};
+    if (params.status) where.status = params.status;
+    if (params.category) {
+      where.category = { OR: [{ slug: params.category }, { name: { contains: params.category, mode: "insensitive" } }] };
+    }
+    if (params.query) {
+      where.OR = [
+        { sku: { contains: params.query, mode: "insensitive" } },
+        { title: { contains: params.query, mode: "insensitive" } },
+        { brand: { contains: params.query, mode: "insensitive" } },
+        { manufacturer: { contains: params.query, mode: "insensitive" } },
+        { model: { contains: params.query, mode: "insensitive" } },
+        { mpn: { contains: params.query, mode: "insensitive" } },
+        { ebayListingId: { contains: params.query, mode: "insensitive" } },
+        { ebayOfferId: { contains: params.query, mode: "insensitive" } },
+      ];
+    }
+
+    const [total, statusCounts, products] = await Promise.all([
+      prisma.product.count({ where }),
+      prisma.product.groupBy({ by: ["status"], _count: { _all: true } }).catch(() => []),
+      prisma.product.findMany({
+        where,
+        select: {
+          id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, mpn: true, condition: true,
+          price: true, priceOnRequest: true, stockQty: true, status: true, source: true, updatedAt: true,
+          ebayPublishStatus: true, ebayListingId: true, ebayOfferId: true, ebayMarketplaceId: true,
+          category: { select: { name: true, slug: true } },
+          images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { url: true } },
+        },
+        orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const counts = { PUBLISHED: 0, DRAFT: 0, ARCHIVED: 0 } as Record<string, number>;
+    (statusCounts as any[]).forEach((row) => { counts[row.status] = row._count?._all ?? 0; });
+    return {
+      products: products.map((product: any) => {
+        const canonical = canonicalCategoryForText({ title: product.title, category: product.category?.name, categorySlug: product.category?.slug, brand: product.brand, manufacturer: product.manufacturer, mpn: product.mpn });
+        return {
+          id: product.id,
+          sku: product.sku,
+          title: product.title,
+          slug: product.slug,
+          brand: product.brand ?? product.manufacturer ?? "",
+          manufacturer: product.manufacturer ?? product.brand ?? "",
+          mpn: product.mpn ?? "",
+          category: canonical.groupLabel,
+          categorySlug: canonical.groupSlug,
+          condition: product.condition,
+          price: product.price === null || product.price === undefined ? null : Number(product.price),
+          priceOnRequest: product.priceOnRequest,
+          stockQty: product.stockQty,
+          status: product.status,
+          source: product.source ?? "database",
+          image: product.images?.[0]?.url ?? null,
+          updatedAt: product.updatedAt?.toISOString?.() ?? "",
+          ebayPublishStatus: product.ebayPublishStatus ?? "NOT_LISTED",
+          ebayListingId: product.ebayListingId ?? "",
+          ebayOfferId: product.ebayOfferId ?? "",
+          ebayMarketplaceId: product.ebayMarketplaceId ?? "EBAY_GB",
+        };
+      }),
+      total,
+      counts,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  });
+
+  if (dbResult.ok) return { source: "database", message: "Admin product list served from lightweight paginated endpoint.", categories: PUBLIC_CATEGORY_LIST, ...dbResult.data };
+  const fallback = await getProductsFromRepository({ query: params.query, category: params.category, status: params.status, includeArchived: true });
+  const start = (page - 1) * pageSize;
+  return { ...fallback, products: fallback.products.slice(start, start + pageSize), page, pageSize, totalPages: Math.max(1, Math.ceil(fallback.products.length / pageSize)), counts: {} };
 }
 
 export async function getProductByIdFromRepository(id: string) {

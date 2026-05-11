@@ -9,6 +9,10 @@ type AdminProduct = CatalogProduct & {
   status?: "PUBLISHED" | "DRAFT" | "ARCHIVED";
   source?: string;
   updatedAt?: string;
+  ebayListingId?: string;
+  ebayOfferId?: string;
+  ebayPublishStatus?: string;
+  ebayMarketplaceId?: string;
 };
 
 function priceLabel(product: AdminProduct) {
@@ -16,16 +20,11 @@ function priceLabel(product: AdminProduct) {
   return `£${product.price.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function nextSku(products: AdminProduct[]) {
-  const used = new Set<number>();
-  products.forEach((product) => {
-    const match = product.sku.match(/^CBUK(\d{5})$/i);
-    if (match) used.add(Number(match[1]));
-  });
-  let next = 1;
-  while (used.has(next)) next += 1;
-  return `CBUK${String(next).padStart(5, "0")}`;
+function ebayUrl(product: AdminProduct) {
+  if (!product.ebayListingId) return "";
+  return product.ebayMarketplaceId === "EBAY_US" ? `https://www.ebay.com/itm/${product.ebayListingId}` : `https://www.ebay.co.uk/itm/${product.ebayListingId}`;
 }
+
 
 export default function AdminProducts() {
   const [search, setSearch] = useState("");
@@ -33,18 +32,25 @@ export default function AdminProducts() {
   const [status, setStatus] = useState("");
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [message, setMessage] = useState("");
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   async function loadProducts() {
     setLoading(true);
-    const params = new URLSearchParams({ admin: "1" });
+    const params = new URLSearchParams({ admin: "1", page: String(page), pageSize: "50" });
     if (search) params.set("q", search);
     if (category) params.set("category", category);
     if (status) params.set("status", status);
     const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
     const result = await response.json();
     setProducts(result.products ?? []);
+    setTotal(Number(result.total ?? result.products?.length ?? 0));
+    setTotalPages(Number(result.totalPages ?? 1));
+    setCounts(result.counts ?? {});
     setLoading(false);
   }
 
@@ -56,7 +62,9 @@ export default function AdminProducts() {
       });
     }, 150);
     return () => clearTimeout(timer);
-  }, [search, category, status]);
+  }, [search, category, status, page]);
+
+  useEffect(() => { setPage(1); }, [search, category, status]);
 
   const filtered = useMemo(() => products, [products]);
 
@@ -73,13 +81,15 @@ export default function AdminProducts() {
   }
 
   async function duplicateProduct(product: AdminProduct) {
-    const sku = nextSku(products);
     const payload = {
       ...product,
       id: undefined,
-      sku,
+      sku: undefined,
+      ebayListingId: undefined,
+      ebayOfferId: undefined,
+      ebayPublishStatus: "NOT_LISTED",
       title: `${product.title} copy`,
-      slug: `${product.slug}-copy-${sku.toLowerCase()}`,
+      slug: `${product.slug}-copy-${Date.now().toString(36)}`,
       status: "DRAFT",
       source: "admin",
     };
@@ -93,7 +103,24 @@ export default function AdminProducts() {
       setMessage(result.error || result.reason || `Could not duplicate ${product.sku}.`);
       return;
     }
-    setMessage(`${product.sku} duplicated as ${sku}.`);
+    setMessage(`${product.sku} duplicated. The server assigned the next safe CBUK SKU.`);
+    await loadProducts();
+  }
+
+  async function endEbayListing(product: AdminProduct) {
+    if (!product.ebayOfferId && !product.ebayListingId) return;
+    if (!confirm(`End the eBay listing for ${product.sku}? This affects eBay only. The Combay product will remain in the catalogue and the action will be logged.`)) return;
+    const response = await fetch(`/api/admin/ebay/publishing/product/${encodeURIComponent(product.id)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "end-listing", confirmEndListing: true }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      setMessage(result.error || result.reason || `Could not end eBay listing for ${product.sku}.`);
+      return;
+    }
+    setMessage(`eBay listing end/withdraw action completed for ${product.sku}.`);
     await loadProducts();
   }
 
@@ -121,10 +148,10 @@ export default function AdminProducts() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => handleCsvUpload(event.target.files?.[0] ?? null)} />
-          <button type="button" onClick={() => csvInputRef.current?.click()} className="btn-secondary text-xs py-2"><Upload size={14} /> Upload CSV</button>
-          <a href="/stock-list-template.csv" download className="btn-secondary text-xs py-2"><Download size={14} /> CSV Template</a>
-          <Link href="/admin/products/ai" className="btn-secondary text-xs py-2"><Sparkles size={14} /> Product AI</Link>
-          <Link href="/admin/products/new" className="btn-primary text-xs py-2"><Plus size={14} /> Add Product</Link>
+          <Link href="/admin/products/new" className="btn-primary text-xs py-1.5 px-3"><Plus size={13} /> Add product</Link>
+          <Link href="/admin/products/ai" className="btn-secondary text-xs py-1.5 px-3"><Sparkles size={13} /> AI</Link>
+          <button type="button" onClick={() => csvInputRef.current?.click()} className="btn-secondary text-xs py-1.5 px-3"><Upload size={13} /> Upload CSV</button>
+          <a href="/stock-list-template.csv" download className="btn-secondary text-xs py-1.5 px-3"><Download size={13} /> Template</a>
         </div>
       </div>
 
@@ -132,10 +159,11 @@ export default function AdminProducts() {
 
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{products.length} loaded</span>
-          <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{products.filter((p) => p.status === "PUBLISHED").length} published</span>
-          <span className="rounded-full bg-yellow-50 px-3 py-1.5 font-900 text-yellow-700">{products.filter((p) => p.status === "DRAFT").length} draft</span>
-          <span className="rounded-full bg-gray-50 px-3 py-1.5 font-900 text-gray-700">{products.filter((p) => p.status === "ARCHIVED").length} archived</span>
+          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{total.toLocaleString("en-GB")} total</span>
+          <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">{Number(counts.PUBLISHED || 0).toLocaleString("en-GB")} published</span>
+          <span className="rounded-full bg-yellow-50 px-3 py-1.5 font-900 text-yellow-700">{Number(counts.DRAFT || 0).toLocaleString("en-GB")} draft</span>
+          <span className="rounded-full bg-gray-50 px-3 py-1.5 font-900 text-gray-700">{Number(counts.ARCHIVED || 0).toLocaleString("en-GB")} archived</span>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 font-900 text-blue-700">Page {page} of {totalPages}</span>
         </div>
       </div>
 
@@ -161,11 +189,11 @@ export default function AdminProducts() {
           <table className="w-full table-fixed text-xs">
             <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="w-[38%] px-3 py-2">Product</th>
+                <th className="w-[36%] px-3 py-2">Product</th>
                 <th className="w-[17%] px-3 py-2">Category / Condition</th>
                 <th className="w-[13%] px-3 py-2">Price / Stock</th>
                 <th className="w-[14%] px-3 py-2">Status / Source</th>
-                <th className="w-[18%] px-3 py-2 text-right">Actions</th>
+                <th className="w-[20%] px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -199,10 +227,16 @@ export default function AdminProducts() {
                     </td>
                     <td className="px-3 py-3 align-top">
                       <div className="flex flex-wrap justify-end gap-1">
-                        <Link href={`/shop/${product.slug}`} target="_blank" className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Preview"><Eye size={12} /></Link>
+                        <Link href={`/shop/${product.slug}`} target="_blank" className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Preview website product"><Eye size={12} /><span className="sr-only">Website</span></Link>
+                        {product.ebayListingId ? (
+                          <a href={ebayUrl(product)} target="_blank" rel="noreferrer" className="rounded-md border border-blue-200 px-2 py-1 text-[10px] font-900 text-blue-700 hover:bg-blue-50" title="Preview eBay listing"><Eye size={12} /> eBay</a>
+                        ) : (
+                          <span className="rounded-md border border-slate-100 px-2 py-1 text-[10px] font-900 text-slate-300" title="No active eBay listing"><Eye size={12} /> eBay</span>
+                        )}
                         <Link href={`/admin/products/${product.id}`} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Edit"><Edit size={12} /></Link>
                         <button onClick={() => duplicateProduct(product)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Duplicate"><Copy size={12} /></button>
-                        <button onClick={() => archiveProduct(product)} className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-900 text-red-700 hover:bg-red-50" title="Archive"><Trash2 size={12} /></button>
+                        <button onClick={() => endEbayListing(product)} disabled={!product.ebayOfferId} className="rounded-md border border-orange-200 px-2 py-1 text-[10px] font-900 text-orange-700 hover:bg-orange-50 disabled:opacity-35" title="End eBay listing only"><Trash2 size={12} /> eBay</button>
+                        <button onClick={() => archiveProduct(product)} className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-900 text-red-700 hover:bg-red-50" title="Archive Combay product"><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>
@@ -214,6 +248,14 @@ export default function AdminProducts() {
 
         {loading && <div className="p-10 text-center text-gray-400 text-sm">Loading products…</div>}
         {!loading && filtered.length === 0 && <div className="p-10 text-center text-gray-400 text-sm">No products match that filter.</div>}
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+          <span>Showing {filtered.length} of {total.toLocaleString("en-GB")} products</span>
+          <div className="flex items-center gap-2">
+            <button className="rounded-md border border-slate-200 px-3 py-1.5 font-900 disabled:opacity-40" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</button>
+            <span className="font-900 text-navy-950">{page} / {totalPages}</span>
+            <button className="rounded-md border border-slate-200 px-3 py-1.5 font-900 disabled:opacity-40" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Next</button>
+          </div>
+        </div>
       </div>
     </div>
   );

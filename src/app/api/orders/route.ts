@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma, withDatabase } from "@/lib/db";
 import { requireAdminApiSession, requireCustomerApiSession } from "@/lib/apiAccess";
+import { ensureOperationalTables } from "@/lib/operationalSchema";
+import { createAdminActivityNotification, sendTrackingEmailIfNeeded } from "@/lib/operations";
 
 const DEMO_ORDERS = [
   { id: "demo-1", orderNumber: "CB1ACB2F", status: "DELIVERED", paymentStatus: "PAID", total: 1240, subtotal: 1033.33, tax: 206.67, shipping: 0, createdAt: "2026-04-28", customerName: "Demo Customer", customerEmail: "demo@combay.co.uk", items: [] },
@@ -35,6 +37,11 @@ function normalizeAdminOrder(order: any) {
     trackingNumber: order.trackingNumber ?? null,
     trackingUrl: order.trackingUrl ?? null,
     dispatchedAt: order.dispatchedAt ?? null,
+    trackingEmailSentAt: order.trackingEmailSentAt ?? null,
+    salesChannel: order.salesChannel ?? "WEBSITE",
+    externalOrderId: order.externalOrderId ?? null,
+    externalMarketplace: order.externalMarketplace ?? null,
+    paidAt: order.paidAt ?? null,
     shippingAddress: order.shippingAddress ?? null,
     items: (order.items ?? []).map((item: any) => ({
       id: item.id,
@@ -192,11 +199,35 @@ export async function PATCH(request: NextRequest) {
   }
 
   const dbResult = await withDatabase(async () => {
+    await ensureOperationalTables();
+    const before = await prisma.order.findUnique({ where: id ? { id } : { orderNumber } }).catch(() => null);
     const updated = await prisma.order.update({
       where: id ? { id } : { orderNumber },
       data,
       include: { items: true, returns: true, shippingSnapshot: true },
     });
+    const trackingChanged = Boolean(
+      updated.trackingNumber && (
+        !before ||
+        before.trackingNumber !== updated.trackingNumber ||
+        before.trackingUrl !== updated.trackingUrl ||
+        before.trackingCarrier !== updated.trackingCarrier ||
+        before.status !== updated.status
+      )
+    );
+    if (trackingChanged || updated.status === "DISPATCHED") {
+      await sendTrackingEmailIfNeeded(updated).catch((emailError) => console.error("[tracking-email-failed]", emailError));
+      await createAdminActivityNotification({
+        type: "TRACKING_UPDATED",
+        title: `Tracking updated for ${updated.orderNumber}`,
+        message: `${updated.trackingCarrier || "Courier"}: ${updated.trackingNumber || "tracking added"}`,
+        sourceModel: "Order",
+        sourceId: updated.id,
+        customerName: updated.customerName,
+        customerEmail: updated.customerEmail,
+        amount: Number(updated.total || 0),
+      }).catch(() => null);
+    }
     return updated;
   });
 

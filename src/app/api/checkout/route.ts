@@ -141,6 +141,7 @@ export async function POST(request: Request) {
         company: body.customer.company ? String(body.customer.company) : null,
         status: "PENDING_PAYMENT",
         paymentStatus: "UNPAID",
+        salesChannel: "WEBSITE",
         subtotal,
         discount,
         promotionCode,

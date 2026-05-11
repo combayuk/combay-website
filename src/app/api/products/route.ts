@@ -1,4 +1,4 @@
-import { getProductsFromRepository, saveProductToRepository } from "@/lib/productRepository";
+import { getAdminProductsListFromRepository, getProductsFromRepository, saveProductToRepository } from "@/lib/productRepository";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -11,6 +11,25 @@ export async function GET(req: Request) {
   const priceMaxRaw = searchParams.get("priceMax") ?? searchParams.get("max");
   const priceMin = priceMinRaw ? Number(priceMinRaw) : null;
   const priceMax = priceMaxRaw ? Number(priceMaxRaw) : null;
+  const page = Number(searchParams.get("page") || 1);
+  const pageSize = Number(searchParams.get("pageSize") || 50);
+
+  if (admin) {
+    const result = await getAdminProductsListFromRepository({ query: q, category, status, page, pageSize });
+    return Response.json({
+      ok: true,
+      source: result.source,
+      message: result.message,
+      count: result.products.length,
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      totalPages: result.totalPages,
+      counts: result.counts,
+      categories: result.categories,
+      products: result.products,
+    });
+  }
 
   const result = await getProductsFromRepository({
     query: q,

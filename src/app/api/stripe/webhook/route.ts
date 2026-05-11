@@ -6,6 +6,8 @@ import { sendAdminNotification, sendCustomerAcknowledgement } from "@/lib/mailer
 import { captureLead } from "@/lib/leads";
 import { runEmailAutomations } from "@/lib/emailAutomations";
 import { ensureOrderForPaidInvoice } from "@/lib/paidInvoiceOrder";
+import { ensureOperationalTables } from "@/lib/operationalSchema";
+import { createAdminActivityNotification, decrementStockForPaidOrder } from "@/lib/operations";
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -27,6 +29,8 @@ export async function POST(request: Request) {
     const orderNumber = metadata.orderNumber || session.client_reference_id;
     const paidAmount = session.amount_total ? Number((session.amount_total / 100).toFixed(2)) : undefined;
 
+    await ensureOperationalTables();
+
     if (invoiceId || documentNumber) {
       const invoiceResult = await withDatabase(async () => prisma.invoice.update({
         where: invoiceId ? { id: invoiceId } : { documentNumber },
@@ -45,6 +49,19 @@ export async function POST(request: Request) {
           console.error("[invoice-auto-order-failed]", orderError);
           return null;
         });
+        if (order?.id) {
+          await decrementStockForPaidOrder(order.id, "SALE_INVOICE", "stripe-webhook").catch((stockError) => console.error("[invoice-stock-decrement-failed]", stockError));
+          await createAdminActivityNotification({
+            type: "PAID_INVOICE",
+            title: `Paid invoice/proforma ${invoice.documentNumber}`,
+            message: `Payment confirmed and stock processing attempted for ${invoice.documentNumber}.`,
+            sourceModel: "Invoice",
+            sourceId: invoice.id,
+            customerName: invoice.customerName,
+            customerEmail: invoice.customerEmail,
+            amount: Number(invoice.total || 0),
+          }).catch(() => null);
+        }
         await sendCustomerAcknowledgement({
           to: invoice.customerEmail,
           name: invoice.customerName,
@@ -86,11 +103,22 @@ export async function POST(request: Request) {
     } else if (orderId || orderNumber) {
       const updateResult = await withDatabase(async () => prisma.order.update({
         where: orderId ? { id: orderId } : { orderNumber },
-        data: { paymentStatus: "PAID", status: "PAYMENT_RECEIVED", notes: `Stripe webhook confirmed payment. Session: ${session.id}` },
+        data: { paymentStatus: "PAID", status: "PAYMENT_RECEIVED", paidAt: new Date(), salesChannel: "WEBSITE", notes: `Stripe webhook confirmed payment. Session: ${session.id}` },
         include: { items: true },
       }));
       if (updateResult.ok) {
         const order: any = updateResult.data;
+        await decrementStockForPaidOrder(order.id, "SALE_WEBSITE", "stripe-webhook").catch((stockError) => console.error("[order-stock-decrement-failed]", stockError));
+        await createAdminActivityNotification({
+          type: "PAID_ORDER",
+          title: `Paid website order ${order.orderNumber}`,
+          message: `Stripe confirmed payment. Stock decrement and eBay stock queue were triggered.`,
+          sourceModel: "Order",
+          sourceId: order.id,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          amount: Number(order.total || 0),
+        }).catch(() => null);
         await sendCustomerAcknowledgement({
           to: order.customerEmail,
           name: order.customerName,

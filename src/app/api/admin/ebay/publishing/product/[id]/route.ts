@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { applyEbayCategoryToProduct, generateEbayDescriptionForProduct, getEbayProductPublishingState, publishProductToEbay, queueEbayPublishReview, saveEbayProductDraft, suggestEbayCategoriesForProduct, validateEbayProduct } from "@/lib/ebayPublishing";
+import { applyEbayCategoryToProduct, generateEbayDescriptionForProduct, getEbayProductPublishingState, publishProductToEbay, endEbayListingForProduct, queueEbayPublishReview, saveEbayProductDraft, suggestEbayCategoriesForProduct, validateEbayProduct } from "@/lib/ebayPublishing";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const result = await getEbayProductPublishingState(params.id);
@@ -16,6 +16,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   else if (action === "validate") result = await validateEbayProduct(params.id);
   else if (action === "queue-review") result = await queueEbayPublishReview(params.id);
   else if (action === "live-publish") result = await publishProductToEbay(params.id, { confirmLivePublish: Boolean(body.confirmLivePublish), triggeredBy: "admin" });
+  else if (action === "end-listing") result = await endEbayListingForProduct(params.id, { confirmEndListing: Boolean(body.confirmEndListing), triggeredBy: "admin" });
   else if (action === "suggest-categories") result = await suggestEbayCategoriesForProduct(params.id, body.query, body.marketplaceId);
   else if (action === "apply-category") result = await applyEbayCategoryToProduct(params.id, { categoryId: body.categoryId, categoryName: body.categoryName, categoryPath: body.categoryPath, marketplaceId: body.marketplaceId });
   else result = await saveEbayProductDraft(params.id, body.product || body);

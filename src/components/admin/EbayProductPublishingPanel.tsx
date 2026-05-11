@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Eye, FileCode2, ListTree, MapPin, RefreshCw, Rocket, Save, Search, ShieldCheck, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, FileCode2, ListTree, MapPin, RefreshCw, Rocket, Save, Search, ShieldCheck, UploadCloud, Trash2 } from "lucide-react";
 
 type Props = { productId?: string; currentSku?: string; title?: string };
 
@@ -249,6 +249,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     else if (action === "validate") setMessage(result.validation?.valid ? "Validation passed. You can queue for manual publish approval." : "Validation completed with issues. Resolve the listed errors before queueing.");
     else if (action === "queue-review") setMessage("Product queued for manual eBay publish approval. No live listing has been changed yet.");
     else if (action === "live-publish") setMessage(result.listingId ? `Live eBay listing published/updated successfully. Listing ID: ${result.listingId}${result.listingUrl ? ` — ${result.listingUrl}` : ""}` : "Live eBay publish/update completed.");
+    else if (action === "end-listing") setMessage("eBay listing ended/withdrawn. The Combay product remains in the catalogue and the action is recorded in logs.");
     else if (action === "suggest-categories") setMessage(result.suggestions?.length ? `Fetched ${result.suggestions.length} eBay category suggestions from eBay Taxonomy.` : "No eBay categories were returned. Try a shorter product title, brand or MPN search.");
     else if (action === "apply-category") setMessage("eBay category applied. Required item specifics were fetched and auto-mapped where possible.");
     else setMessage("Local eBay draft saved.");
@@ -337,6 +338,13 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     const confirmed = window.confirm("This will call the live eBay Inventory API and may create or update a real eBay listing. Continue only if the product has been reviewed, priced, categorised and mapped correctly.");
     if (!confirmed) return;
     await post("live-publish", { confirmLivePublish: true });
+    await load();
+  }
+
+  async function endLiveListing() {
+    const confirmed = window.confirm("End this eBay listing? This affects the eBay listing only. The Combay product, listing IDs and audit logs will be retained for traceability.");
+    if (!confirmed) return;
+    await post("end-listing", { confirmEndListing: true });
     await load();
   }
 
@@ -542,6 +550,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
           <button type="button" onClick={saveDraft} disabled={Boolean(busy)} className="btn-secondary text-xs py-2"><Save size={14} /> Save eBay draft</button>
           <button type="button" onClick={() => post("validate").then(() => load())} disabled={Boolean(busy)} className="btn-secondary text-xs py-2"><ShieldCheck size={14} /> Validate</button>
           <button type="button" onClick={() => post("queue-review").then(() => load())} disabled={Boolean(busy) || !ready} className="btn-secondary text-xs py-2"><UploadCloud size={14} /> Queue publish review</button>
+          <button type="button" onClick={endLiveListing} disabled={Boolean(busy) || !form.ebayOfferId} className="btn-secondary text-xs py-2 text-red-700"><Trash2 size={14} /> End eBay listing</button>
           <button type="button" onClick={publishLiveNow} disabled={Boolean(busy) || !ready} className="btn-primary text-xs py-2"><Rocket size={14} /> Publish / update live eBay listing</button>
         </div>
       </div>

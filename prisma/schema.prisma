@@ -239,6 +239,12 @@ model Product {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
+  @@index([sku])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([ebayListingId])
+  @@index([ebayOfferId])
   @@index([ebayPublishStatus])
   @@index([ebayMarketplaceId])
   @@index([ebayCategoryId])
@@ -532,20 +538,33 @@ model Order {
   trackingCarrier String?
   trackingUrl     String?
   dispatchedAt    DateTime?
+  trackingEmailSentAt DateTime?
+  trackingEmailLastHash String?
+  salesChannel    String       @default("WEBSITE")
+  externalOrderId String?
+  externalMarketplace String?
+  paidAt          DateTime?
   items           OrderItem[]
   returns         Return[]
   invoices        Invoice[]
   shippingSnapshot OrderShippingSnapshot?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([salesChannel])
+  @@index([externalOrderId])
 }
 
 model OrderItem {
   id            String   @id @default(cuid())
   orderId       String
   order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId     String
-  product       Product  @relation(fields: [productId], references: [id])
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id])
   title         String
   sku           String
   variationSku  String?
@@ -911,6 +930,85 @@ model EbayAccountDeletionNotification {
 }
 
 
+
+// ─── OPERATIONS, STOCK & ADMIN NOTIFICATIONS ─────────
+model InventoryMovement {
+  id                String   @id @default(cuid())
+  productId         String?
+  variantId         String?
+  sku               String
+  variationSku      String?
+  type              String
+  quantityChange    Int
+  source            String
+  sourceId          String
+  externalReference String   @unique
+  notes             String?  @db.Text
+  createdAt         DateTime @default(now())
+  createdBy         String?
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([sku])
+  @@index([source, sourceId])
+  @@index([createdAt])
+}
+
+model InventorySyncJob {
+  id          String   @id @default(cuid())
+  productId   String?
+  variantId   String?
+  sku         String
+  target      String
+  action      String
+  status      String   @default("QUEUED")
+  attempts    Int      @default(0)
+  payload     Json?
+  error       String?  @db.Text
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([sku])
+  @@index([target, status])
+  @@index([createdAt])
+}
+
+model AdminNotification {
+  id            String   @id @default(cuid())
+  type          String
+  title         String
+  message       String?  @db.Text
+  sourceModel   String?
+  sourceId      String?
+  customerName  String?
+  customerEmail String?
+  amount        Decimal? @db.Decimal(10, 2)
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  readAt        DateTime?
+
+  @@index([type])
+  @@index([isRead, createdAt])
+  @@index([sourceModel, sourceId])
+}
+
+model SkuAuditLog {
+  id               String   @id @default(cuid())
+  productId         String?
+  oldSku            String?
+  newSku            String
+  reason            String
+  changedBy         String?
+  changedAt         DateTime @default(now())
+  ebayUpdateStatus  String?
+  ebayUpdateError   String?  @db.Text
+
+  @@index([productId])
+  @@index([newSku])
+  @@index([changedAt])
+}
 
 // ─── EBAY OUTBOUND PUBLISHING ─────────────────────────
 model EbaySyncLog {

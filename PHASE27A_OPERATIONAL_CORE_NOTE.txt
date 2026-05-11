@@ -1,0 +1,34 @@
+Phase 27A — Operational Core, Inventory, Tracking, Products Page and Dashboard
+
+This cumulative build starts the Phase 27 implementation from the uploaded change/audit document. It intentionally focuses on critical operational behaviour before wider UI and migration phases.
+
+Implemented:
+- Tracking email automation when admin adds/changes tracking or marks an order dispatched.
+- Tracking email duplicate prevention using trackingEmailLastHash.
+- Runtime database bootstrap for new operational fields/tables without requiring manual DATABASE_URL handling or prisma db push.
+- InventoryMovement table and idempotent stock decrement engine.
+- InventorySyncJob queue creation for eBay quantity updates after website/invoice stock changes.
+- AdminNotification table and notifications for paid orders, paid invoices and tracking updates.
+- Stripe-paid website orders now mark paidAt/salesChannel and trigger stock decrement/eBay stock queue.
+- Stripe-paid invoice/proforma now creates/links an order, creates OrderItem rows from invoice lines where possible, marks paid and triggers stock decrement/eBay stock queue.
+- OrderItem.productId is now optional so paid invoice/service/manual lines can appear in order documents even when no product SKU match exists.
+- Admin dashboard replaced launch reminders with real operations dashboard: sales value, paid orders, returns/rate, open activity, channel breakdown and customer/sales notifications.
+- Product master list now uses a lightweight server-paginated admin endpoint instead of the heavy full product detail fetch.
+- Product page top toolbar is smaller/compact.
+- Product table now includes separate website preview eye and eBay preview eye.
+- Product table now includes eBay-only end listing action.
+- eBay listing tab now also exposes End eBay listing action.
+- eBay end action uses Inventory API withdrawOffer to end the listing while retaining the offer/product for audit and relisting.
+- New product SKU generation changed to highest existing CBUK number + 1, server-side, instead of lowest gap reuse.
+- Database indexes added in Prisma schema and runtime bootstrap for products/orders/operational tables.
+
+Not yet completed in this subphase:
+- Full historical SKU migration tool and eBay SKU repair report.
+- Full hard-delete / 48-hour purge queue / VPS media cleanup.
+- eBay sale ingestion/polling for stock decrement.
+- Processing InventorySyncJob queue into live eBay quantity API updates.
+- Full product editor right-panel redesign and brand/manufacturer field merge.
+- Complete platform audit expansion beyond the Phase 26.2Y audit baseline.
+
+Deployment:
+- No Prisma db push required. The operational schema bootstrap runs safely at runtime using the same Vercel database connection already used by the app.
