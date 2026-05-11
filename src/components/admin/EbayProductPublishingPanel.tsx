@@ -64,6 +64,20 @@ function formatLogTime(value: any) {
   try { return new Date(value).toLocaleString("en-GB"); } catch { return "—"; }
 }
 
+function ebayListingUrl(listingId?: string, marketplaceId?: string) {
+  const id = String(listingId || "").trim();
+  if (!id) return "";
+  const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
+  if (marketplace === "EBAY_US") return `https://www.ebay.com/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_DE") return `https://www.ebay.de/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_FR") return `https://www.ebay.fr/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_IT") return `https://www.ebay.it/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_ES") return `https://www.ebay.es/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_AU") return `https://www.ebay.com.au/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_CA") return `https://www.ebay.ca/itm/${encodeURIComponent(id)}`;
+  return `https://www.ebay.co.uk/itm/${encodeURIComponent(id)}`;
+}
+
 function SelectField({ label, value, onChange, options, placeholder = "Select option" }: { label: string; value: string; onChange: (value: string) => void; options: SelectOption[]; placeholder?: string }) {
   return (
     <label className="block">
@@ -167,6 +181,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
   const recentJobs = useMemo(() => state.jobs || [], [state.jobs]);
   const recentLogs = useMemo(() => state.logs || [], [state.logs]);
   const latestFailure = recentLogs.find((log: any) => String(log.status || "").toUpperCase() === "FAILED" || String(log.errorMessage || "").trim());
+  const liveListingUrl = ebayListingUrl(form.ebayListingId, form.ebayMarketplaceId);
   const specificsJson = useMemo(() => aspectValuesFromText(specificsText), [specificsText]);
   const requiredAspects = aspectMetadata.filter((aspect) => aspect.required);
   const recommendedAspects = aspectMetadata.filter((aspect) => !aspect.required && aspect.recommended).slice(0, 12);
@@ -189,7 +204,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     if (action === "generate-description") setMessage("Branded eBay description generated. Review, validate and save the local eBay draft.");
     else if (action === "validate") setMessage(result.validation?.valid ? "Validation passed. You can queue for manual publish approval." : "Validation completed with issues. Resolve the listed errors before queueing.");
     else if (action === "queue-review") setMessage("Product queued for manual eBay publish approval. No live listing has been changed yet.");
-    else if (action === "live-publish") setMessage(result.listingId ? `Live eBay listing published/updated successfully. Listing ID: ${result.listingId}` : "Live eBay publish/update completed.");
+    else if (action === "live-publish") setMessage(result.listingId ? `Live eBay listing published/updated successfully. Listing ID: ${result.listingId}${result.listingUrl ? ` — ${result.listingUrl}` : ""}` : "Live eBay publish/update completed.");
     else if (action === "suggest-categories") setMessage(result.suggestions?.length ? `Fetched ${result.suggestions.length} eBay category suggestions from eBay Taxonomy.` : "No eBay categories were returned. Try a shorter product title, brand or MPN search.");
     else if (action === "apply-category") setMessage("eBay category applied. Required item specifics were fetched and auto-mapped where possible.");
     else setMessage("Local eBay draft saved.");
@@ -286,7 +301,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
           <SelectField label="Fulfilment policy" value={form.ebayFulfillmentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayFulfillmentPolicyId: value }))} options={fulfillmentOptions} placeholder="No fulfilment policy found" />
           <SelectField label="Payment policy" value={form.ebayPaymentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayPaymentPolicyId: value }))} options={paymentOptions} placeholder="No payment policy found" />
           <SelectField label="Return policy" value={form.ebayReturnPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayReturnPolicyId: value }))} options={returnOptions} placeholder="No return policy found" />
-          <label className="block"><span className="label">Listing ID</span><input value={form.ebayListingId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayListingId: e.target.value }))} className="input py-2 text-sm" /></label>
+          <label className="block"><span className="label">Listing ID</span><input value={form.ebayListingId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayListingId: e.target.value }))} className="input py-2 text-sm" />{liveListingUrl && <a href={liveListingUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-[11px] font-900 text-blue-700 hover:underline">Open eBay listing</a>}</label>
           <label className="block"><span className="label">Offer ID</span><input value={form.ebayOfferId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayOfferId: e.target.value }))} className="input py-2 text-sm" /></label>
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-900 text-navy-950 self-end"><input type="checkbox" checked={Boolean(form.ebayExcludedFromSync)} onChange={(e) => setForm((c: any) => ({ ...c, ebayExcludedFromSync: e.target.checked }))} /> Exclude from eBay sync/publish</label>
         </div>

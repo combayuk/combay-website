@@ -1,0 +1,18 @@
+Phase 26.2X.14 — eBay publishOffer verification fix
+
+Fixes an issue where Combay could report live eBay publish/update success after creating an Inventory API offer, while the item did not appear on eBay.
+
+Root cause:
+- Products imported from eBay could already have an ebayListingId stored.
+- If the product did not yet have a stored ebayOfferId, Combay created a new eBay offer.
+- The previous logic skipped publishOffer whenever ebayListingId already existed.
+- That meant a newly-created offer remained unpublished even though Combay logged success.
+
+Changes:
+- If no offer ID existed at the start of the run, Combay now calls publishOffer even if a legacy/imported listing ID exists.
+- If a new offer is created in the run, Combay always calls publishOffer.
+- The returned eBay listing ID from publishOffer replaces any stale listing ID.
+- Success logs now include a direct eBay listing URL.
+- Product editor now shows an Open eBay listing link beside the listing ID.
+
+No Prisma/schema changes.

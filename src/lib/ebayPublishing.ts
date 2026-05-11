@@ -1590,6 +1590,20 @@ async function logEbayPublishEvent(product: any, actionType: string, status: str
   }).catch(() => null);
 }
 
+function ebayListingUrl(listingId: string, marketplaceId?: string | null) {
+  const id = String(listingId || "").trim();
+  if (!id) return "";
+  const marketplace = String(marketplaceId || MARKETPLACE).toUpperCase();
+  if (marketplace === "EBAY_US") return `https://www.ebay.com/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_DE") return `https://www.ebay.de/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_FR") return `https://www.ebay.fr/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_IT") return `https://www.ebay.it/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_ES") return `https://www.ebay.es/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_AU") return `https://www.ebay.com.au/itm/${encodeURIComponent(id)}`;
+  if (marketplace === "EBAY_CA") return `https://www.ebay.ca/itm/${encodeURIComponent(id)}`;
+  return `https://www.ebay.co.uk/itm/${encodeURIComponent(id)}`;
+}
+
 export async function publishProductToEbay(productId: string, input: { confirmLivePublish?: boolean; triggeredBy?: string } = {}) {
   return withDatabase(async () => {
     await ensureEbayPublishingDefaults();
@@ -1614,6 +1628,9 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
     let job: any = null;
     let offerId = product.ebayOfferId || "";
     let listingId = product.ebayListingId || "";
+    const hadOfferIdAtStart = Boolean(String(offerId || "").trim());
+    const hadListingIdAtStart = Boolean(String(listingId || "").trim());
+    let offerCreatedThisRun = false;
     const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
     const inventoryPayload = inventoryItemPayload(product);
     let offerRequestPayload = offerPayload(product, config, sku);
@@ -1648,18 +1665,25 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
         await logEbayPublishEvent(product, "EBAY_UPDATE_OFFER", "SUCCESS", "eBay offer updated.", { offerId, offerPayload: offerRequestPayload });
       } else {
         offerResponse = await ebayInventoryApiRequest("/sell/inventory/v1/offer", "POST", offerRequestPayload, marketplaceId);
+        offerCreatedThisRun = true;
         offerId = String(offerResponse.offerId || offerResponse.id || "");
         if (!offerId) throw new Error("eBay created the inventory item but did not return an offer ID.");
-        await logEbayPublishEvent(product, "EBAY_CREATE_OFFER", "SUCCESS", "eBay offer created.", { offerResponse, offerPayload: offerRequestPayload }, null, offerId);
+        await logEbayPublishEvent(product, "EBAY_CREATE_OFFER", "SUCCESS", "eBay offer created. It still needs to be published before it appears as a live eBay listing.", { offerResponse, offerPayload: offerRequestPayload, hadListingIdAtStart }, null, offerId, listingId || null);
       }
 
-      if (!listingId) {
+      // Important: an old stored listing ID is not proof that the newly-created offer
+      // is live. If there was no saved offer ID at the start, we must call publishOffer
+      // even when a legacy/imported listing ID already exists on the product. Otherwise
+      // Combay reports success after createOffer, while nothing appears in eBay Active listings.
+      const mustPublishOffer = !listingId || offerCreatedThisRun || !hadOfferIdAtStart;
+      if (mustPublishOffer) {
         const publishResponse = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`, "POST", undefined, marketplaceId);
-        listingId = String(publishResponse.listingId || publishResponse.listing?.listingId || "");
-        if (!listingId) throw new Error("eBay publish call completed but no listing ID was returned.");
-        await logEbayPublishEvent(product, "EBAY_PUBLISH_OFFER", "SUCCESS", "eBay offer published as a live listing.", publishResponse, null, offerId, listingId);
+        const returnedListingId = String(publishResponse.listingId || publishResponse.listing?.listingId || "");
+        if (!returnedListingId) throw new Error("eBay publish call completed but no listing ID was returned.");
+        listingId = returnedListingId;
+        await logEbayPublishEvent(product, "EBAY_PUBLISH_OFFER", "SUCCESS", offerCreatedThisRun || !hadOfferIdAtStart ? "eBay offer published as a live listing after creating/linking the offer." : "eBay offer published as a live listing.", { publishResponse, hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun }, null, offerId, listingId);
       } else {
-        await logEbayPublishEvent(product, "EBAY_UPDATE_LIVE_LISTING", "SUCCESS", "Existing eBay listing updated through Inventory API offer/inventory records.", { offerId, listingId }, null, offerId, listingId);
+        await logEbayPublishEvent(product, "EBAY_UPDATE_LIVE_LISTING", "SUCCESS", "Existing eBay listing updated through Inventory API offer/inventory records.", { offerId, listingId, hadOfferIdAtStart, hadListingIdAtStart }, null, offerId, listingId);
       }
 
       const previousJson = {
@@ -1695,8 +1719,8 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
         },
       }).catch(() => null);
       await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "SUCCESS", finishedAt: new Date(), payload: { inventoryPayload, offerPayload: offerRequestPayload, offerId, listingId } } }).catch(() => null);
-      await logEbayPublishEvent(updated, "LIVE_EBAY_PUBLISH_COMPLETE", "SUCCESS", listingId === product.ebayListingId ? "eBay listing updated successfully." : "New eBay listing published successfully.", { offerId, listingId }, null, offerId, listingId);
-      return { product: updated, offerId, listingId, validation, jobId: job.id };
+      await logEbayPublishEvent(updated, "LIVE_EBAY_PUBLISH_COMPLETE", "SUCCESS", mustPublishOffer ? "eBay offer published successfully. Check the direct eBay listing URL and allow a short indexing delay before searching by keyword." : "eBay listing updated successfully.", { offerId, listingId, listingUrl: ebayListingUrl(listingId, marketplaceId), hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun }, null, offerId, listingId);
+      return { product: updated, offerId, listingId, listingUrl: ebayListingUrl(listingId, marketplaceId), validation, jobId: job.id };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Live eBay publish failed.";
       const apiError = error instanceof EbayInventoryApiError ? error : null;
