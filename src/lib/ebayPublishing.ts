@@ -1361,9 +1361,10 @@ function ebayErrorMessage(body: any, fallback: string) {
 }
 
 function ebayRequestLanguage(marketplace: string) {
-  // eBay Inventory REST calls require Content-Language, not Accept-Language.
-  // The value must match the marketplace locale. EBAY_GB should use en-GB;
-  // using en-US against EBAY_GB can still produce eBay 25709 language-header failures.
+  // eBay Inventory REST calls need valid language headers. In Vercel/Node,
+  // fetch can add Accept-Language: * when omitted; eBay rejects that with 25709.
+  // Therefore live publish requests set both Accept-Language and Content-Language
+  // to a real marketplace locale. EBAY_GB uses en-GB.
   const value = String(marketplace || MARKETPLACE).toUpperCase();
   if (value === "EBAY_GB") return "en-GB";
   if (value === "EBAY_US") return "en-US";
@@ -1381,11 +1382,13 @@ async function ebayInventoryApiRequest(path: string, method: string, body?: any,
   const { token, config } = await getEbayAccessToken();
   const marketplace = marketplaceId || config.marketplaceId || MARKETPLACE;
   const root = apiRootForEnvironment(config.environment);
+  const language = ebayRequestLanguage(marketplace);
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
+    "Accept-Language": language,
     "Content-Type": "application/json",
-    "Content-Language": ebayRequestLanguage(marketplace),
+    "Content-Language": language,
     "X-EBAY-C-MARKETPLACE-ID": marketplace,
   };
   const response = await fetch(`${root}${path}`, {

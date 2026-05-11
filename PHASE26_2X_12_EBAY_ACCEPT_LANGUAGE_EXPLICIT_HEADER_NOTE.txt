@@ -1,0 +1,14 @@
+Phase 26.2X.12 — Explicit eBay Accept-Language Header Fix
+
+Fixes persistent eBay Inventory publish failures:
+25709 — API_INVENTORY/Request — Invalid value for header Accept-Language.
+
+Root cause:
+The previous patch removed the custom Accept-Language header, but Node/undici fetch can still send a default Accept-Language value such as * when omitted. eBay Inventory rejects that default.
+
+Change:
+- Live eBay Inventory API requests now explicitly send a valid Accept-Language locale.
+- EBAY_GB uses Accept-Language: en-GB and Content-Language: en-GB.
+- Existing X-EBAY-C-MARKETPLACE-ID remains EBAY_GB.
+- Diagnostics will show the explicit language headers, with Authorization redacted.
+- No Prisma/database changes.

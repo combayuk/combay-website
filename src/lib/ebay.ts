@@ -104,8 +104,9 @@ function tradingApiUrl(environment?: string) {
 
 function ebayContentLanguageForMarketplace(marketplaceId?: string | null) {
   const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
-  // eBay REST Inventory calls require Content-Language for request payload text.
-  // Do not send Accept-Language; eBay rejects invalid language headers with 25709.
+  // eBay REST Inventory calls require valid locale headers for request payload text.
+  // Node/undici may send Accept-Language: * if the header is omitted, which eBay
+  // rejects with 25709, so we set a real locale explicitly.
   // Use the locale that matches the marketplace, especially EBAY_GB -> en-GB.
   const languageMap: Record<string, string> = {
     EBAY_GB: "en-GB",
@@ -163,6 +164,9 @@ function ebayMarketplaceHeaders(token: string, config: EbayConfig) {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
     Accept: "application/json",
+    // Node/undici can otherwise add Accept-Language: * automatically, which eBay
+    // Inventory rejects with 25709. Send an explicit valid locale instead.
+    "Accept-Language": language,
     "Content-Language": language,
     "X-EBAY-C-MARKETPLACE-ID": marketplaceId,
   };
