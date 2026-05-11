@@ -384,7 +384,17 @@ async function upsertFetchedOptions(options: Partial<EbayPublishingOptionState>,
     ...(options.paymentPolicies || []).map((policy) => prisma.ebayPolicyMapping.upsert({ where: { id: `payment_${marketplaceId}_${policy.id}` }, create: { id: `payment_${marketplaceId}_${policy.id}`, type: "payment", ebayPolicyId: policy.id, ebayPolicyName: policy.name, marketplaceId, isDefault: Boolean(policy.isDefault), isActive: true }, update: { ebayPolicyName: policy.name, isDefault: Boolean(policy.isDefault), isActive: true } }).catch(() => null)),
     ...(options.returnPolicies || []).map((policy) => prisma.ebayPolicyMapping.upsert({ where: { id: `return_${marketplaceId}_${policy.id}` }, create: { id: `return_${marketplaceId}_${policy.id}`, type: "return", ebayPolicyId: policy.id, ebayPolicyName: policy.name, marketplaceId, isDefault: Boolean(policy.isDefault), isActive: true }, update: { ebayPolicyName: policy.name, isDefault: Boolean(policy.isDefault), isActive: true } }).catch(() => null)),
     ...(options.fulfillmentPolicies || []).map((policy) => prisma.ebayPolicyMapping.upsert({ where: { id: `fulfillment_${marketplaceId}_${policy.id}` }, create: { id: `fulfillment_${marketplaceId}_${policy.id}`, type: "fulfillment", ebayPolicyId: policy.id, ebayPolicyName: policy.name, marketplaceId, isDefault: Boolean(policy.isDefault), isActive: true }, update: { ebayPolicyName: policy.name, isDefault: Boolean(policy.isDefault), isActive: true } }).catch(() => null)),
-    ...(options.inventoryLocations || []).map((location) => prisma.ebayInventoryLocation.upsert({ where: { key: location.id }, create: { key: location.id, name: location.name || location.id, countryCode: location.raw?.location?.address?.country || location.raw?.countryCode || "GB", isDefault: Boolean(location.isDefault), isActive: true }, update: { name: location.name || location.id, isDefault: Boolean(location.isDefault), isActive: true } }).catch(() => null)),
+    ...(options.inventoryLocations || []).map((location) => {
+      const address = location.raw?.location?.address || location.raw?.address || {};
+      const postcode = address?.postalCode || location.raw?.postcode || location.raw?.postalCode || null;
+      const city = address?.city || location.raw?.city || null;
+      const countryCode = address?.country || location.raw?.countryCode || "GB";
+      return prisma.ebayInventoryLocation.upsert({
+        where: { key: location.id },
+        create: { key: location.id, name: location.name || location.id, countryCode, postcode, city, isDefault: Boolean(location.isDefault), isActive: true },
+        update: { name: location.name || location.id, countryCode, postcode, city, isDefault: Boolean(location.isDefault), isActive: true },
+      }).catch(() => null);
+    }),
   ]);
 }
 
@@ -805,13 +815,14 @@ export async function ensureEbayPublishingDefaults() {
   });
 
   const location = await prisma.ebayInventoryLocation.findFirst({ where: { isDefault: true } });
+  const envDispatchPostcode = ebayDispatchPostcodeFromEnv();
   const defaultLocation = location || await prisma.ebayInventoryLocation.upsert({
     where: { key: "COMBAY-UK-MAIN" },
     create: {
       key: "COMBAY-UK-MAIN",
       name: "Combay UK dispatch location",
       countryCode: "GB",
-      postcode: "CM17",
+      postcode: envDispatchPostcode || null,
       city: "Chelmsford",
       isDefault: true,
       isActive: true,
@@ -819,7 +830,7 @@ export async function ensureEbayPublishingDefaults() {
     update: {
       name: "Combay UK dispatch location",
       countryCode: "GB",
-      postcode: "CM17",
+      ...(isFullUkPostcode(envDispatchPostcode) ? { postcode: envDispatchPostcode } : {}),
       city: "Chelmsford",
       isDefault: true,
       isActive: true,
@@ -951,9 +962,40 @@ export async function saveEbayPublishingSettings(input: any) {
       const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
       const marketplaceId = EBAY_MARKETPLACE_OPTIONS.some((item) => item.value === input.marketplaceId) ? input.marketplaceId : (config?.marketplaceId || MARKETPLACE);
       const listingDuration = EBAY_LISTING_DURATION_OPTIONS.some((item) => item.value === input.defaultListingDuration) ? input.defaultListingDuration : "GTC";
+      const selectedLocationKey = safeMerchantLocationKey(input.defaultInventoryLocationKey || config?.defaultInventoryLocationKey || "COMBAY-UK-MAIN");
+      const existingLocation = await prisma.ebayInventoryLocation.findFirst({ where: { key: selectedLocationKey } }).catch(() => null);
+      const locationCountryCode = String(input.inventoryLocationCountryCode || existingLocation?.countryCode || "GB").trim().toUpperCase() || "GB";
+      const locationPostcode = locationCountryCode === "GB"
+        ? normaliseUkPostcode(input.inventoryLocationPostcode || existingLocation?.postcode || ebayDispatchPostcodeFromEnv())
+        : String(input.inventoryLocationPostcode || existingLocation?.postcode || "").trim();
+      if (locationCountryCode === "GB" && !isFullUkPostcode(locationPostcode)) {
+        throw new Error(locationNeedsFullUkPostcodeMessage(selectedLocationKey, locationPostcode));
+      }
+      await prisma.ebayInventoryLocation.upsert({
+        where: { key: selectedLocationKey },
+        create: {
+          key: selectedLocationKey,
+          name: cleanEbayLocationName(input.inventoryLocationName || existingLocation?.name || "Combay UK dispatch location"),
+          countryCode: locationCountryCode,
+          postcode: locationPostcode || null,
+          addressLine1: String(input.inventoryLocationAddressLine1 || existingLocation?.addressLine1 || "").trim() || null,
+          city: String(input.inventoryLocationCity || existingLocation?.city || "Chelmsford").trim() || null,
+          isDefault: true,
+          isActive: true,
+        },
+        update: {
+          name: cleanEbayLocationName(input.inventoryLocationName || existingLocation?.name || "Combay UK dispatch location"),
+          countryCode: locationCountryCode,
+          postcode: locationPostcode || null,
+          addressLine1: String(input.inventoryLocationAddressLine1 || existingLocation?.addressLine1 || "").trim() || null,
+          city: String(input.inventoryLocationCity || existingLocation?.city || "Chelmsford").trim() || null,
+          isDefault: true,
+          isActive: true,
+        },
+      });
       const payload = {
         marketplaceId,
-        defaultInventoryLocationKey: input.defaultInventoryLocationKey || null,
+        defaultInventoryLocationKey: selectedLocationKey,
         defaultPaymentPolicyId: input.defaultPaymentPolicyId || null,
         defaultReturnPolicyId: input.defaultReturnPolicyId || null,
         defaultFulfillmentPolicyId: input.defaultFulfillmentPolicyId || null,
@@ -1116,6 +1158,15 @@ export async function getEbayProductPublishingState(productId: string) {
       inventoryLocations: locations.map((item: any) => ({ id: item.key, name: `${item.name} (${item.key})`, isDefault: item.isDefault, raw: item })),
     };
     const validation = validateEbayProductRecord(product);
+    const selectedLocationKey = safeMerchantLocationKey(product.ebayInventoryLocationKey || config?.defaultInventoryLocationKey || "COMBAY-UK-MAIN");
+    const selectedLocation = locations.find((item: any) => item.key === selectedLocationKey);
+    if (selectedLocation) {
+      const locationCheck = validateLocalInventoryLocationForEbay(selectedLocation, selectedLocationKey);
+      locationCheck.errors.forEach((message) => {
+        if (!validation.errors.includes(message)) validation.errors.push(message);
+      });
+      validation.valid = validation.errors.length === 0;
+    }
     return { product, logs, jobs, config, templates, locations, options, validation };
   });
 }
@@ -1444,21 +1495,77 @@ function cleanEbayLocationName(value?: string | null) {
     .slice(0, 80) || "Combay UK dispatch location";
 }
 
-function defaultEbayWarehouseLocationPayload(location?: any) {
+function normaliseUkPostcode(value?: string | null) {
+  const compact = String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .trim();
+  if (!compact) return "";
+  if (compact.length <= 3) return compact;
+  return `${compact.slice(0, -3)} ${compact.slice(-3)}`;
+}
+
+function isFullUkPostcode(value?: string | null) {
+  const normalised = normaliseUkPostcode(value);
+  return /^(GIR 0AA|[A-Z]{1,2}[0-9][0-9A-Z]?\s[0-9][A-Z]{2})$/.test(normalised);
+}
+
+function compactPostcodeKey(value?: string | null) {
+  return normaliseUkPostcode(value).replace(/[^A-Z0-9]/g, "").slice(0, 12);
+}
+
+function ebayDispatchPostcodeFromEnv() {
+  return normaliseUkPostcode(process.env.COMBAY_EBAY_DISPATCH_POSTCODE || process.env.EBAY_DISPATCH_POSTCODE || "");
+}
+
+function locationNeedsFullUkPostcodeMessage(key: string, postcode?: string | null) {
+  const current = String(postcode || "").trim() || "blank";
+  return `eBay inventory location ${key} has postcode '${current}'. eBay UK requires a full UK postcode, not just an outward code such as CM17. Go to Admin → eBay Publish → Default inventory location details, enter the full dispatch postcode, save settings, then publish again.`;
+}
+
+function sanitiseLocalInventoryLocation(location: any, key: string) {
   const country = String(location?.countryCode || "GB").trim().toUpperCase() || "GB";
-  const city = String(location?.city || "Chelmsford").trim() || "Chelmsford";
-  const postcode = String(location?.postcode || "CM17").trim() || "CM17";
-  const stateOrProvince = country === "GB" ? String(location?.stateOrProvince || "Essex").trim() || "Essex" : String(location?.stateOrProvince || "").trim();
+  const postcode = country === "GB"
+    ? normaliseUkPostcode(location?.postcode || ebayDispatchPostcodeFromEnv())
+    : String(location?.postcode || "").trim();
   return {
+    key,
     name: cleanEbayLocationName(location?.name),
+    countryCode: country,
+    postcode,
+    city: String(location?.city || "Chelmsford").trim() || "Chelmsford",
+    addressLine1: String(location?.addressLine1 || "").trim(),
+    stateOrProvince: String(location?.stateOrProvince || (country === "GB" ? "Essex" : "")).trim(),
+    isDefault: Boolean(location?.isDefault),
+  };
+}
+
+function validateLocalInventoryLocationForEbay(location: any, key: string) {
+  const prepared = sanitiseLocalInventoryLocation(location, key);
+  const errors: string[] = [];
+  if (prepared.countryCode === "GB" && !isFullUkPostcode(prepared.postcode)) {
+    errors.push(locationNeedsFullUkPostcodeMessage(key, prepared.postcode));
+  }
+  return { valid: errors.length === 0, errors, location: prepared };
+}
+
+function defaultEbayWarehouseLocationPayload(location?: any) {
+  const key = safeMerchantLocationKey(location?.key || "COMBAY-UK-MAIN");
+  const prepared = sanitiseLocalInventoryLocation(location, key);
+  if (prepared.countryCode === "GB" && !isFullUkPostcode(prepared.postcode)) {
+    throw new Error(locationNeedsFullUkPostcodeMessage(key, prepared.postcode));
+  }
+  return {
+    name: cleanEbayLocationName(prepared.name),
     merchantLocationStatus: "ENABLED",
     locationTypes: ["WAREHOUSE"],
     location: {
       address: {
-        city,
-        ...(stateOrProvince ? { stateOrProvince } : {}),
-        postalCode: postcode,
-        country,
+        ...(prepared.addressLine1 ? { addressLine1: prepared.addressLine1 } : {}),
+        city: prepared.city,
+        ...(prepared.stateOrProvince ? { stateOrProvince: prepared.stateOrProvince } : {}),
+        postalCode: prepared.postcode,
+        country: prepared.countryCode,
       },
     },
   };
@@ -1475,53 +1582,80 @@ function ebayErrorMentionsLocation(error: unknown) {
   return /location information not found|merchantLocationKey|inventory location/i.test(message);
 }
 
-async function ensureLiveEbayInventoryLocationForOffer(product: EbayProductRecord, config: any, marketplaceId: string) {
-  let key = safeMerchantLocationKey(product.ebayInventoryLocationKey || config?.defaultInventoryLocationKey || "COMBAY-UK-MAIN");
-  const localLocation = await prisma.ebayInventoryLocation.findFirst({ where: { key } }).catch(() => null);
-
-  // First verify the selected merchantLocationKey exists in the connected eBay seller account.
-  // A local Combay dropdown row is not enough: eBay requires an Inventory API location with the
-  // same merchantLocationKey before createOffer/publishOffer can succeed.
-  try {
-    const live = await ebayInventoryApiRequest(`/sell/inventory/v1/location/${encodeURIComponent(key)}`, "GET", undefined, marketplaceId);
-    const status = String(live?.merchantLocationStatus || live?.locationStatus || "").toUpperCase();
-    if (status && status !== "ENABLED") {
-      await ebayInventoryApiRequest(`/sell/inventory/v1/location/${encodeURIComponent(key)}/enable`, "POST", undefined, marketplaceId).catch(() => null);
-    }
-    await prisma.ebayInventoryLocation.upsert({
-      where: { key },
-      create: { key, name: cleanEbayLocationName(live?.name || localLocation?.name), countryCode: live?.location?.address?.country || localLocation?.countryCode || "GB", postcode: live?.location?.address?.postalCode || localLocation?.postcode || null, city: live?.location?.address?.city || localLocation?.city || null, isDefault: Boolean(localLocation?.isDefault || config?.defaultInventoryLocationKey === key), isActive: true },
-      update: { name: cleanEbayLocationName(live?.name || localLocation?.name), countryCode: live?.location?.address?.country || localLocation?.countryCode || "GB", postcode: live?.location?.address?.postalCode || localLocation?.postcode || null, city: live?.location?.address?.city || localLocation?.city || null, isActive: true },
-    }).catch(() => null);
-    return key;
-  } catch (verifyError) {
-    // eBay returned that the selected location is unknown. Create a simple WAREHOUSE location.
-    // Warehouse locations only need a name and basic physical location (postalCode+country or city/state/country).
-    if (!(verifyError instanceof EbayInventoryApiError) && !ebayErrorMentionsLocation(verifyError)) throw verifyError;
-  }
-
-  const createPayload = defaultEbayWarehouseLocationPayload(localLocation || { key, name: "Combay UK dispatch location", countryCode: "GB", city: "Chelmsford", postcode: "CM17" });
+async function createOrEnableEbayWarehouseLocation(product: EbayProductRecord, config: any, marketplaceId: string, key: string, location: any, reason: string) {
+  const createPayload = defaultEbayWarehouseLocationPayload({ ...location, key });
   try {
     await ebayInventoryApiRequest(`/sell/inventory/v1/location/${encodeURIComponent(key)}`, "POST", createPayload, marketplaceId);
-    await logEbayPublishEvent(product, "EBAY_CREATE_INVENTORY_LOCATION", "SUCCESS", `Created eBay warehouse inventory location ${key}.`, { merchantLocationKey: key, locationPayload: createPayload });
+    await logEbayPublishEvent(product, "EBAY_CREATE_INVENTORY_LOCATION", "SUCCESS", `Created eBay warehouse inventory location ${key}.`, { merchantLocationKey: key, reason, locationPayload: createPayload });
   } catch (createError) {
-    // If eBay says it already exists, continue. Otherwise surface the real location error.
+    // If eBay says the location already exists, continue and try to enable/use it. Otherwise surface the real location error.
     if (!(createError instanceof EbayInventoryApiError) || !ebayErrorHasId(createError, 25803)) throw createError;
+    await logEbayPublishEvent(product, "EBAY_CREATE_INVENTORY_LOCATION", "RUNNING", `eBay location ${key} already exists; Combay will enable and use it.`, { merchantLocationKey: key, reason, locationPayload: createPayload }, null, null, null);
   }
 
   await ebayInventoryApiRequest(`/sell/inventory/v1/location/${encodeURIComponent(key)}/enable`, "POST", undefined, marketplaceId).catch(() => null);
   await prisma.ebayInventoryLocation.upsert({
     where: { key },
-    create: { key, name: createPayload.name, countryCode: createPayload.location.address.country, postcode: createPayload.location.address.postalCode, city: createPayload.location.address.city, isDefault: Boolean(config?.defaultInventoryLocationKey === key || !config?.defaultInventoryLocationKey), isActive: true },
-    update: { name: createPayload.name, countryCode: createPayload.location.address.country, postcode: createPayload.location.address.postalCode, city: createPayload.location.address.city, isActive: true },
+    create: { key, name: createPayload.name, countryCode: createPayload.location.address.country, postcode: createPayload.location.address.postalCode, city: createPayload.location.address.city, addressLine1: createPayload.location.address.addressLine1 || null, isDefault: Boolean(config?.defaultInventoryLocationKey === key || !config?.defaultInventoryLocationKey), isActive: true },
+    update: { name: createPayload.name, countryCode: createPayload.location.address.country, postcode: createPayload.location.address.postalCode, city: createPayload.location.address.city, addressLine1: createPayload.location.address.addressLine1 || null, isActive: true },
   }).catch(() => null);
   if (!product.ebayInventoryLocationKey || product.ebayInventoryLocationKey !== key) {
     await prisma.product.update({ where: { id: product.id }, data: { ebayInventoryLocationKey: key } }).catch(() => null);
   }
-  if (!config?.defaultInventoryLocationKey) {
+  if (config?.id && (!config.defaultInventoryLocationKey || config.defaultInventoryLocationKey !== key)) {
     await prisma.ebaySyncConfig.update({ where: { id: config.id }, data: { defaultInventoryLocationKey: key } }).catch(() => null);
   }
   return key;
+}
+
+async function ensureLiveEbayInventoryLocationForOffer(product: EbayProductRecord, config: any, marketplaceId: string) {
+  let key = safeMerchantLocationKey(product.ebayInventoryLocationKey || config?.defaultInventoryLocationKey || "COMBAY-UK-MAIN");
+  const localLocation = await prisma.ebayInventoryLocation.findFirst({ where: { key } }).catch(() => null);
+  const localCheck = validateLocalInventoryLocationForEbay(localLocation || { key, name: "Combay UK dispatch location", countryCode: "GB", city: "Chelmsford", postcode: ebayDispatchPostcodeFromEnv() }, key);
+  if (!localCheck.valid) {
+    const message = localCheck.errors.join(" ");
+    await logEbayPublishEvent(product, "EBAY_VERIFY_INVENTORY_LOCATION", "FAILED", message, { merchantLocationKey: key, localLocation }, message, product.ebayOfferId || null, product.ebayListingId || null);
+    throw new Error(message);
+  }
+  const preparedLocation = localCheck.location;
+
+  // Verify the selected merchantLocationKey exists in the connected eBay seller account.
+  // A local Combay dropdown row is not enough: eBay requires an Inventory API location with the
+  // same merchantLocationKey before createOffer/publishOffer can succeed.
+  try {
+    const live = await ebayInventoryApiRequest(`/sell/inventory/v1/location/${encodeURIComponent(key)}`, "GET", undefined, marketplaceId);
+    const status = String(live?.merchantLocationStatus || live?.locationStatus || "").toUpperCase();
+    const liveAddress = live?.location?.address || {};
+    const livePostcode = liveAddress?.postalCode || "";
+    const liveCountry = String(liveAddress?.country || preparedLocation.countryCode || "GB").toUpperCase();
+
+    // eBay can return an existing location key that is technically present but unusable for UK publish
+    // if it was created with only the outward code (e.g. CM17). In that case create a fresh location key
+    // using the full saved postcode, then use that key in the offer payload.
+    if (liveCountry === "GB" && !isFullUkPostcode(livePostcode)) {
+      const postcodeSuffix = compactPostcodeKey(preparedLocation.postcode);
+      const repairedKey = safeMerchantLocationKey(`${key}-${postcodeSuffix}`);
+      if (repairedKey && repairedKey !== key) {
+        await logEbayPublishEvent(product, "EBAY_REPAIR_INVENTORY_LOCATION", "RUNNING", `Existing eBay inventory location ${key} does not have a full UK postcode. Creating/using repaired location key ${repairedKey}.`, { originalKey: key, repairedKey, liveLocation: live, preparedLocation }, null, product.ebayOfferId || null, product.ebayListingId || null);
+        return createOrEnableEbayWarehouseLocation(product, config, marketplaceId, repairedKey, preparedLocation, "existing_location_missing_full_uk_postcode");
+      }
+    }
+
+    if (status && status !== "ENABLED") {
+      await ebayInventoryApiRequest(`/sell/inventory/v1/location/${encodeURIComponent(key)}/enable`, "POST", undefined, marketplaceId).catch(() => null);
+    }
+    await prisma.ebayInventoryLocation.upsert({
+      where: { key },
+      create: { key, name: cleanEbayLocationName(live?.name || localLocation?.name), countryCode: liveAddress?.country || preparedLocation.countryCode, postcode: normaliseUkPostcode(liveAddress?.postalCode || preparedLocation.postcode) || preparedLocation.postcode || null, city: liveAddress?.city || preparedLocation.city || null, addressLine1: liveAddress?.addressLine1 || preparedLocation.addressLine1 || null, isDefault: Boolean(localLocation?.isDefault || config?.defaultInventoryLocationKey === key), isActive: true },
+      update: { name: cleanEbayLocationName(live?.name || localLocation?.name), countryCode: liveAddress?.country || preparedLocation.countryCode, postcode: normaliseUkPostcode(liveAddress?.postalCode || preparedLocation.postcode) || preparedLocation.postcode || null, city: liveAddress?.city || preparedLocation.city || null, addressLine1: liveAddress?.addressLine1 || preparedLocation.addressLine1 || null, isActive: true },
+    }).catch(() => null);
+    return key;
+  } catch (verifyError) {
+    // eBay returned that the selected location is unknown. Create a WAREHOUSE location with the saved full postcode.
+    if (!(verifyError instanceof EbayInventoryApiError) && !ebayErrorMentionsLocation(verifyError)) throw verifyError;
+  }
+
+  return createOrEnableEbayWarehouseLocation(product, config, marketplaceId, key, preparedLocation, "location_not_found_on_ebay");
 }
 
 function inventoryItemPayload(product: EbayProductRecord) {

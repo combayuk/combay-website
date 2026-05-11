@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, FileCode2, PackageCheck, PlayCircle, Plus, RefreshCw, Save, Wrench } from "lucide-react";
 
-type Option = { id?: string; value?: string; name?: string; label?: string; isDefault?: boolean };
+type Option = { id?: string; value?: string; name?: string; label?: string; isDefault?: boolean; raw?: any };
 
 type SettingsPayload = {
   schemaReady?: boolean;
@@ -109,6 +109,27 @@ const blankTemplate = {
   isDefault: false,
 };
 
+function normaliseUkPostcodeForDisplay(value?: string) {
+  const compact = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").trim();
+  if (!compact || compact.length <= 3) return compact;
+  return `${compact.slice(0, -3)} ${compact.slice(-3)}`;
+}
+
+function locationDetails(payload: SettingsPayload, key?: string) {
+  const locations = payload.locations || [];
+  const options = payload.options?.inventoryLocations || [];
+  const local = locations.find((item: any) => item.key === key) || null;
+  const option = options.find((item: any) => (item.id || item.value) === key) || null;
+  const rawAddress = option?.raw?.location?.address || option?.raw?.address || {};
+  return {
+    name: local?.name || option?.name || "Combay UK dispatch location",
+    postcode: local?.postcode || rawAddress?.postalCode || "",
+    city: local?.city || rawAddress?.city || "Chelmsford",
+    countryCode: local?.countryCode || rawAddress?.country || "GB",
+    addressLine1: local?.addressLine1 || rawAddress?.addressLine1 || "",
+  };
+}
+
 export default function EbayPublishingPage() {
   const [payload, setPayload] = useState<SettingsPayload>({});
   const [form, setForm] = useState<any>({});
@@ -129,9 +150,16 @@ export default function EbayPublishingPage() {
       setPayload(result);
       const config = result.config || {};
       const options = result.options || {};
+      const defaultLocationKey = config.defaultInventoryLocationKey || options.inventoryLocations?.find((item: any) => item.isDefault)?.id || options.inventoryLocations?.[0]?.id || result.locations?.[0]?.key || "";
+      const location = locationDetails(result, defaultLocationKey);
       setForm({
         marketplaceId: config.marketplaceId || "EBAY_GB",
-        defaultInventoryLocationKey: config.defaultInventoryLocationKey || options.inventoryLocations?.find((item: any) => item.isDefault)?.id || options.inventoryLocations?.[0]?.id || result.locations?.[0]?.key || "",
+        defaultInventoryLocationKey: defaultLocationKey,
+        inventoryLocationName: location.name,
+        inventoryLocationPostcode: normaliseUkPostcodeForDisplay(location.postcode),
+        inventoryLocationCity: location.city,
+        inventoryLocationCountryCode: location.countryCode,
+        inventoryLocationAddressLine1: location.addressLine1,
         defaultPaymentPolicyId: config.defaultPaymentPolicyId || options.paymentPolicies?.find((item: any) => item.isDefault)?.id || options.paymentPolicies?.[0]?.id || "",
         defaultReturnPolicyId: config.defaultReturnPolicyId || options.returnPolicies?.find((item: any) => item.isDefault)?.id || options.returnPolicies?.[0]?.id || "",
         defaultFulfillmentPolicyId: config.defaultFulfillmentPolicyId || options.fulfillmentPolicies?.find((item: any) => item.isDefault)?.id || options.fulfillmentPolicies?.[0]?.id || "",
@@ -278,13 +306,41 @@ export default function EbayPublishingPage() {
               <SelectField label="Marketplace" value={form.marketplaceId || ""} onChange={(value) => setForm((c: any) => ({ ...c, marketplaceId: value }))} options={marketplaceOptions} disabled={!schemaReady} />
               <label className="block"><span className="label">SKU prefix</span><input value={form.defaultSkuPrefix || ""} disabled={!schemaReady} onChange={(e) => setForm((c: any) => ({ ...c, defaultSkuPrefix: e.target.value }))} className="input py-2 text-sm font-mono" /></label>
               <SelectField label="Listing duration" value={form.defaultListingDuration || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultListingDuration: value }))} options={durationOptions} disabled={!schemaReady} />
-              <SelectField label="Inventory location" value={form.defaultInventoryLocationKey || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultInventoryLocationKey: value }))} options={inventoryOptions} placeholder="No eBay inventory location found" disabled={!schemaReady} />
+              <SelectField label="Inventory location" value={form.defaultInventoryLocationKey || ""} onChange={(value) => {
+                const details = locationDetails(payload, value);
+                setForm((c: any) => ({
+                  ...c,
+                  defaultInventoryLocationKey: value,
+                  inventoryLocationName: details.name,
+                  inventoryLocationPostcode: normaliseUkPostcodeForDisplay(details.postcode),
+                  inventoryLocationCity: details.city,
+                  inventoryLocationCountryCode: details.countryCode,
+                  inventoryLocationAddressLine1: details.addressLine1,
+                }));
+              }} options={inventoryOptions} placeholder="No eBay inventory location found" disabled={!schemaReady} />
               <SelectField label="Payment policy" value={form.defaultPaymentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultPaymentPolicyId: value }))} options={paymentOptions} placeholder="Fetch/select payment policy" disabled={!schemaReady} />
               <SelectField label="Return policy" value={form.defaultReturnPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultReturnPolicyId: value }))} options={returnOptions} placeholder="Fetch/select return policy" disabled={!schemaReady} />
               <SelectField label="Fulfilment policy" value={form.defaultFulfillmentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultFulfillmentPolicyId: value }))} options={fulfillmentOptions} placeholder="Fetch/select fulfilment policy" disabled={!schemaReady} />
               <div className="lg:col-span-2 flex items-end gap-2">
                 <div className="flex-1"><SelectField label="Default eBay HTML template" value={form.defaultDescriptionTemplateId || ""} onChange={(value) => setForm((c: any) => ({ ...c, defaultDescriptionTemplateId: value }))} options={(payload.templates ?? []).map((template: any) => ({ id: template.id, name: template.name, isDefault: template.isDefault }))} placeholder="System default" disabled={!schemaReady} /></div>
                 <button type="button" onClick={() => setTemplateOpen((value) => !value)} disabled={!schemaReady} className="btn-secondary mb-0.5 whitespace-nowrap py-2 text-xs"><Plus size={14} /> New template</button>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+              <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="font-display text-sm font-900 text-navy-950">Default inventory location details</h3>
+                  <p className="mt-1 text-xs leading-5 text-amber-900">eBay UK requires a full postcode for the Inventory API location before a listing can be published. Do not use only the outward code such as CM17.</p>
+                </div>
+                <StatusBadge tone="amber">Required before live publish</StatusBadge>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-4">
+                <label className="block lg:col-span-2"><span className="label">Location name</span><input value={form.inventoryLocationName || ""} disabled={!schemaReady} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationName: e.target.value }))} className="input py-2 text-sm" placeholder="Combay UK dispatch location" /></label>
+                <label className="block"><span className="label">Full UK postcode</span><input value={form.inventoryLocationPostcode || ""} disabled={!schemaReady} onBlur={(e) => setForm((c: any) => ({ ...c, inventoryLocationPostcode: normaliseUkPostcodeForDisplay(e.target.value) }))} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationPostcode: e.target.value }))} className="input py-2 text-sm font-mono" placeholder="e.g. CM17 9AA" /></label>
+                <label className="block"><span className="label">Country</span><select value={form.inventoryLocationCountryCode || "GB"} disabled={!schemaReady} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationCountryCode: e.target.value }))} className="input py-2 text-sm"><option value="GB">United Kingdom (GB)</option><option value="IE">Ireland (IE)</option><option value="US">United States (US)</option><option value="DE">Germany (DE)</option><option value="FR">France (FR)</option></select></label>
+                <label className="block lg:col-span-2"><span className="label">Address line 1 <span className="font-500 text-gray-400">optional</span></span><input value={form.inventoryLocationAddressLine1 || ""} disabled={!schemaReady} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationAddressLine1: e.target.value }))} className="input py-2 text-sm" placeholder="Warehouse/unit address if you want to store it" /></label>
+                <label className="block lg:col-span-2"><span className="label">Town / city</span><input value={form.inventoryLocationCity || ""} disabled={!schemaReady} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationCity: e.target.value }))} className="input py-2 text-sm" placeholder="Chelmsford" /></label>
               </div>
             </div>
 

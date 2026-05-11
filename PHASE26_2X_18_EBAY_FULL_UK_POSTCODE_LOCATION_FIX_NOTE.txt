@@ -1,0 +1,15 @@
+Phase 26.2X.18 — eBay full UK postcode inventory-location fix
+
+This cumulative source archive keeps all previous Phase 26.2X eBay publishing functionality and fixes the Inventory API publish failure:
+25012 — Invalid inventory location. Enter a full UK postcode.
+
+Changes:
+- Adds default eBay inventory-location details to Admin → eBay Publish.
+- Requires a full UK postcode for GB inventory locations before live publish.
+- Prevents using only an outward postcode such as CM17 for eBay Inventory API publish.
+- Saves location name, postcode, country, city and optional address line into EbayInventoryLocation.
+- Product eBay Listing validation now shows the location postcode issue before calling eBay.
+- Live publish now verifies the selected eBay location and, if the existing eBay location was created with an incomplete UK postcode, creates/uses a repaired location key based on the full postcode.
+- Keeps the previous unpublished-offer publish fix, published-offer verification, explicit Accept-Language header fix, condition enum fix, and inventory-location creation flow.
+
+No Prisma command is required for this phase because it uses existing EbayInventoryLocation fields.
