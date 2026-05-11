@@ -17,11 +17,14 @@ function priceLabel(product: AdminProduct) {
 }
 
 function nextSku(products: AdminProduct[]) {
-  const max = products.reduce((highest, product) => {
+  const used = new Set<number>();
+  products.forEach((product) => {
     const match = product.sku.match(/^CBUK(\d{5})$/i);
-    return match ? Math.max(highest, Number(match[1])) : highest;
-  }, 0);
-  return `CBUK${String(max + 1).padStart(5, "0")}`;
+    if (match) used.add(Number(match[1]));
+  });
+  let next = 1;
+  while (used.has(next)) next += 1;
+  return `CBUK${String(next).padStart(5, "0")}`;
 }
 
 export default function AdminProducts() {

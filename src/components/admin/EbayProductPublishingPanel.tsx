@@ -203,6 +203,16 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
 
   useEffect(() => { load().catch(() => setMessage("Could not load eBay publishing state.")); }, [productId]);
 
+  useEffect(() => {
+    function handleTopAction(event: Event) {
+      const action = (event as CustomEvent<string>).detail;
+      if (action === "validate") post("validate").then(() => load());
+      if (action === "publish") publishLiveNow();
+    }
+    window.addEventListener("combay-ebay-top-action", handleTopAction as EventListener);
+    return () => window.removeEventListener("combay-ebay-top-action", handleTopAction as EventListener);
+  }, [productId, form, ready]);
+
   const validation = state.validation || state.product?.ebayValidationErrorsJson || { valid: false, errors: [], warnings: [] };
   const ready = Boolean(validation.valid);
   const optionState = state.options || {};
@@ -213,7 +223,8 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
   const fulfillmentOptions = optionState.fulfillmentPolicies || [];
   const recentJobs = useMemo(() => state.jobs || [], [state.jobs]);
   const recentLogs = useMemo(() => state.logs || [], [state.logs]);
-  const latestFailure = recentLogs.find((log: any) => String(log.status || "").toUpperCase() === "FAILED" || String(log.errorMessage || "").trim());
+  const latestStateLog = useMemo(() => recentLogs.find((log: any) => ["LIVE_EBAY_PUBLISH_FAILED", "LIVE_EBAY_PUBLISH_COMPLETE"].includes(String(log.actionType || ""))), [recentLogs]);
+  const latestFailure = latestStateLog && String(latestStateLog.status || "").toUpperCase() === "FAILED" ? latestStateLog : null;
   const liveListingUrl = ebayListingUrl(form.ebayListingId, form.ebayMarketplaceId, state.config?.environment);
   const specificsJson = useMemo(() => aspectValuesFromText(specificsText), [specificsText]);
   const requiredAspects = aspectMetadata.filter((aspect) => aspect.required);
@@ -369,6 +380,31 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
         </div>
       </section>}
 
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div><h3 className="font-display text-lg font-900 text-navy-950">eBay readiness summary</h3><p className="mt-1 text-xs text-gray-500">Compact preflight view for SKU, category, specifics, condition, images, description, policies and stock.</p></div>
+          <Badge tone={ready ? "green" : "amber"}>{ready ? "Ready to publish" : "Needs review"}</Badge>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["SKU", state.product?.sku ? "Ready" : "Missing", Boolean(state.product?.sku)],
+            ["Category", form.ebayCategoryId ? "Ready" : "Missing", Boolean(form.ebayCategoryId)],
+            ["Item specifics", `${requiredAspects.filter((a) => aspectHasValue(specificsJson, a.name)).length}/${requiredAspects.length || 0} required`, requiredAspects.every((a) => aspectHasValue(specificsJson, a.name))],
+            ["Condition", state.product?.condition ? "Ready" : "Missing", Boolean(state.product?.condition)],
+            ["Images", `${state.product?.images?.length || 0} image(s)`, Boolean(state.product?.images?.length)],
+            ["Description", form.ebayDescriptionHtml ? "Ready" : "Missing", Boolean(form.ebayDescriptionHtml)],
+            ["Policies", form.ebayPaymentPolicyId && form.ebayReturnPolicyId && form.ebayFulfillmentPolicyId ? "Ready" : "Missing", Boolean(form.ebayPaymentPolicyId && form.ebayReturnPolicyId && form.ebayFulfillmentPolicyId)],
+            ["Price/stock", state.product?.price && Number(state.product?.stockQty || 0) > 0 ? "Ready" : "Needs check", Boolean(state.product?.price && Number(state.product?.stockQty || 0) > 0)],
+          ].map(([label, value, ok]) => (
+            <div key={String(label)} className={`rounded-lg border px-3 py-2 text-xs ${ok ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+              <div className="font-900 text-navy-950">{label}</div>
+              <div className="mt-0.5">{value}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div><h3 className="font-display text-lg font-900 text-navy-950">Listing mapping</h3><p className="mt-1 text-xs text-gray-500">Seller policies and listing IDs. Category selection is handled by the eBay category assistant below.</p></div>
@@ -480,9 +516,9 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="font-display text-lg font-900 text-navy-950">Recent eBay API logs</h3>
-        <p className="mt-1 text-xs text-gray-500">Use this when eBay returns a generic error such as 2004. The log now shows the exact endpoint and returned parameters where eBay provides them.</p>
+      <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <summary className="cursor-pointer font-display text-lg font-900 text-navy-950">Recent eBay API logs <span className="ml-2 text-xs font-700 text-gray-500">loaded on demand view</span></summary>
+        <p className="mt-2 text-xs text-gray-500">Historic failures remain here for traceability. The current status panel above only shows the latest active publish state.</p>
         <div className="mt-3 space-y-2">
           {recentLogs.slice(0, 8).map((log: any) => (
             <div key={log.id} className={`rounded-lg border px-3 py-2 text-xs ${log.status === "FAILED" ? "border-red-200 bg-red-50" : "border-slate-200 bg-slate-50"}`}>
@@ -498,7 +534,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
           ))}
           {!recentLogs.length && <p className="text-sm text-gray-500">No eBay API logs yet.</p>}
         </div>
-      </section>
+      </details>
 
       <div className="sticky bottom-4 z-20 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="text-xs text-gray-500"><span className="font-900 text-navy-950">Live publish safety:</span> category and required aspects should be selected through the assistant before live publishing.</div>

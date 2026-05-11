@@ -1,0 +1,17 @@
+Phase 26.2Y — Admin/Product/eBay Refinement, Critical Fixes & Initial Audit
+
+This cumulative phase builds on 26.2X.19.
+
+Implemented:
+- Paid invoice line-item fallback: when creating paid/commercial/packing documents from an order with no OrderItem rows, the system now copies line snapshots from the linked source invoice/proforma instead of producing a blank paid invoice.
+- Paid document creation now blocks if there are no source line items to snapshot.
+- eBay current-state handling: old publish failures are no longer shown as the current error after a later successful publish. Historic failures remain in collapsed API logs.
+- eBay tab readiness summary: SKU, category, item specifics, condition, images, description, policies, price/stock.
+- eBay logs collapsed by default and reduced initial payload sizes for product eBay state.
+- eBay default HTML description redesigned with Combay logo, slogan/tagline, navy/gold branding, overview, specs, condition/testing, included items, shipping/returns and branded footer.
+- System default eBay template refreshes at runtime if it is the built-in Combay system template.
+- Product editor top sticky action/status bar: website status, eBay status, SKU, save draft, publish product, preview, validate eBay and publish/update eBay action triggers.
+- SKU quick win: new local SKU generation now uses the lowest unused CBUK number instead of always max+1. Full SKU reservation/migration remains a separate controlled phase.
+- Added docs/combay-platform-audit-phase-26-2y.md with initial P0/P1/P2 audit findings and next-phase roadmap.
+
+No Prisma/schema change in this phase.

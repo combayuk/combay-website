@@ -154,6 +154,12 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     seoDescription: (product as any).seoDescription ?? "",
     seoKeywords: (product as any).seoKeywords ?? "",
     ebayItemId: product.ebayItemId ?? "",
+    ebayListingId: (product as any).ebayListingId ?? "",
+    ebayOfferId: (product as any).ebayOfferId ?? "",
+    ebayPublishStatus: (product as any).ebayPublishStatus ?? "NOT_LISTED",
+    ebayLastPushedAt: (product as any).ebayLastPushedAt?.toISOString?.() ?? null,
+    ebayLastError: (product as any).ebayLastError ?? null,
+    ebayValidationErrorsJson: (product as any).ebayValidationErrorsJson ?? null,
     syncExcluded: product.syncExcluded ?? false,
     ebayExcludedFromSync: (product as any).ebayExcludedFromSync ?? product.syncExcluded ?? false,
     rawEbayDescription: (product as any).rawEbayDescription ?? "",
@@ -200,17 +206,20 @@ async function getCategoryId(input?: { category?: string; categorySlug?: string;
 }
 
 async function nextSku() {
-  const latest = await prisma.product.findMany({
+  const existing = await prisma.product.findMany({
     where: { sku: { startsWith: "CBUK" } },
-    select: { sku: true },
-    orderBy: { sku: "desc" },
-    take: 50,
+    select: { sku: true, status: true, ebayListingId: true, ebayOfferId: true, ebayItemId: true },
+    orderBy: { sku: "asc" },
+    take: 10000,
   });
-  const max = (latest as Array<{ sku: string }>).reduce((highest: number, item: { sku: string }) => {
+  const used = new Set<number>();
+  for (const item of existing as Array<{ sku: string }>) {
     const match = item.sku.match(/^CBUK(\d{5})$/i);
-    return match ? Math.max(highest, Number(match[1])) : highest;
-  }, 0);
-  return `CBUK${String(max + 1).padStart(5, "0")}`;
+    if (match) used.add(Number(match[1]));
+  }
+  let next = 1;
+  while (used.has(next)) next += 1;
+  return `CBUK${String(next).padStart(5, "0")}`;
 }
 
 function relationPayload(input: ProductWriteInput) {

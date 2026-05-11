@@ -654,31 +654,53 @@ async function ensureEbayPublishingDatabaseSchema() {
   return ebayPublishingSchemaPromise;
 }
 
-const DEFAULT_EBAY_TEMPLATE = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222; line-height: 1.5; max-width: 900px; margin: 0 auto; border: 1px solid #e5e7eb; background: #ffffff;">
+const DEFAULT_EBAY_TEMPLATE = `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #1f2937; line-height: 1.55; max-width: 920px; margin: 0 auto; border: 1px solid #dbe3ec; background: #ffffff;">
   <div style="background: #2D4F7A; padding: 18px 22px; color: #ffffff;">
-    <h1 style="margin: 0; font-size: 22px; line-height: 1.3;">{{productTitle}}</h1>
-    <p style="margin: 6px 0 0; color: #f4f4f4;">Industrial equipment supplied by Combay Limited</p>
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        <td style="vertical-align:middle; width:180px;"><img src="https://combay-website-lt8v.vercel.app/images/combay-logo-white.svg" alt="Combay Limited" style="max-width:160px; height:auto; display:block;" /></td>
+        <td style="vertical-align:middle; text-align:right; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:#f6e7c8;">Industrial equipment · Sourcing · Supply</td>
+      </tr>
+    </table>
+    <h1 style="margin: 16px 0 0; font-size: 23px; line-height: 1.25; color:#ffffff;">{{productTitle}}</h1>
+    <p style="margin: 7px 0 0; color: #eef4fb; font-size: 13px;">Professional industrial, automation and technical equipment supplied by Combay Limited.</p>
   </div>
-  <div style="height: 4px; background: #E8A44A;"></div>
+  <div style="height: 5px; background: #E8A44A;"></div>
   <div style="padding: 22px;">
-    <h2 style="color: #2D4F7A; font-size: 18px; margin-top: 0;">Product Overview</h2>
-    <p>{{overview}}</p>
-    <h2 style="color: #2D4F7A; font-size: 18px;">Key Details</h2>
-    {{keyDetailsTable}}
-    <h2 style="color: #2D4F7A; font-size: 18px;">Description</h2>
-    <p>{{description}}</p>
-    <h2 style="color: #2D4F7A; font-size: 18px;">Technical Specifications</h2>
-    {{specificationsTable}}
-    <h2 style="color: #2D4F7A; font-size: 18px;">Condition & Testing</h2>
-    <p>{{conditionDescription}}</p>
-    <h2 style="color: #2D4F7A; font-size: 18px;">What Is Included</h2>
-    <p>{{includedItems}}</p>
-    <h2 style="color: #2D4F7A; font-size: 18px;">Shipping & Returns</h2>
-    <p>{{shippingSummary}}</p>
-    <div style="margin-top: 24px; padding: 14px; background: #f8fafc; border-left: 4px solid #E8A44A;">
-      <strong>About Combay Limited</strong>
-      <p style="margin-bottom: 0;">Combay Limited supplies industrial automation, electrical, laboratory, and technical equipment to businesses, engineers, resellers, and procurement teams.</p>
+    <div style="margin: 0 0 18px; padding: 14px 16px; background:#f8fafc; border-left:4px solid #E8A44A;">
+      <strong style="color:#2D4F7A;">Combay SKU:</strong> {{sku}}<br/>
+      <span style="color:#4b5563;">Please review the full description, condition notes and images before purchase. Contact Combay if you need compatibility confirmation.</span>
     </div>
+
+    <h2 style="color: #2D4F7A; font-size: 18px; margin: 0 0 8px;">Product Overview</h2>
+    <p style="margin-top:0;">{{overview}}</p>
+
+    <h2 style="color: #2D4F7A; font-size: 18px; margin-bottom: 8px;">Key Details</h2>
+    {{keyDetailsTable}}
+
+    <h2 style="color: #2D4F7A; font-size: 18px; margin-bottom: 8px;">Description</h2>
+    <p>{{description}}</p>
+
+    <h2 style="color: #2D4F7A; font-size: 18px; margin-bottom: 8px;">Technical Specifications</h2>
+    {{specificationsTable}}
+
+    <h2 style="color: #2D4F7A; font-size: 18px; margin-bottom: 8px;">Condition & Testing</h2>
+    <p>{{conditionDescription}}</p>
+
+    <h2 style="color: #2D4F7A; font-size: 18px; margin-bottom: 8px;">What Is Included</h2>
+    <p>{{includedItems}}</p>
+
+    <h2 style="color: #2D4F7A; font-size: 18px; margin-bottom: 8px;">Shipping, Dispatch & Returns</h2>
+    <p>{{shippingSummary}}</p>
+    <p style="font-size:13px;color:#4b5563;">Goods are packed for courier dispatch with serial numbers recorded before shipment where applicable. Returns and warranty terms apply as stated in the listing and invoice.</p>
+
+    <div style="margin-top: 24px; padding: 16px; background: #f8fafc; border: 1px solid #e5e7eb;">
+      <strong style="display:block;color:#2D4F7A;font-size:16px;margin-bottom:6px;">About Combay Limited</strong>
+      <p style="margin:0;color:#374151;">Combay Limited supplies industrial automation, electrical, laboratory and technical equipment to businesses, engineers, resellers and procurement teams. We focus on practical product information, clear condition notes and professional B2B fulfilment.</p>
+    </div>
+  </div>
+  <div style="padding: 14px 22px; background:#2D4F7A; color:#ffffff; font-size:12px;">
+    <strong>Combay Limited</strong> · Industrial equipment supply, sourcing and asset recovery · sales@combay.co.uk
   </div>
 </div>`;
 
@@ -804,15 +826,24 @@ export async function ensureEbayPublishingDefaults() {
   await ensureEbayPublishingDatabaseSchema();
   await prisma.product.updateMany({ where: { ebayConditionEnum: "USED" }, data: { ebayConditionEnum: "USED_EXCELLENT", ebayConditionId: "3000" } }).catch(() => null);
   const template = await prisma.ebayDescriptionTemplate.findFirst({ where: { isDefault: true } });
-  const defaultTemplate = template || await prisma.ebayDescriptionTemplate.create({
-    data: {
-      name: "Combay default eBay template",
-      description: "Professional eBay-safe Combay branded listing template.",
-      html: DEFAULT_EBAY_TEMPLATE,
-      isDefault: true,
-      isSystem: true,
-    },
-  });
+  const defaultTemplate = template
+    ? await prisma.ebayDescriptionTemplate.update({
+        where: { id: template.id },
+        data: template.isSystem ? {
+          name: "Combay default eBay template",
+          description: "Professional eBay-safe Combay branded listing template with logo, slogan and B2B sections.",
+          html: DEFAULT_EBAY_TEMPLATE,
+        } : {},
+      })
+    : await prisma.ebayDescriptionTemplate.create({
+        data: {
+          name: "Combay default eBay template",
+          description: "Professional eBay-safe Combay branded listing template with logo, slogan and B2B sections.",
+          html: DEFAULT_EBAY_TEMPLATE,
+          isDefault: true,
+          isSystem: true,
+        },
+      });
 
   const location = await prisma.ebayInventoryLocation.findFirst({ where: { isDefault: true } });
   const envDispatchPostcode = ebayDispatchPostcodeFromEnv();
@@ -893,8 +924,8 @@ export async function getEbayPublishingSettings() {
       const [templates, locations, logs, jobs] = await Promise.all([
         prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] }),
         prisma.ebayInventoryLocation.findMany({ orderBy: [{ isDefault: "desc" }, { name: "asc" }] }),
-        prisma.ebaySyncLog.findMany({ orderBy: { startedAt: "desc" }, take: 25 }),
-        prisma.ebayPublishJob.findMany({ orderBy: { queuedAt: "desc" }, take: 25 }),
+        prisma.ebaySyncLog.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
+        prisma.ebayPublishJob.findMany({ orderBy: { queuedAt: "desc" }, take: 10 }),
       ]);
 
       const options: EbayPublishingOptionState = {
@@ -1142,8 +1173,8 @@ export async function getEbayProductPublishingState(productId: string) {
     await ensureEbayPublishingDefaults();
     const product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
-    const logs = await prisma.ebaySyncLog.findMany({ where: { productId: product.id }, orderBy: { startedAt: "desc" }, take: 20 });
-    const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: product.id }, orderBy: { queuedAt: "desc" }, take: 10 });
+    const logs = await prisma.ebaySyncLog.findMany({ where: { productId: product.id }, orderBy: { startedAt: "desc" }, take: 8 });
+    const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: product.id }, orderBy: { queuedAt: "desc" }, take: 5 });
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
     const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
     const templates = await prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] });

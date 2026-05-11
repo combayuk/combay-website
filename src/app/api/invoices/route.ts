@@ -199,6 +199,27 @@ export async function POST(request: NextRequest) {
       const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
       if (!order) throw new Error("Order not found");
 
+      const sourceInvoice = order.items.length ? null : await prisma.invoice.findFirst({
+        where: { orderId: order.id, lines: { some: {} } },
+        include: { lines: { orderBy: { sortOrder: "asc" } } },
+        orderBy: { createdAt: "asc" },
+      });
+      const sourceItems = order.items.length
+        ? order.items.map((item) => ({
+            title: item.title,
+            sku: item.sku,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            lineTotal: item.lineTotal,
+          }))
+        : (sourceInvoice?.lines ?? []).map((line, index) => ({
+            title: line.description || line.sku || `Invoice line ${index + 1}`,
+            sku: line.sku || `DOC-${sourceInvoice?.documentNumber || order.orderNumber}-${index + 1}`,
+            quantity: Number(line.quantity || 1),
+            unitPrice: line.unitPrice,
+            lineTotal: line.lineTotal,
+          }));
+
       const orderDocType: InvoiceType =
         type === "PAID_INVOICE" ? "PAID_INVOICE" :
         type === "PACKING_LIST" ? "PACKING_LIST" :
@@ -214,6 +235,7 @@ export async function POST(request: NextRequest) {
       const paid = isPaidDoc ? total : money(body.amountPaid ?? 0);
       const balanceDue = Math.max(money(total - paid), 0);
       const status = isPackingList ? "DRAFT" : isPaidDoc && balanceDue === 0 ? "PAID" : "AWAITING_PAYMENT";
+      if (!sourceItems.length) throw new Error("Cannot create this document because the paid order/proforma has no line items to snapshot.");
 
       let invoice = await prisma.invoice.create({
         data: {
@@ -239,7 +261,7 @@ export async function POST(request: NextRequest) {
           notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}. No loose batteries.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : orderDocType === "PACKING_LIST" ? `Packing list generated from order ${order.orderNumber}. No loose batteries.` : `Document generated from order ${order.orderNumber}.`),
           paymentTerms: body.paymentTerms ?? defaultTerms(orderDocType),
           lines: {
-            create: order.items.map((item, index) => {
+            create: sourceItems.map((item, index) => {
               const itemTitle = String(item.title || item.sku || `Order item ${index + 1}`).trim();
               const description = orderDocType === "COMMERCIAL_INVOICE"
                 ? `${itemTitle}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, ImagePlus, Plus, RotateCcw, Save, Sparkles, Star, Trash2, Truck, Video } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Eye, FileText, ImagePlus, Plus, Rocket, RotateCcw, Save, ShieldCheck, Sparkles, Star, Trash2, Truck, Video } from "lucide-react";
 import { CATEGORIES, type CatalogProduct, type ConditionCode } from "@/lib/catalog";
 import { CONDITION_OPTIONS, createBlankAdminProduct, slugifyProductTitle, type AdminProduct, type AdminProductStatus } from "@/lib/adminCatalog";
 import { generateProductContent } from "@/lib/productContentAssistant";
@@ -344,6 +344,20 @@ export default function ProductEditor({ mode, productId }: Props) {
     setTimeout(() => router.push("/admin/products"), 700);
   }
 
+  function triggerEbayAction(action: "validate" | "publish") {
+    if (mode !== "edit" || !product.id) {
+      setMessage("Save the product first before using eBay publish actions.");
+      return;
+    }
+    setTab("ebay");
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("combay-ebay-top-action", { detail: action }));
+    }, 150);
+  }
+
+  const websiteStatusLabel = product.status === "PUBLISHED" ? "Published" : product.status === "ARCHIVED" ? "Archived" : "Draft";
+  const ebayStatusLabel = (product as any).ebayPublishStatus === "PUBLISHED" ? "Published" : (product as any).ebayListingId ? "Listed" : (product as any).ebayValidationErrorsJson?.valid ? "Ready" : "Not listed";
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "basic", label: "Basic info" },
     { id: "content", label: "Content & specs" },
@@ -369,19 +383,26 @@ export default function ProductEditor({ mode, productId }: Props) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <section className="sticky top-0 z-30 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-start gap-3 min-w-0">
             <Link href="/admin/products" className="mt-1 text-gray-400 hover:text-navy-950 p-1"><ArrowLeft size={18} /></Link>
             <div className="min-w-0">
               <p className="font-mono text-[11px] tracking-widest uppercase text-gray-400">Product editor</p>
-              <h1 className="font-display font-900 text-navy-950 text-2xl truncate">{mode === "new" ? "Add product" : "Edit product"}</h1>
-              <p className="text-gray-500 text-xs mt-1 font-mono">SKU: {product.sku || "Not set"} · {product.status}</p>
+              <h1 className="font-display font-900 text-navy-950 text-xl truncate">{product.title || (mode === "new" ? "Add product" : "Edit product")}</h1>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-900">
+                <span className="rounded-full bg-slate-50 px-2.5 py-1 font-mono text-accent">SKU: {product.sku || "Not set"}</span>
+                <span className={`rounded-full px-2.5 py-1 ${product.status === "PUBLISHED" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>Website: {websiteStatusLabel}</span>
+                <span className={`rounded-full px-2.5 py-1 ${(product as any).ebayPublishStatus === "PUBLISHED" ? "bg-green-50 text-green-700" : "bg-slate-50 text-slate-700"}`}>eBay: {ebayStatusLabel}</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary text-xs py-2"><Save size={14} /> Save draft</button>
-            <button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary text-xs py-2">Publish product →</button>
+            <button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary text-xs py-2">Publish product</button>
+            {product.slug && <a href={`/shop/${product.slug}`} target="_blank" rel="noreferrer" className="btn-secondary text-xs py-2"><Eye size={14} /> Preview</a>}
+            <button type="button" onClick={() => triggerEbayAction("validate")} className="btn-secondary text-xs py-2"><ShieldCheck size={14} /> Validate eBay</button>
+            <button type="button" onClick={() => triggerEbayAction("publish")} className="btn-secondary text-xs py-2"><Rocket size={14} /> {(product as any).ebayListingId ? "Update eBay" : "Publish eBay"}</button>
           </div>
         </div>
       </section>
