@@ -150,6 +150,257 @@ function pickDefault(options: EbayOption[], current?: string | null) {
   return options.find((item) => item.isDefault)?.id || options[0]?.id || current || "";
 }
 
+
+let ebayPublishingSchemaPromise: Promise<void> | null = null;
+
+async function ensureEbayPublishingDatabaseSchema() {
+  if (ebayPublishingSchemaPromise) return ebayPublishingSchemaPromise;
+  ebayPublishingSchemaPromise = (async () => {
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS "EbaySyncConfig" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "environment" TEXT NOT NULL DEFAULT 'production',
+        "marketplaceId" TEXT NOT NULL DEFAULT 'EBAY_GB',
+        "clientId" TEXT,
+        "clientSecret" TEXT,
+        "ruName" TEXT,
+        "refreshToken" TEXT,
+        "accessToken" TEXT,
+        "accessTokenExpiresAt" TIMESTAMP(3),
+        "lastSyncAt" TIMESTAMP(3),
+        "syncCursorPage" INTEGER NOT NULL DEFAULT 1,
+        "syncTotalPages" INTEGER,
+        "syncLastMode" TEXT,
+        "syncLastBatchSize" INTEGER NOT NULL DEFAULT 50,
+        "syncLastStartedAt" TIMESTAMP(3),
+        "syncLastCompletedAt" TIMESTAMP(3),
+        "syncDone" BOOLEAN NOT NULL DEFAULT true,
+        "syncPaused" BOOLEAN NOT NULL DEFAULT false,
+        "syncLastMessage" TEXT,
+        "syncLastError" TEXT,
+        "defaultInventoryLocationKey" TEXT,
+        "defaultPaymentPolicyId" TEXT,
+        "defaultReturnPolicyId" TEXT,
+        "defaultFulfillmentPolicyId" TEXT,
+        "defaultListingDuration" TEXT DEFAULT 'GTC',
+        "defaultSkuPrefix" TEXT DEFAULT 'CBUK',
+        "autoGenerateSku" BOOLEAN NOT NULL DEFAULT true,
+        "autoPublishToEbay" BOOLEAN NOT NULL DEFAULT false,
+        "manualApprovalBeforePublish" BOOLEAN NOT NULL DEFAULT true,
+        "defaultDescriptionTemplateId" TEXT,
+        "defaultConditionMappingJson" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultInventoryLocationKey" TEXT;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultPaymentPolicyId" TEXT;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultReturnPolicyId" TEXT;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultFulfillmentPolicyId" TEXT;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultListingDuration" TEXT DEFAULT 'GTC';`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultSkuPrefix" TEXT DEFAULT 'CBUK';`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "autoGenerateSku" BOOLEAN NOT NULL DEFAULT true;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "autoPublishToEbay" BOOLEAN NOT NULL DEFAULT false;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "manualApprovalBeforePublish" BOOLEAN NOT NULL DEFAULT true;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultDescriptionTemplateId" TEXT;`,
+      `ALTER TABLE IF EXISTS "EbaySyncConfig" ADD COLUMN IF NOT EXISTS "defaultConditionMappingJson" JSONB;`,
+
+      `CREATE TABLE IF NOT EXISTS "EbaySyncLog" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "productId" TEXT,
+        "sku" TEXT,
+        "productTitle" TEXT,
+        "actionType" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'PENDING',
+        "ebayListingId" TEXT,
+        "ebayOfferId" TEXT,
+        "message" TEXT,
+        "errorMessage" TEXT,
+        "rawPayload" JSONB,
+        "retryCount" INTEGER NOT NULL DEFAULT 0,
+        "triggeredBy" TEXT,
+        "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "finishedAt" TIMESTAMP(3)
+      );`,
+      `CREATE INDEX IF NOT EXISTS "EbaySyncLog_productId_idx" ON "EbaySyncLog"("productId");`,
+      `CREATE INDEX IF NOT EXISTS "EbaySyncLog_sku_idx" ON "EbaySyncLog"("sku");`,
+      `CREATE INDEX IF NOT EXISTS "EbaySyncLog_actionType_idx" ON "EbaySyncLog"("actionType");`,
+      `CREATE INDEX IF NOT EXISTS "EbaySyncLog_status_idx" ON "EbaySyncLog"("status");`,
+      `CREATE INDEX IF NOT EXISTS "EbaySyncLog_startedAt_idx" ON "EbaySyncLog"("startedAt");`,
+
+      `CREATE TABLE IF NOT EXISTS "EbayPolicyMapping" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "type" TEXT NOT NULL,
+        "combayKey" TEXT,
+        "ebayPolicyId" TEXT NOT NULL,
+        "ebayPolicyName" TEXT,
+        "marketplaceId" TEXT NOT NULL DEFAULT 'EBAY_GB',
+        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `CREATE INDEX IF NOT EXISTS "EbayPolicyMapping_type_marketplaceId_idx" ON "EbayPolicyMapping"("type", "marketplaceId");`,
+      `CREATE INDEX IF NOT EXISTS "EbayPolicyMapping_combayKey_idx" ON "EbayPolicyMapping"("combayKey");`,
+      `CREATE INDEX IF NOT EXISTS "EbayPolicyMapping_isDefault_idx" ON "EbayPolicyMapping"("isDefault");`,
+
+      `CREATE TABLE IF NOT EXISTS "EbayCategoryMapping" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "combayCategorySlug" TEXT NOT NULL,
+        "combayCategoryName" TEXT,
+        "ebayCategoryId" TEXT NOT NULL,
+        "ebayCategoryName" TEXT,
+        "marketplaceId" TEXT NOT NULL DEFAULT 'EBAY_GB',
+        "confidence" DECIMAL(5,2),
+        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "EbayCategoryMapping_combayCategorySlug_marketplaceId_key" ON "EbayCategoryMapping"("combayCategorySlug", "marketplaceId");`,
+      `CREATE INDEX IF NOT EXISTS "EbayCategoryMapping_ebayCategoryId_idx" ON "EbayCategoryMapping"("ebayCategoryId");`,
+
+      `CREATE TABLE IF NOT EXISTS "EbayAspectMapping" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "ebayCategoryId" TEXT NOT NULL,
+        "combaySpecLabel" TEXT NOT NULL,
+        "ebayAspectName" TEXT NOT NULL,
+        "isRequired" BOOLEAN NOT NULL DEFAULT false,
+        "marketplaceId" TEXT NOT NULL DEFAULT 'EBAY_GB',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "EbayAspectMapping_ebayCategoryId_combaySpecLabel_market_key" ON "EbayAspectMapping"("ebayCategoryId", "combaySpecLabel", "marketplaceId");`,
+      `CREATE INDEX IF NOT EXISTS "EbayAspectMapping_ebayAspectName_idx" ON "EbayAspectMapping"("ebayAspectName");`,
+
+      `CREATE TABLE IF NOT EXISTS "EbayPublishJob" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "productId" TEXT NOT NULL,
+        "sku" TEXT,
+        "action" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'QUEUED',
+        "marketplaceId" TEXT NOT NULL DEFAULT 'EBAY_GB',
+        "payload" JSONB,
+        "errorMessage" TEXT,
+        "attempts" INTEGER NOT NULL DEFAULT 0,
+        "queuedBy" TEXT,
+        "queuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "startedAt" TIMESTAMP(3),
+        "finishedAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `CREATE INDEX IF NOT EXISTS "EbayPublishJob_productId_idx" ON "EbayPublishJob"("productId");`,
+      `CREATE INDEX IF NOT EXISTS "EbayPublishJob_sku_idx" ON "EbayPublishJob"("sku");`,
+      `CREATE INDEX IF NOT EXISTS "EbayPublishJob_action_idx" ON "EbayPublishJob"("action");`,
+      `CREATE INDEX IF NOT EXISTS "EbayPublishJob_status_idx" ON "EbayPublishJob"("status");`,
+      `CREATE INDEX IF NOT EXISTS "EbayPublishJob_queuedAt_idx" ON "EbayPublishJob"("queuedAt");`,
+
+      `CREATE TABLE IF NOT EXISTS "EbayListingRevision" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "productId" TEXT NOT NULL,
+        "sku" TEXT,
+        "action" TEXT NOT NULL,
+        "previousJson" JSONB,
+        "nextJson" JSONB,
+        "reason" TEXT,
+        "createdBy" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `CREATE INDEX IF NOT EXISTS "EbayListingRevision_productId_idx" ON "EbayListingRevision"("productId");`,
+      `CREATE INDEX IF NOT EXISTS "EbayListingRevision_sku_idx" ON "EbayListingRevision"("sku");`,
+      `CREATE INDEX IF NOT EXISTS "EbayListingRevision_createdAt_idx" ON "EbayListingRevision"("createdAt");`,
+
+      `CREATE TABLE IF NOT EXISTS "EbayInventoryLocation" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "key" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "countryCode" TEXT NOT NULL DEFAULT 'GB',
+        "postcode" TEXT,
+        "addressLine1" TEXT,
+        "city" TEXT,
+        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "EbayInventoryLocation_key_key" ON "EbayInventoryLocation"("key");`,
+      `CREATE INDEX IF NOT EXISTS "EbayInventoryLocation_isDefault_idx" ON "EbayInventoryLocation"("isDefault");`,
+      `CREATE INDEX IF NOT EXISTS "EbayInventoryLocation_isActive_idx" ON "EbayInventoryLocation"("isActive");`,
+
+      `CREATE TABLE IF NOT EXISTS "EbayDescriptionTemplate" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "description" TEXT,
+        "html" TEXT NOT NULL,
+        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+        "isSystem" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`,
+      `CREATE INDEX IF NOT EXISTS "EbayDescriptionTemplate_isDefault_idx" ON "EbayDescriptionTemplate"("isDefault");`,
+      `CREATE INDEX IF NOT EXISTS "EbayDescriptionTemplate_isSystem_idx" ON "EbayDescriptionTemplate"("isSystem");`,
+
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayListingId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayOfferId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayInventoryItemSku" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayMarketplaceId" TEXT DEFAULT 'EBAY_GB';`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayCategoryId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayCategoryName" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayPublishStatus" TEXT DEFAULT 'NOT_LISTED';`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayLastPushedAt" TIMESTAMP(3);`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayLastPulledAt" TIMESTAMP(3);`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayLastError" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayExcludedFromSync" BOOLEAN NOT NULL DEFAULT false;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebaySourceOfTruth" TEXT DEFAULT 'COMBAY';`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayConditionId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayConditionEnum" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayFulfillmentPolicyId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayPaymentPolicyId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayReturnPolicyId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayInventoryLocationKey" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayDescriptionHtml" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayDescriptionTemplateId" TEXT;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebaySpecificsJson" JSONB;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayValidationErrorsJson" JSONB;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebaySkuLocked" BOOLEAN NOT NULL DEFAULT false;`,
+      `CREATE INDEX IF NOT EXISTS "Product_ebayPublishStatus_idx" ON "Product"("ebayPublishStatus");`,
+      `CREATE INDEX IF NOT EXISTS "Product_ebayMarketplaceId_idx" ON "Product"("ebayMarketplaceId");`,
+      `CREATE INDEX IF NOT EXISTS "Product_ebayCategoryId_idx" ON "Product"("ebayCategoryId");`,
+      `CREATE INDEX IF NOT EXISTS "Product_ebayExcludedFromSync_idx" ON "Product"("ebayExcludedFromSync");`,
+      `CREATE INDEX IF NOT EXISTS "Product_ebayInventoryItemSku_idx" ON "Product"("ebayInventoryItemSku");`,
+
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebayVariationSku" TEXT;`,
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebayVariationData" JSONB;`,
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebaySku" TEXT;`,
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebayOfferId" TEXT;`,
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebayInventoryItemGroupKey" TEXT;`,
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebayQuantity" INTEGER;`,
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebayPrice" DECIMAL(10,2);`,
+      `ALTER TABLE IF EXISTS "ProductVariant" ADD COLUMN IF NOT EXISTS "ebaySpecificsJson" JSONB;`,
+      `CREATE INDEX IF NOT EXISTS "ProductVariant_ebaySku_idx" ON "ProductVariant"("ebaySku");`,
+      `CREATE INDEX IF NOT EXISTS "ProductVariant_ebayOfferId_idx" ON "ProductVariant"("ebayOfferId");`,
+
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayFulfillmentPolicyId" TEXT;`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayMarketplaceId" TEXT DEFAULT 'EBAY_GB';`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayDomesticShippingServiceCode" TEXT;`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayInternationalShippingServiceCode" TEXT;`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayExcludedLocationsJson" JSONB;`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayHandlingTimeDays" INTEGER;`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayCollectionOnly" BOOLEAN NOT NULL DEFAULT false;`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayFreightRequired" BOOLEAN NOT NULL DEFAULT false;`,
+      `ALTER TABLE IF EXISTS "ShippingPolicy" ADD COLUMN IF NOT EXISTS "ebayMappingStatus" TEXT DEFAULT 'UNMAPPED';`,
+      `CREATE INDEX IF NOT EXISTS "ShippingPolicy_ebayMarketplaceId_idx" ON "ShippingPolicy"("ebayMarketplaceId");`
+    ];
+
+    for (const statement of statements) {
+      await prisma.$executeRawUnsafe(statement);
+    }
+  })().catch((error) => {
+    ebayPublishingSchemaPromise = null;
+    throw error;
+  });
+  return ebayPublishingSchemaPromise;
+}
+
 const DEFAULT_EBAY_TEMPLATE = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222; line-height: 1.5; max-width: 900px; margin: 0 auto; border: 1px solid #e5e7eb; background: #ffffff;">
   <div style="background: #2D4F7A; padding: 18px 22px; color: #ffffff;">
     <h1 style="margin: 0; font-size: 22px; line-height: 1.3;">{{productTitle}}</h1>
@@ -297,6 +548,7 @@ export function validateEbaySafeHtml(html: string) {
 }
 
 export async function ensureEbayPublishingDefaults() {
+  await ensureEbayPublishingDatabaseSchema();
   const template = await prisma.ebayDescriptionTemplate.findFirst({ where: { isDefault: true } });
   const defaultTemplate = template || await prisma.ebayDescriptionTemplate.create({
     data: {
@@ -647,6 +899,7 @@ export async function validateEbayProduct(productId: string) {
 
 export async function queueEbayPublishReview(productId: string) {
   return withDatabase(async () => {
+    await ensureEbayPublishingDefaults();
     const product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
     const validation = validateEbayProductRecord(product);
@@ -718,6 +971,7 @@ export async function repairImportedEbayListings(limit = 100) {
 export async function createOrUpdateEbayTemplate(input: any) {
   return withDatabase(async () => {
     try {
+      await ensureEbayPublishingDatabaseSchema();
       const html = stripUnsafeHtml(String(input.html || DEFAULT_EBAY_TEMPLATE));
       const unsafeErrors = validateEbaySafeHtml(html);
       if (unsafeErrors.length) throw new Error(unsafeErrors.join(" "));

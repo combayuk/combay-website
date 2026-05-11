@@ -1,0 +1,33 @@
+Phase 26.2X.3 — Runtime eBay Publishing Database Bootstrap
+
+This cumulative build keeps Phase 26.2X.2 and adds a safer database bootstrap for the eBay publishing foundation.
+
+Reason:
+- The deployed application was already using its production database connection, but the newly added eBay publishing tables were missing.
+- The local DATABASE_URL is sensitive and should not be copied into chat.
+- The eBay publishing page should not require the user to expose or manually handle the database URL just to create missing eBay foundation tables.
+
+Change:
+- src/lib/ebayPublishing.ts now creates the missing eBay publishing tables/columns at runtime, using the same DATABASE_URL already available to the deployed Vercel app.
+- The bootstrap uses CREATE TABLE IF NOT EXISTS and ALTER TABLE IF EXISTS ... ADD COLUMN IF NOT EXISTS statements, so it is idempotent and safe to run more than once.
+- It covers:
+  - EbayDescriptionTemplate
+  - EbayInventoryLocation
+  - EbayPolicyMapping
+  - EbayCategoryMapping
+  - EbayAspectMapping
+  - EbayPublishJob
+  - EbayListingRevision
+  - EbaySyncLog
+  - outbound publishing columns on EbaySyncConfig
+  - outbound publishing columns on Product/ProductVariant
+  - eBay mapping columns on ShippingPolicy
+
+Result:
+- After deployment, visiting /admin/ebay/publishing should initialise the missing eBay publishing schema automatically against the live app database.
+- The user should not need to paste DATABASE_URL locally for this specific eBay publishing schema bootstrap.
+
+Still true:
+- This does not include live publish-to-eBay yet.
+- The current phase is still the controlled foundation: settings, templates, validation, drafts, queue/review and logs.
+- Live eBay publish worker/API calls should follow after this page and mapping foundation are stable.
