@@ -1,0 +1,13 @@
+Phase 26.2X.10 — eBay Accept-Language Build Hotfix
+
+Fixes Vercel build error introduced in Phase 26.2X.9:
+
+  Cannot find name 'ebayLocaleForMarketplace'
+
+Cause:
+- The REST Inventory API language helper was renamed to ebayContentLanguageForMarketplace while one older Trading API XML request still called ebayLocaleForMarketplace for ErrorLanguage.
+
+Fix:
+- Reintroduced a dedicated ebayLocaleForMarketplace helper for Trading API XML ErrorLanguage values.
+- Keeps the REST Inventory API Accept-Language fix intact: REST calls do not send Accept-Language and continue to use Content-Language where required.
+- No database/Prisma changes.

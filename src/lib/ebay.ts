@@ -121,6 +121,25 @@ function ebayContentLanguageForMarketplace(marketplaceId?: string | null) {
   return languageMap[marketplace] || "en-US";
 }
 
+
+function ebayLocaleForMarketplace(marketplaceId?: string | null) {
+  const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
+  // Trading API XML uses ErrorLanguage values with underscores.
+  // REST Inventory payloads continue to use ebayContentLanguageForMarketplace().
+  const localeMap: Record<string, string> = {
+    EBAY_GB: "en_GB",
+    EBAY_US: "en_US",
+    EBAY_AU: "en_AU",
+    EBAY_CA: "en_CA",
+    EBAY_IE: "en_IE",
+    EBAY_DE: "de_DE",
+    EBAY_FR: "fr_FR",
+    EBAY_IT: "it_IT",
+    EBAY_ES: "es_ES",
+  };
+  return localeMap[marketplace] || "en_US";
+}
+
 function ebaySiteIdForMarketplace(marketplaceId?: string | null) {
   const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
   const siteMap: Record<string, string> = {
