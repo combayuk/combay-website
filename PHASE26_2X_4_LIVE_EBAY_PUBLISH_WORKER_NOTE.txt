@@ -1,0 +1,20 @@
+Phase 26.2X.4 — Controlled live eBay publish/update worker
+
+This cumulative project archive builds on Phase 26.2X.3. It adds the first controlled live single-product eBay publishing path while preserving the existing validation, draft, policy fetching, branded HTML description, logs and safety controls.
+
+Key additions:
+- Product eBay Listing tab now has an explicit "Publish / update live eBay listing" action.
+- The action requires browser confirmation and server-side confirmation before calling eBay.
+- Strict validation now blocks live publish until the product has SKU, price, stock, category, HTTPS image, branded HTML description, inventory location, payment policy, return policy and fulfilment policy.
+- Variation products remain blocked until the dedicated variation-publishing phase.
+- Manual quote / collection-only products remain blocked from live publish until freight/collection policy handling is intentionally reviewed.
+- The live publish worker calls eBay Inventory API in the correct single-product sequence: create/update inventory item, create/update offer, publish offer if no listing ID exists.
+- Existing listing updates use the saved offer/listing mapping and do not create a duplicate listing.
+- Product records store eBay offer ID, listing ID, inventory SKU, last pushed timestamp, status and last error.
+- eBaySyncLog and EbayPublishJob records capture validation, Inventory API steps, errors and success states.
+- A process-approved-job endpoint and admin button were added for queued publish jobs.
+
+Important safety:
+- This phase can create/update a real live eBay listing only after explicit admin confirmation.
+- Do not test on a valuable/live product first. Create a low-value internal test product or use sandbox/very controlled listing details first.
+- Category/aspect suggestion APIs are still a later phase; admin must manually enter the correct eBay category ID and aspects for now.

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileCode2, PackageCheck, Plus, RefreshCw, Save, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileCode2, PackageCheck, PlayCircle, Plus, RefreshCw, Save, Wrench } from "lucide-react";
 
 type Option = { id?: string; value?: string; name?: string; label?: string; isDefault?: boolean };
 
@@ -116,6 +116,7 @@ export default function EbayPublishingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [processingJob, setProcessingJob] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateForm, setTemplateForm] = useState<any>(blankTemplate);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
@@ -200,6 +201,23 @@ export default function EbayPublishingPage() {
     setMessage("New eBay HTML template saved.");
   }
 
+
+  async function processApprovedJob() {
+    const confirmed = window.confirm("This will process the next approved eBay publish job and may create or update a live eBay listing. Continue only after the product has been reviewed.");
+    if (!confirmed) return;
+    setProcessingJob(true);
+    setMessage("Processing next approved eBay publish job…");
+    const response = await fetch("/api/admin/ebay/publishing/jobs/process", { method: "POST" });
+    const result = await response.json().catch(() => ({}));
+    setProcessingJob(false);
+    if (!result.ok) {
+      setMessage(result.error || "Could not process approved eBay publish job.");
+      return;
+    }
+    setMessage(result.processed ? `Processed eBay publish job. Listing ID: ${result.result?.data?.listingId || result.result?.listingId || "see logs"}.` : result.message || "No approved jobs waiting.");
+    await load();
+  }
+
   async function repairImported() {
     setRepairing(true);
     setMessage("Repairing imported eBay listings in a safe local batch. Live eBay listings are not overwritten by this step.");
@@ -227,6 +245,7 @@ export default function EbayPublishingPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={load} className="btn-secondary text-xs py-2"><RefreshCw size={14} /> Refresh / fetch eBay options</button>
+            <button onClick={processApprovedJob} disabled={processingJob || !schemaReady || stats.pendingJobs < 1} className="btn-secondary text-xs py-2"><PlayCircle size={14} /> {processingJob ? "Processing…" : "Process approved publish job"}</button>
             <button onClick={save} disabled={saving || !schemaReady} className="btn-primary text-xs py-2"><Save size={14} /> {saving ? "Saving…" : "Save settings"}</button>
           </div>
         </div>
@@ -312,7 +331,7 @@ export default function EbayPublishingPage() {
               <li>3. Fill category, policies and mapping fields.</li>
               <li>4. Generate the branded eBay description.</li>
               <li>5. Validate and save local eBay draft.</li>
-              <li>6. Queue for manual publish approval only when valid.</li>
+              <li>6. Queue for approval or explicitly publish/update live once validation passes.</li>
             </ol>
           </section>
 
@@ -328,7 +347,7 @@ export default function EbayPublishingPage() {
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2"><CheckCircle2 size={17} className="text-green-600" /><h2 className="font-display text-sm font-900 text-navy-950">Foundation status</h2></div>
-            <div className="mt-3 flex flex-wrap gap-1.5"><StatusBadge>SKU governance</StatusBadge><StatusBadge>Validation</StatusBadge><StatusBadge>Drafts</StatusBadge><StatusBadge>Logs</StatusBadge><StatusBadge>HTML builder</StatusBadge><StatusBadge>Policy dropdowns</StatusBadge></div>
+            <div className="mt-3 flex flex-wrap gap-1.5"><StatusBadge>SKU governance</StatusBadge><StatusBadge>Validation</StatusBadge><StatusBadge>Drafts</StatusBadge><StatusBadge>Logs</StatusBadge><StatusBadge>HTML builder</StatusBadge><StatusBadge>Policy dropdowns</StatusBadge><StatusBadge tone="green">Live single-product publish</StatusBadge></div>
           </section>
         </aside>
       </section>

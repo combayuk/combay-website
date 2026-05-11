@@ -1,0 +1,16 @@
+Phase 26.2X.5 — eBay Category Assistant and Aspect Mapping
+
+Purpose:
+- Admin should not need to go to eBay manually just to find category IDs.
+- Product editor eBay Listing tab now queries eBay Taxonomy from inside Combay.
+- Admin can search eBay categories using product title/brand/MPN/category, view suggested eBay category paths and IDs, then apply one category directly to the product.
+- Applying a category stores the eBay category ID/name on the product and fetches item-specific/aspect metadata for that eBay category.
+- Required/recommended aspects are shown in the product editor.
+- Where Combay already has matching specs such as Brand, Manufacturer, MPN, Model, Type or Product Type, the system auto-maps them into eBay aspects JSON.
+- Validation now blocks missing required eBay aspects when aspect metadata has been fetched.
+
+Important:
+- This phase does not remove live-publish safeguards.
+- Category/aspect selection still requires admin review before live publish.
+- The live publish button remains blocked unless validation passes.
+- No Prisma db push is needed for this phase because it uses existing eBay publishing fields/tables.

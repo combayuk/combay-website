@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { generateEbayDescriptionForProduct, getEbayProductPublishingState, queueEbayPublishReview, saveEbayProductDraft, validateEbayProduct } from "@/lib/ebayPublishing";
+import { applyEbayCategoryToProduct, generateEbayDescriptionForProduct, getEbayProductPublishingState, publishProductToEbay, queueEbayPublishReview, saveEbayProductDraft, suggestEbayCategoriesForProduct, validateEbayProduct } from "@/lib/ebayPublishing";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const result = await getEbayProductPublishingState(params.id);
@@ -15,6 +15,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (action === "generate-description") result = await generateEbayDescriptionForProduct(params.id, body.templateId);
   else if (action === "validate") result = await validateEbayProduct(params.id);
   else if (action === "queue-review") result = await queueEbayPublishReview(params.id);
+  else if (action === "live-publish") result = await publishProductToEbay(params.id, { confirmLivePublish: Boolean(body.confirmLivePublish), triggeredBy: "admin" });
+  else if (action === "suggest-categories") result = await suggestEbayCategoriesForProduct(params.id, body.query, body.marketplaceId);
+  else if (action === "apply-category") result = await applyEbayCategoryToProduct(params.id, { categoryId: body.categoryId, categoryName: body.categoryName, categoryPath: body.categoryPath, marketplaceId: body.marketplaceId });
   else result = await saveEbayProductDraft(params.id, body.product || body);
 
   if (!result.ok) return Response.json({ ok: false, error: result.reason }, { status: 202 });

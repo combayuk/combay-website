@@ -98,6 +98,249 @@ async function getJsonOrEmpty(url: string, token: string, marketplaceId?: string
   return body;
 }
 
+
+type EbayCategorySuggestionResult = {
+  categoryId: string;
+  categoryName: string;
+  categoryPath: string;
+  leafCategoryTreeNode?: boolean;
+  relevancy?: string;
+  categoryTreeId?: string;
+  raw?: any;
+};
+
+type EbayAspectMetadata = {
+  name: string;
+  required: boolean;
+  recommended: boolean;
+  selectionOnly: boolean;
+  mode?: string;
+  usage?: string;
+  values: string[];
+  raw?: any;
+};
+
+function cleanCategoryQuery(value: unknown) {
+  return String(value || "")
+    .replace(/[^a-zA-Z0-9\-\/\.\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 140);
+}
+
+function categorySuggestionQueryForProduct(product: EbayProductRecord, query?: string | null) {
+  const manual = cleanCategoryQuery(query);
+  if (manual) return manual;
+  return cleanCategoryQuery([
+    product.title,
+    product.brand || product.manufacturer,
+    product.model,
+    product.mpn,
+    product.category?.name,
+    product.category?.slug,
+  ].filter(Boolean).join(" "));
+}
+
+function normaliseAspectKey(value: unknown) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function productSpecLookup(product: EbayProductRecord) {
+  const lookup = new Map<string, string>();
+  const add = (key: string, value: any) => {
+    const cleanKey = normaliseAspectKey(key);
+    const text = String(value ?? "").trim();
+    if (cleanKey && text && !lookup.has(cleanKey)) lookup.set(cleanKey, text);
+  };
+  add("Brand", product.brand || product.manufacturer);
+  add("Manufacturer", product.manufacturer || product.brand);
+  add("MPN", product.mpn);
+  add("Model", product.model);
+  add("Product Type", product.category?.name);
+  add("Type", product.category?.name);
+  add("Condition", conditionLabel(product.condition));
+  (product.specs || []).forEach((spec: any) => {
+    add(spec.label || spec.name, spec.value);
+  });
+  return lookup;
+}
+
+function selectAllowedAspectValue(rawValue: string, aspect: EbayAspectMetadata) {
+  const value = String(rawValue || "").trim();
+  if (!value) return "";
+  if (!aspect.values.length) return value;
+  const exact = aspect.values.find((candidate) => candidate.toLowerCase() === value.toLowerCase());
+  if (exact) return exact;
+  const loose = aspect.values.find((candidate) => normaliseAspectKey(candidate) === normaliseAspectKey(value));
+  if (loose) return loose;
+  return aspect.selectionOnly ? "" : value;
+}
+
+function autoMapAspects(product: EbayProductRecord, aspects: EbayAspectMetadata[], existing?: any) {
+  const lookup = productSpecLookup(product);
+  const output: Record<string, any> = existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
+  delete output._raw;
+  const aliases: Record<string, string[]> = {
+    brand: ["brand", "manufacturer", "make"],
+    manufacturer: ["manufacturer", "brand", "make"],
+    mpn: ["mpn", "manufacturerpartnumber", "partnumber", "modelnumber", "model"],
+    model: ["model", "modelnumber", "mpn", "partnumber"],
+    type: ["type", "producttype", "category"],
+    producttype: ["producttype", "type", "category"],
+    condition: ["condition"],
+  };
+
+  aspects.forEach((aspect) => {
+    if (!aspect.name || output[aspect.name]?.length) return;
+    const key = normaliseAspectKey(aspect.name);
+    const possibleKeys = [key, ...(aliases[key] || [])];
+    let found = "";
+    for (const candidate of possibleKeys) {
+      const value = lookup.get(candidate);
+      if (value) { found = value; break; }
+    }
+    const safeValue = selectAllowedAspectValue(found, aspect);
+    if (safeValue) output[aspect.name] = [safeValue];
+  });
+
+  output._requiredAspects = aspects.filter((aspect) => aspect.required).map((aspect) => aspect.name);
+  output._recommendedAspects = aspects.filter((aspect) => aspect.recommended && !aspect.required).map((aspect) => aspect.name).slice(0, 40);
+  output._aspectMetadata = aspects.slice(0, 80).map((aspect) => ({ name: aspect.name, required: aspect.required, recommended: aspect.recommended, selectionOnly: aspect.selectionOnly, values: aspect.values.slice(0, 80) }));
+  output._generatedBy = "Combay eBay category assistant";
+  return output;
+}
+
+function mapTaxonomySuggestion(item: any, categoryTreeId: string): EbayCategorySuggestionResult | null {
+  const node = item?.category || item?.categoryTreeNode || item?.categorySuggestion?.category;
+  const categoryId = node?.categoryId || item?.category?.categoryId || item?.categoryId;
+  const categoryName = node?.categoryName || item?.category?.categoryName || item?.categoryName;
+  if (!categoryId || !categoryName) return null;
+  const ancestors = item?.categoryTreeNodeAncestors || item?.category?.categoryTreeNodeAncestors || [];
+  const path = [...ancestors].reverse().map((ancestor: any) => ancestor.categoryName).filter(Boolean).concat(categoryName).join(" > ");
+  return {
+    categoryId: String(categoryId),
+    categoryName: String(categoryName),
+    categoryPath: path || String(categoryName),
+    leafCategoryTreeNode: item?.leafCategoryTreeNode === true || node?.leafCategoryTreeNode === true,
+    relevancy: item?.relevancy,
+    categoryTreeId,
+    raw: item,
+  };
+}
+
+function mapTaxonomyAspect(item: any): EbayAspectMetadata | null {
+  const name = item?.localizedAspectName || item?.aspectName || item?.name;
+  if (!name) return null;
+  const constraint = item?.aspectConstraint || {};
+  const usage = String(constraint.aspectUsage || item?.aspectUsage || "").toUpperCase();
+  const mode = String(constraint.aspectMode || item?.aspectMode || "").toUpperCase();
+  const required = constraint.aspectRequired === true || usage === "REQUIRED";
+  const recommended = required || usage === "RECOMMENDED";
+  const values: string[] = Array.isArray(item?.aspectValues)
+    ? item.aspectValues.map((value: any) => String(value?.localizedValue || value?.value || value || "").trim()).filter(Boolean)
+    : [];
+  return {
+    name: String(name),
+    required,
+    recommended,
+    selectionOnly: mode === "SELECTION_ONLY" || Boolean(constraint.aspectMode && mode.includes("SELECTION")),
+    mode,
+    usage,
+    values: Array.from(new Set(values)).slice(0, 250),
+    raw: item,
+  };
+}
+
+async function getEbayDefaultCategoryTreeId(marketplaceId = MARKETPLACE) {
+  const { token, config } = await getEbayAccessToken();
+  const marketplace = marketplaceId || config.marketplaceId || MARKETPLACE;
+  const root = apiRootForEnvironment(config.environment);
+  const data = await getJsonOrEmpty(`${root}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${encodeURIComponent(marketplace)}`, token, marketplace);
+  const categoryTreeId = data?.categoryTreeId || data?.categoryTree?.categoryTreeId;
+  if (!categoryTreeId) throw new Error("eBay did not return a category tree ID for this marketplace.");
+  return { categoryTreeId: String(categoryTreeId), categoryTreeVersion: data?.categoryTreeVersion || data?.categoryTree?.categoryTreeVersion || null, marketplaceId: marketplace };
+}
+
+export async function suggestEbayCategoriesForProduct(productId: string, query?: string | null, marketplaceId?: string | null) {
+  return withDatabase(async () => {
+    await ensureEbayPublishingDefaults();
+    const product = await getProductForEbay(productId);
+    if (!product) throw new Error("Product not found.");
+    const marketplace = marketplaceId || product.ebayMarketplaceId || MARKETPLACE;
+    const searchQuery = categorySuggestionQueryForProduct(product, query);
+    if (!searchQuery) throw new Error("Add a product title, brand, model or search phrase before searching eBay categories.");
+    const { token, config } = await getEbayAccessToken();
+    const tree = await getEbayDefaultCategoryTreeId(marketplace);
+    const root = apiRootForEnvironment(config.environment);
+    const url = `${root}/commerce/taxonomy/v1/category_tree/${encodeURIComponent(tree.categoryTreeId)}/get_category_suggestions?q=${encodeURIComponent(searchQuery)}`;
+    const data = await getJsonOrEmpty(url, token, marketplace);
+    const suggestions = (data?.categorySuggestions || [])
+      .map((item: any) => mapTaxonomySuggestion(item, tree.categoryTreeId))
+      .filter(Boolean)
+      .slice(0, 12);
+    await prisma.ebaySyncLog.create({ data: { productId: product.id, sku: product.sku, productTitle: product.title, actionType: "EBAY_CATEGORY_SUGGESTIONS", status: suggestions.length ? "SUCCESS" : "MANUAL_REVIEW", message: suggestions.length ? `Fetched ${suggestions.length} eBay category suggestions.` : "No eBay category suggestions were returned for this query.", rawPayload: { query: searchQuery, marketplace, suggestions }, finishedAt: new Date() } }).catch(() => null);
+    return { query: searchQuery, marketplaceId: marketplace, categoryTreeId: tree.categoryTreeId, suggestions };
+  });
+}
+
+export async function fetchEbayAspectsForCategory(categoryId: string, marketplaceId = MARKETPLACE) {
+  const marketplace = marketplaceId || MARKETPLACE;
+  const { token, config } = await getEbayAccessToken();
+  const tree = await getEbayDefaultCategoryTreeId(marketplace);
+  const root = apiRootForEnvironment(config.environment);
+  const url = `${root}/commerce/taxonomy/v1/category_tree/${encodeURIComponent(tree.categoryTreeId)}/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`;
+  const data = await getJsonOrEmpty(url, token, marketplace);
+  const aspects = (data?.aspects || []).map(mapTaxonomyAspect).filter(Boolean) as EbayAspectMetadata[];
+  return { marketplaceId: marketplace, categoryTreeId: tree.categoryTreeId, categoryTreeVersion: tree.categoryTreeVersion, aspects };
+}
+
+export async function applyEbayCategoryToProduct(productId: string, input: { categoryId: string; categoryName?: string; categoryPath?: string; marketplaceId?: string | null }) {
+  return withDatabase(async () => {
+    await ensureEbayPublishingDefaults();
+    const product = await getProductForEbay(productId);
+    if (!product) throw new Error("Product not found.");
+    const categoryId = String(input.categoryId || "").trim();
+    if (!categoryId) throw new Error("Select a valid eBay category first.");
+    const marketplace = input.marketplaceId || product.ebayMarketplaceId || MARKETPLACE;
+    const aspectResult = await fetchEbayAspectsForCategory(categoryId, marketplace);
+    const categoryName = String(input.categoryName || input.categoryPath || categoryId).trim();
+    const mergedSpecifics = autoMapAspects(product, aspectResult.aspects, product.ebaySpecificsJson);
+    mergedSpecifics._categoryId = categoryId;
+    mergedSpecifics._categoryName = categoryName;
+    mergedSpecifics._categoryPath = input.categoryPath || categoryName;
+    mergedSpecifics._categoryTreeId = aspectResult.categoryTreeId;
+    mergedSpecifics._marketplaceId = marketplace;
+
+    if (product.category?.slug) {
+      await prisma.ebayCategoryMapping.upsert({
+        where: { combayCategorySlug_marketplaceId: { combayCategorySlug: product.category.slug, marketplaceId: marketplace } },
+        create: { combayCategorySlug: product.category.slug, combayCategoryName: product.category.name, ebayCategoryId: categoryId, ebayCategoryName: categoryName, marketplaceId: marketplace, confidence: 90, isDefault: true },
+        update: { ebayCategoryId: categoryId, ebayCategoryName: categoryName, confidence: 90, isDefault: true },
+      }).catch(() => null);
+    }
+
+    await Promise.all(aspectResult.aspects.slice(0, 80).map((aspect) => {
+      const lookup = productSpecLookup(product);
+      const matched = lookup.has(normaliseAspectKey(aspect.name)) ? aspect.name : null;
+      if (!matched) return Promise.resolve(null);
+      return prisma.ebayAspectMapping.upsert({
+        where: { ebayCategoryId_combaySpecLabel_marketplaceId: { ebayCategoryId: categoryId, combaySpecLabel: matched, marketplaceId: marketplace } },
+        create: { ebayCategoryId: categoryId, combaySpecLabel: matched, ebayAspectName: aspect.name, isRequired: aspect.required, marketplaceId: marketplace },
+        update: { ebayAspectName: aspect.name, isRequired: aspect.required },
+      }).catch(() => null);
+    }));
+
+    const validation = validateEbayProductRecord({ ...product, ebayMarketplaceId: marketplace, ebayCategoryId: categoryId, ebayCategoryName: categoryName, ebaySpecificsJson: mergedSpecifics });
+    const updated = await prisma.product.update({ where: { id: product.id }, data: { ebayMarketplaceId: marketplace, ebayCategoryId: categoryId, ebayCategoryName: categoryName, ebaySpecificsJson: mergedSpecifics, ebayValidationErrorsJson: validation, ebayPublishStatus: validation.valid ? "READY_TO_PUBLISH" : "VALIDATION_FAILED" } });
+    await prisma.ebaySyncLog.create({ data: { productId: product.id, sku: updated.sku, productTitle: updated.title, actionType: "APPLY_EBAY_CATEGORY", status: "SUCCESS", message: `Applied eBay category ${categoryName} (${categoryId}) and fetched ${aspectResult.aspects.length} aspect definitions.`, rawPayload: { categoryId, categoryName, categoryPath: input.categoryPath, validation, aspects: aspectResult.aspects }, finishedAt: new Date() } }).catch(() => null);
+    return { product: updated, validation, category: { categoryId, categoryName, categoryPath: input.categoryPath || categoryName }, aspects: aspectResult.aspects, specifics: mergedSpecifics };
+  });
+}
+
 async function fetchLiveEbayPublishingOptions(marketplaceId = MARKETPLACE): Promise<Partial<EbayPublishingOptionState>> {
   const { token, config } = await getEbayAccessToken();
   const marketplace = marketplaceId || config.marketplaceId || MARKETPLACE;
@@ -772,16 +1015,24 @@ export function validateEbayProductRecord(product: EbayProductRecord) {
   if (product.priceOnRequest || product.price === null || product.price === undefined) errors.push("A fixed product price is required for eBay publishing. POA products should remain quote-only.");
   if (Number(product.stockQty ?? 0) <= 0) errors.push("Stock quantity must be greater than zero before publishing.");
   if (product.ebayExcludedFromSync || product.syncExcluded) errors.push("Product is excluded from eBay sync/publishing.");
-  if (!product.ebayCategoryId) errors.push("eBay category ID is required.");
-  if (!product.ebayFulfillmentPolicyId && !product.shippingPolicy?.ebayFulfillmentPolicyId) warnings.push("No eBay fulfilment policy is mapped yet. Select one before live publish.");
-  if (!product.ebayPaymentPolicyId) warnings.push("No eBay payment policy is selected yet.");
-  if (!product.ebayReturnPolicyId) warnings.push("No eBay return policy is selected yet.");
-  if (!product.ebayInventoryLocationKey) warnings.push("No eBay inventory location is selected yet.");
-  if (product.shippingManualQuoteRequired || product.shippingCollectionOnly || product.shippingPolicy?.manualQuoteRequired) warnings.push("Product uses manual quote/collection-only shipping. Use freight/collection policy mapping before live eBay publish.");
+  if (!product.ebayCategoryId) errors.push("eBay category ID is required. Use the eBay category assistant to select a category from eBay, rather than going to eBay manually.");
+  const specifics = product.ebaySpecificsJson && typeof product.ebaySpecificsJson === "object" && !Array.isArray(product.ebaySpecificsJson) ? product.ebaySpecificsJson : {};
+  const requiredAspects = Array.isArray(specifics._requiredAspects) ? specifics._requiredAspects : [];
+  requiredAspects.forEach((aspectName: string) => {
+    const value = specifics[aspectName];
+    const hasValue = Array.isArray(value) ? value.some((item) => String(item || "").trim()) : Boolean(String(value || "").trim());
+    if (!hasValue) errors.push(`Required eBay item specific missing: ${aspectName}.`);
+  });
+  if (!requiredAspects.length && product.ebayCategoryId) warnings.push("eBay category is selected but required aspect metadata has not been fetched yet. Use Apply category / Refresh aspects before live publish.");
+  if (!product.ebayFulfillmentPolicyId && !product.shippingPolicy?.ebayFulfillmentPolicyId) errors.push("No eBay fulfilment policy is mapped yet. Select one before live publish.");
+  if (!product.ebayPaymentPolicyId) errors.push("No eBay payment policy is selected yet.");
+  if (!product.ebayReturnPolicyId) errors.push("No eBay return policy is selected yet.");
+  if (!product.ebayInventoryLocationKey) errors.push("No eBay inventory location is selected yet.");
+  if (product.shippingManualQuoteRequired || product.shippingCollectionOnly || product.shippingPolicy?.manualQuoteRequired) errors.push("Product uses manual quote/collection-only shipping. Use freight/collection policy mapping before live eBay publish.");
   errors.push(...imageValidation(product.images || []));
 
   const html = String(product.ebayDescriptionHtml || "");
-  if (!html.trim()) warnings.push("Branded eBay HTML description has not been generated yet.");
+  if (!html.trim()) errors.push("Branded eBay HTML description has not been generated yet.");
   errors.push(...validateEbaySafeHtml(html));
 
   const variants = Array.isArray(product.variants) ? product.variants : [];
@@ -917,6 +1168,329 @@ export async function queueEbayPublishReview(productId: string) {
     await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "UPDATE_PENDING", ebaySkuLocked: true } });
     await prisma.ebaySyncLog.create({ data: { productId: product.id, sku: product.sku, productTitle: product.title, actionType: "QUEUE_EBAY_PUBLISH_REVIEW", status: "SUCCESS", message: "Product queued for manual approval before live eBay publishing.", rawPayload: { jobId: job.id, validation }, finishedAt: new Date() } });
     return { job, validation };
+  });
+}
+
+
+function marketplaceCurrency(marketplaceId?: string | null) {
+  const marketplace = String(marketplaceId || MARKETPLACE).toUpperCase();
+  const map: Record<string, string> = {
+    EBAY_GB: "GBP",
+    EBAY_IE: "EUR",
+    EBAY_DE: "EUR",
+    EBAY_FR: "EUR",
+    EBAY_IT: "EUR",
+    EBAY_ES: "EUR",
+    EBAY_US: "USD",
+    EBAY_CA: "CAD",
+    EBAY_AU: "AUD",
+  };
+  return map[marketplace] || "GBP";
+}
+
+function moneyValue(value: any) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number <= 0) return "0.00";
+  return number.toFixed(2);
+}
+
+function normaliseAspectValues(value: any): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 20);
+  if (value === null || value === undefined) return [];
+  const text = String(value).trim();
+  return text ? [text] : [];
+}
+
+function ebayAspectsForProduct(product: EbayProductRecord) {
+  const aspects: Record<string, string[]> = {};
+  const setAspect = (name: string, value: any) => {
+    const values = normaliseAspectValues(value);
+    if (values.length) aspects[name] = Array.from(new Set([...(aspects[name] || []), ...values])).slice(0, 20);
+  };
+
+  if (product.ebaySpecificsJson && typeof product.ebaySpecificsJson === "object" && !Array.isArray(product.ebaySpecificsJson)) {
+    Object.entries(product.ebaySpecificsJson).forEach(([key, value]) => {
+      if (!String(key).startsWith("_")) setAspect(key, value);
+    });
+  }
+
+  (product.specs || []).forEach((spec: any) => {
+    const label = String(spec.label || spec.name || "").trim();
+    const value = String(spec.value || "").trim();
+    if (label && value) setAspect(label, value);
+  });
+
+  setAspect("Brand", product.brand || product.manufacturer || "Combay");
+  if (product.mpn) setAspect("MPN", product.mpn);
+  if (product.model) setAspect("Model", product.model);
+  if (product.manufacturer && !aspects.Manufacturer) setAspect("Manufacturer", product.manufacturer);
+  return aspects;
+}
+
+function publicImageUrls(product: EbayProductRecord) {
+  return (product.images || [])
+    .map((image: any) => String(image.url || "").trim())
+    .filter((url: string) => /^https:\/\//i.test(url))
+    .slice(0, 12);
+}
+
+function truncateText(value: any, max = 1000) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function livePublishValidation(product: EbayProductRecord) {
+  const base = validateEbayProductRecord(product);
+  const errors = [...(base.errors || [])];
+  const warnings = [...(base.warnings || [])];
+  const add = (message: string) => { if (!errors.includes(message)) errors.push(message); };
+
+  if (!product.ebayDescriptionHtml?.trim()) add("Generate and save the branded eBay HTML description before live publish.");
+  if (!product.ebayPaymentPolicyId) add("Select a valid eBay payment policy before live publish.");
+  if (!product.ebayReturnPolicyId) add("Select a valid eBay return policy before live publish.");
+  if (!product.ebayFulfillmentPolicyId && !product.shippingPolicy?.ebayFulfillmentPolicyId) add("Select a valid eBay fulfilment policy before live publish.");
+  if (!product.ebayInventoryLocationKey) add("Select an eBay inventory location before live publish.");
+  if (!publicImageUrls(product).length) add("At least one HTTPS product image is required before live publish.");
+  if (product.shippingManualQuoteRequired || product.shippingCollectionOnly || product.shippingPolicy?.manualQuoteRequired) {
+    add("Manual quote or collection-only shipping products are blocked from live publish until a suitable eBay freight/collection fulfilment policy is selected and manually reviewed.");
+  }
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+function ebayErrorMessage(body: any, fallback: string) {
+  const errors = Array.isArray(body?.errors) ? body.errors : [];
+  if (errors.length) {
+    return errors.map((error: any) => [error.errorId, error.message, error.longMessage].filter(Boolean).join(" — ")).join(" | ");
+  }
+  return body?.message || body?.error_description || body?.error || fallback;
+}
+
+async function ebayInventoryApiRequest(path: string, method: string, body?: any, marketplaceId?: string | null) {
+  const { token, config } = await getEbayAccessToken();
+  const marketplace = marketplaceId || config.marketplaceId || MARKETPLACE;
+  const root = apiRootForEnvironment(config.environment);
+  const response = await fetch(`${root}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Content-Language": marketplace === "EBAY_GB" ? "en-GB" : "en-US",
+      "Accept-Language": marketplace === "EBAY_GB" ? "en-GB" : "en-US",
+      "X-EBAY-C-MARKETPLACE-ID": marketplace,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  });
+  const text = await response.text();
+  let parsed: any = {};
+  try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text }; }
+  if (!response.ok) throw new Error(ebayErrorMessage(parsed, `eBay Inventory API ${method} ${path} failed with ${response.status}`));
+  return parsed;
+}
+
+function inventoryItemPayload(product: EbayProductRecord) {
+  const condition = mapConditionToEbay(product);
+  const images = publicImageUrls(product);
+  const payload: any = {
+    availability: {
+      shipToLocationAvailability: {
+        quantity: Math.max(0, Number(product.stockQty || 0)),
+      },
+    },
+    condition: product.ebayConditionEnum || condition.conditionEnum,
+    product: {
+      title: truncateText(product.title, 80),
+      description: truncateText(product.description || product.productOverview || product.title, 4000),
+      aspects: ebayAspectsForProduct(product),
+      imageUrls: images,
+    },
+  };
+  const conditionDescription = truncateText(condition.note || product.ebayConditionDescription, 1000);
+  if (conditionDescription && !["NEW", "LIKE_NEW", "NEW_OTHER", "NEW_WITH_DEFECTS"].includes(String(payload.condition))) payload.conditionDescription = conditionDescription;
+  const weight = Number(product.packedWeightKg || product.weight || 0);
+  if (weight > 0) {
+    payload.packageWeightAndSize = {
+      packageType: "PACKAGE_THICK_ENVELOPE",
+      weight: { value: Number(weight.toFixed(3)), unit: "KILOGRAM" },
+    };
+    const length = Number(product.packedLengthCm || 0);
+    const width = Number(product.packedWidthCm || 0);
+    const height = Number(product.packedHeightCm || 0);
+    if (length > 0 && width > 0 && height > 0) {
+      payload.packageWeightAndSize.dimensions = { length, width, height, unit: "CENTIMETER" };
+    }
+  }
+  return payload;
+}
+
+function offerPayload(product: EbayProductRecord, config: any, sku: string) {
+  const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
+  const fulfillmentPolicyId = product.ebayFulfillmentPolicyId || product.shippingPolicy?.ebayFulfillmentPolicyId;
+  return {
+    sku,
+    marketplaceId,
+    format: "FIXED_PRICE",
+    availableQuantity: Math.max(1, Number(product.stockQty || 1)),
+    categoryId: String(product.ebayCategoryId || ""),
+    merchantLocationKey: String(product.ebayInventoryLocationKey || config?.defaultInventoryLocationKey || ""),
+    listingDescription: stripUnsafeHtml(String(product.ebayDescriptionHtml || buildCombayEbayDescription(product))),
+    listingDuration: String(config?.defaultListingDuration || "GTC"),
+    includeCatalogProductDetails: false,
+    listingPolicies: {
+      fulfillmentPolicyId: String(fulfillmentPolicyId || ""),
+      paymentPolicyId: String(product.ebayPaymentPolicyId || ""),
+      returnPolicyId: String(product.ebayReturnPolicyId || ""),
+    },
+    pricingSummary: {
+      price: { currency: marketplaceCurrency(marketplaceId), value: moneyValue(product.price) },
+    },
+  };
+}
+
+async function logEbayPublishEvent(product: any, actionType: string, status: string, message: string, rawPayload?: any, errorMessage?: string | null, ebayOfferId?: string | null, ebayListingId?: string | null) {
+  return prisma.ebaySyncLog.create({
+    data: {
+      productId: product?.id,
+      sku: product?.sku,
+      productTitle: product?.title,
+      actionType,
+      status,
+      message,
+      errorMessage: errorMessage || null,
+      ebayOfferId: ebayOfferId || product?.ebayOfferId || null,
+      ebayListingId: ebayListingId || product?.ebayListingId || null,
+      rawPayload: rawPayload || undefined,
+      finishedAt: new Date(),
+    },
+  }).catch(() => null);
+}
+
+export async function publishProductToEbay(productId: string, input: { confirmLivePublish?: boolean; triggeredBy?: string } = {}) {
+  return withDatabase(async () => {
+    await ensureEbayPublishingDefaults();
+    if (!input.confirmLivePublish) throw new Error("Live eBay publish requires explicit confirmation.");
+    const product = await getProductForEbay(productId);
+    if (!product) throw new Error("Product not found.");
+    const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
+    const validation = livePublishValidation(product);
+    if (!validation.valid) {
+      await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "VALIDATION_FAILED", ebayValidationErrorsJson: validation } }).catch(() => null);
+      await logEbayPublishEvent(product, "LIVE_EBAY_PUBLISH_VALIDATION", "FAILED", "Live eBay publish blocked by validation.", validation, validation.errors.join(" "));
+      throw new Error(`Live eBay publish blocked: ${validation.errors.join(" ")}`);
+    }
+
+    const sku = String(product.ebayInventoryItemSku || product.sku).trim();
+    const existingDuplicate = await prisma.product.findFirst({
+      where: { id: { not: product.id }, OR: [{ sku }, { ebayInventoryItemSku: sku }, { ebayListingId: { not: null }, ebayInventoryItemSku: sku }] },
+      select: { id: true, sku: true, title: true, ebayListingId: true },
+    }).catch(() => null);
+    if (existingDuplicate) throw new Error(`Duplicate eBay SKU guard blocked publish. SKU ${sku} is already used by ${existingDuplicate.sku} / ${existingDuplicate.title}.`);
+
+    let job: any = null;
+    let offerId = product.ebayOfferId || "";
+    let listingId = product.ebayListingId || "";
+    const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
+    const inventoryPayload = inventoryItemPayload(product);
+    const offerRequestPayload = offerPayload(product, config, sku);
+
+    try {
+      job = await prisma.ebayPublishJob.create({
+        data: {
+          productId: product.id,
+          sku,
+          action: listingId ? "UPDATE_EXISTING_EBAY_LISTING" : "PUBLISH_NEW_EBAY_LISTING",
+          status: "RUNNING",
+          marketplaceId,
+          attempts: 1,
+          startedAt: new Date(),
+          payload: { inventoryPayload, offerPayload: offerRequestPayload },
+          queuedBy: input.triggeredBy || "admin",
+        },
+      });
+      await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: listingId ? "UPDATE_PENDING" : "PUBLISHING", ebayLastError: null, ebayValidationErrorsJson: validation } });
+      await logEbayPublishEvent(product, "LIVE_EBAY_PUBLISH_STARTED", "RUNNING", "Started controlled live eBay publish/update job.", { jobId: job.id, sku, marketplaceId });
+
+      await ebayInventoryApiRequest(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, "PUT", inventoryPayload, marketplaceId);
+      await logEbayPublishEvent(product, "EBAY_CREATE_OR_REPLACE_INVENTORY_ITEM", "SUCCESS", "eBay inventory item created/updated.", { sku, inventoryPayload });
+
+      let offerResponse: any = {};
+      if (offerId) {
+        offerResponse = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`, "PUT", offerRequestPayload, marketplaceId);
+        await logEbayPublishEvent(product, "EBAY_UPDATE_OFFER", "SUCCESS", "eBay offer updated.", { offerId, offerPayload: offerRequestPayload });
+      } else {
+        offerResponse = await ebayInventoryApiRequest("/sell/inventory/v1/offer", "POST", offerRequestPayload, marketplaceId);
+        offerId = String(offerResponse.offerId || offerResponse.id || "");
+        if (!offerId) throw new Error("eBay created the inventory item but did not return an offer ID.");
+        await logEbayPublishEvent(product, "EBAY_CREATE_OFFER", "SUCCESS", "eBay offer created.", { offerResponse, offerPayload: offerRequestPayload }, null, offerId);
+      }
+
+      if (!listingId) {
+        const publishResponse = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`, "POST", undefined, marketplaceId);
+        listingId = String(publishResponse.listingId || publishResponse.listing?.listingId || "");
+        if (!listingId) throw new Error("eBay publish call completed but no listing ID was returned.");
+        await logEbayPublishEvent(product, "EBAY_PUBLISH_OFFER", "SUCCESS", "eBay offer published as a live listing.", publishResponse, null, offerId, listingId);
+      } else {
+        await logEbayPublishEvent(product, "EBAY_UPDATE_LIVE_LISTING", "SUCCESS", "Existing eBay listing updated through Inventory API offer/inventory records.", { offerId, listingId }, null, offerId, listingId);
+      }
+
+      const previousJson = {
+        ebayListingId: product.ebayListingId,
+        ebayOfferId: product.ebayOfferId,
+        ebayPublishStatus: product.ebayPublishStatus,
+        stockQty: product.stockQty,
+        price: product.price,
+      };
+      const updated = await prisma.product.update({
+        where: { id: product.id },
+        data: {
+          ebayInventoryItemSku: sku,
+          ebayOfferId: offerId,
+          ebayListingId: listingId,
+          ebayMarketplaceId: marketplaceId,
+          ebayPublishStatus: "PUBLISHED",
+          ebaySkuLocked: true,
+          ebayLastPushedAt: new Date(),
+          ebayLastError: null,
+          ebayValidationErrorsJson: validation,
+        },
+      });
+      await prisma.ebayListingRevision.create({
+        data: {
+          productId: product.id,
+          sku,
+          action: listingId === product.ebayListingId ? "UPDATE_EXISTING_EBAY_LISTING" : "PUBLISH_NEW_EBAY_LISTING",
+          previousJson,
+          nextJson: { ebayListingId: listingId, ebayOfferId: offerId, marketplaceId, inventoryPayload, offerPayload: offerRequestPayload },
+          reason: "Controlled live eBay publish/update from Combay admin.",
+          createdBy: input.triggeredBy || "admin",
+        },
+      }).catch(() => null);
+      await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "SUCCESS", finishedAt: new Date(), payload: { inventoryPayload, offerPayload: offerRequestPayload, offerId, listingId } } }).catch(() => null);
+      await logEbayPublishEvent(updated, "LIVE_EBAY_PUBLISH_COMPLETE", "SUCCESS", listingId === product.ebayListingId ? "eBay listing updated successfully." : "New eBay listing published successfully.", { offerId, listingId }, null, offerId, listingId);
+      return { product: updated, offerId, listingId, validation, jobId: job.id };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Live eBay publish failed.";
+      if (job?.id) await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "FAILED", errorMessage, finishedAt: new Date() } }).catch(() => null);
+      await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "SYNC_FAILED", ebayLastError: errorMessage } }).catch(() => null);
+      await logEbayPublishEvent(product, "LIVE_EBAY_PUBLISH_FAILED", "FAILED", "Live eBay publish/update failed.", { offerId, listingId }, errorMessage, offerId || null, listingId || null);
+      throw error;
+    }
+  });
+}
+
+export async function processNextApprovedEbayPublishJob() {
+  return withDatabase(async () => {
+    await ensureEbayPublishingDefaults();
+    const job = await prisma.ebayPublishJob.findFirst({
+      where: { status: { in: ["AWAITING_MANUAL_APPROVAL", "QUEUED"] }, action: { in: ["PUBLISH_NEW_EBAY_LISTING", "UPDATE_EXISTING_EBAY_LISTING"] } },
+      orderBy: { queuedAt: "asc" },
+    });
+    if (!job) return { processed: false, message: "No approved eBay publish jobs are waiting." };
+    const result = await publishProductToEbay(job.productId, { confirmLivePublish: true, triggeredBy: job.queuedBy || "admin" });
+    await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "SUCCESS", finishedAt: new Date(), errorMessage: null } }).catch(() => null);
+    return { processed: true, sourceJobId: job.id, result };
   });
 }
 
