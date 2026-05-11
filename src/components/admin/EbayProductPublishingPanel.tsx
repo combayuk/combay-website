@@ -203,6 +203,9 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
 
   useEffect(() => { load().catch(() => setMessage("Could not load eBay publishing state.")); }, [productId]);
 
+  const validation = state.validation || state.product?.ebayValidationErrorsJson || { valid: false, errors: [], warnings: [] };
+  const ready = Boolean(validation.valid);
+
   useEffect(() => {
     function handleTopAction(event: Event) {
       const action = (event as CustomEvent<string>).detail;
@@ -212,9 +215,6 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     window.addEventListener("combay-ebay-top-action", handleTopAction as EventListener);
     return () => window.removeEventListener("combay-ebay-top-action", handleTopAction as EventListener);
   }, [productId, form, ready]);
-
-  const validation = state.validation || state.product?.ebayValidationErrorsJson || { valid: false, errors: [], warnings: [] };
-  const ready = Boolean(validation.valid);
   const optionState = state.options || {};
   const marketplaceOptions = optionState.marketplaceOptions?.length ? optionState.marketplaceOptions : FALLBACK_MARKETPLACES;
   const inventoryOptions = optionState.inventoryLocations || [];

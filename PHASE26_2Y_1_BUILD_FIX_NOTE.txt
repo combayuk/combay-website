@@ -1,0 +1,9 @@
+Phase 26.2Y.1 — Build Fix
+
+This cumulative archive fixes the Vercel TypeScript build error in src/components/admin/EbayProductPublishingPanel.tsx:
+
+Block-scoped variable 'ready' used before its declaration.
+
+The validation/ready state is now declared before the top-action event hook that references it in the dependency array. No runtime feature behaviour was intentionally changed.
+
+No Prisma/database command is required.
