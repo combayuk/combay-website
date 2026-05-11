@@ -1,0 +1,11 @@
+Phase 26.2X.11 — eBay GB Content-Language Header Fix
+
+Fixes persistent eBay Inventory API 25709 language-header failures during live publish.
+
+Changes:
+- Keeps removing Accept-Language from live eBay Inventory REST calls.
+- Changes EBAY_GB Inventory API Content-Language from en-US to en-GB so the request language matches the EBAY_GB marketplace.
+- Adds outgoing eBay request header diagnostics with Authorization redacted, so future eBay API failures show exactly which marketplace/language headers were sent.
+- No Prisma/database changes.
+
+Deploy as a cumulative full project archive.

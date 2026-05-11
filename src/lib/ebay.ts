@@ -105,14 +105,14 @@ function tradingApiUrl(environment?: string) {
 function ebayContentLanguageForMarketplace(marketplaceId?: string | null) {
   const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
   // eBay REST Inventory calls require Content-Language for request payload text.
-  // Do not send Accept-Language; eBay can reject it for some marketplaces with 25709.
-  // For English marketplaces, eBay's REST docs consistently document en-US as the safe English value.
+  // Do not send Accept-Language; eBay rejects invalid language headers with 25709.
+  // Use the locale that matches the marketplace, especially EBAY_GB -> en-GB.
   const languageMap: Record<string, string> = {
-    EBAY_GB: "en-US",
+    EBAY_GB: "en-GB",
     EBAY_US: "en-US",
-    EBAY_AU: "en-US",
-    EBAY_CA: "en-US",
-    EBAY_IE: "en-US",
+    EBAY_AU: "en-AU",
+    EBAY_CA: "en-CA",
+    EBAY_IE: "en-IE",
     EBAY_DE: "de-DE",
     EBAY_FR: "fr-FR",
     EBAY_IT: "it-IT",

@@ -1319,9 +1319,10 @@ class EbayInventoryApiError extends Error {
   path: string;
   marketplaceId: string;
   requestPayload: any;
+  requestHeaders?: any;
   responsePayload: any;
 
-  constructor(args: { status: number; method: string; path: string; marketplaceId: string; requestPayload?: any; responsePayload: any; message: string }) {
+  constructor(args: { status: number; method: string; path: string; marketplaceId: string; requestPayload?: any; requestHeaders?: any; responsePayload: any; message: string }) {
     super(args.message);
     this.name = "EbayInventoryApiError";
     this.status = args.status;
@@ -1329,6 +1330,7 @@ class EbayInventoryApiError extends Error {
     this.path = args.path;
     this.marketplaceId = args.marketplaceId;
     this.requestPayload = args.requestPayload;
+    this.requestHeaders = args.requestHeaders;
     this.responsePayload = args.responsePayload;
   }
 }
@@ -1360,9 +1362,14 @@ function ebayErrorMessage(body: any, fallback: string) {
 
 function ebayRequestLanguage(marketplace: string) {
   // eBay Inventory REST calls require Content-Language, not Accept-Language.
-  // EBAY_GB still uses EBAY_GB as the marketplace header, but en-US is the safe
-  // English Content-Language value documented by eBay for request payloads.
+  // The value must match the marketplace locale. EBAY_GB should use en-GB;
+  // using en-US against EBAY_GB can still produce eBay 25709 language-header failures.
   const value = String(marketplace || MARKETPLACE).toUpperCase();
+  if (value === "EBAY_GB") return "en-GB";
+  if (value === "EBAY_US") return "en-US";
+  if (value === "EBAY_AU") return "en-AU";
+  if (value === "EBAY_CA") return "en-CA";
+  if (value === "EBAY_IE") return "en-IE";
   if (value === "EBAY_DE") return "de-DE";
   if (value === "EBAY_FR") return "fr-FR";
   if (value === "EBAY_IT") return "it-IT";
@@ -1374,15 +1381,16 @@ async function ebayInventoryApiRequest(path: string, method: string, body?: any,
   const { token, config } = await getEbayAccessToken();
   const marketplace = marketplaceId || config.marketplaceId || MARKETPLACE;
   const root = apiRootForEnvironment(config.environment);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "Content-Language": ebayRequestLanguage(marketplace),
+    "X-EBAY-C-MARKETPLACE-ID": marketplace,
+  };
   const response = await fetch(`${root}${path}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "Content-Language": ebayRequestLanguage(marketplace),
-      "X-EBAY-C-MARKETPLACE-ID": marketplace,
-    },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
   });
@@ -1396,6 +1404,7 @@ async function ebayInventoryApiRequest(path: string, method: string, body?: any,
       path,
       marketplaceId: marketplace,
       requestPayload: body,
+      requestHeaders: { ...headers, Authorization: "Bearer ***redacted***" },
       responsePayload: parsed,
       message: ebayErrorMessage(parsed, `eBay Inventory API ${method} ${path} failed with ${response.status}`),
     });
@@ -1592,6 +1601,7 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
             marketplaceId: apiError.marketplaceId,
             httpStatus: apiError.status,
             eBayResponse: apiError.responsePayload,
+            requestHeaders: apiError.requestHeaders,
             requestPayload: apiError.requestPayload,
             offerId,
             listingId,
