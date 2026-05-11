@@ -1359,11 +1359,14 @@ function ebayErrorMessage(body: any, fallback: string) {
 }
 
 function ebayRequestLanguage(marketplace: string) {
-  if (marketplace === "EBAY_GB") return "en-GB";
-  if (marketplace === "EBAY_DE") return "de-DE";
-  if (marketplace === "EBAY_FR") return "fr-FR";
-  if (marketplace === "EBAY_IT") return "it-IT";
-  if (marketplace === "EBAY_ES") return "es-ES";
+  // eBay Inventory REST calls require Content-Language, not Accept-Language.
+  // EBAY_GB still uses EBAY_GB as the marketplace header, but en-US is the safe
+  // English Content-Language value documented by eBay for request payloads.
+  const value = String(marketplace || MARKETPLACE).toUpperCase();
+  if (value === "EBAY_DE") return "de-DE";
+  if (value === "EBAY_FR") return "fr-FR";
+  if (value === "EBAY_IT") return "it-IT";
+  if (value === "EBAY_ES") return "es-ES";
   return "en-US";
 }
 

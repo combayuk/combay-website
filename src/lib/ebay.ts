@@ -102,20 +102,23 @@ function tradingApiUrl(environment?: string) {
   return environment === "sandbox" ? "https://api.sandbox.ebay.com/ws/api.dll" : "https://api.ebay.com/ws/api.dll";
 }
 
-function ebayLocaleForMarketplace(marketplaceId?: string | null) {
+function ebayContentLanguageForMarketplace(marketplaceId?: string | null) {
   const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
-  const localeMap: Record<string, string> = {
-    EBAY_GB: "en-GB",
+  // eBay REST Inventory calls require Content-Language for request payload text.
+  // Do not send Accept-Language; eBay can reject it for some marketplaces with 25709.
+  // For English marketplaces, eBay's REST docs consistently document en-US as the safe English value.
+  const languageMap: Record<string, string> = {
+    EBAY_GB: "en-US",
     EBAY_US: "en-US",
-    EBAY_AU: "en-AU",
-    EBAY_CA: "en-CA",
-    EBAY_IE: "en-IE",
+    EBAY_AU: "en-US",
+    EBAY_CA: "en-US",
+    EBAY_IE: "en-US",
     EBAY_DE: "de-DE",
     EBAY_FR: "fr-FR",
     EBAY_IT: "it-IT",
     EBAY_ES: "es-ES",
   };
-  return localeMap[marketplace] || "en-GB";
+  return languageMap[marketplace] || "en-US";
 }
 
 function ebaySiteIdForMarketplace(marketplaceId?: string | null) {
@@ -136,13 +139,12 @@ function ebaySiteIdForMarketplace(marketplaceId?: string | null) {
 
 function ebayMarketplaceHeaders(token: string, config: EbayConfig) {
   const marketplaceId = config.marketplaceId || "EBAY_GB";
-  const locale = ebayLocaleForMarketplace(marketplaceId);
+  const language = ebayContentLanguageForMarketplace(marketplaceId);
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
     Accept: "application/json",
-    "Accept-Language": locale,
-    "Content-Language": locale,
+    "Content-Language": language,
     "X-EBAY-C-MARKETPLACE-ID": marketplaceId,
   };
 }
@@ -154,7 +156,6 @@ function tradingHeaders(token: string, config: EbayConfig, callName: string) {
     "X-EBAY-API-CALL-NAME": callName,
     "X-EBAY-API-SITEID": ebaySiteIdForMarketplace(config.marketplaceId),
     "X-EBAY-API-IAF-TOKEN": token,
-    "Accept-Language": ebayLocaleForMarketplace(config.marketplaceId),
   };
 }
 

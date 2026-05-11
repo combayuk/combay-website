@@ -1,0 +1,13 @@
+Phase 26.2X.9 — eBay Accept-Language Header Fix
+
+Fixes live eBay publish failure:
+25709 — API_INVENTORY/Request — Invalid value for header Accept-Language.
+
+Changes:
+- Removes Accept-Language from eBay REST and Trading API helper headers.
+- Keeps X-EBAY-C-MARKETPLACE-ID as the marketplace selector, e.g. EBAY_GB.
+- Sends Content-Language only where eBay Inventory REST payload calls require it.
+- Uses en-US for English marketplaces including EBAY_GB, because eBay REST Inventory docs document Content-Language en-US for English request payloads and some marketplaces reject en-GB/Accept-Language.
+- Preserves German/French/Italian/Spanish content-language values for those marketplaces.
+
+No Prisma command required.
