@@ -1,0 +1,1 @@
+Phase 26.2X.19 - Adds a visible inventory location details editor directly inside the product eBay Listing tab so admin can enter the full UK dispatch postcode without hunting through settings. Preserves all previous eBay live publish fixes.

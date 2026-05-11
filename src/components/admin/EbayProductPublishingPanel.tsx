@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Eye, FileCode2, ListTree, RefreshCw, Rocket, Save, Search, ShieldCheck, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, FileCode2, ListTree, MapPin, RefreshCw, Rocket, Save, Search, ShieldCheck, UploadCloud } from "lucide-react";
 
 type Props = { productId?: string; currentSku?: string; title?: string };
 
-type SelectOption = { id?: string; value?: string; name?: string; label?: string; isDefault?: boolean };
+type SelectOption = { id?: string; value?: string; name?: string; label?: string; isDefault?: boolean; raw?: any };
 type EbayCategorySuggestion = { categoryId: string; categoryName: string; categoryPath: string; leafCategoryTreeNode?: boolean; relevancy?: string; categoryTreeId?: string };
 type EbayAspectMetadata = { name: string; required?: boolean; recommended?: boolean; selectionOnly?: boolean; values?: string[] };
 
@@ -94,6 +94,31 @@ function SelectField({ label, value, onChange, options, placeholder = "Select op
   );
 }
 
+function normaliseUkPostcodeForDisplay(value?: string) {
+  const compact = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").trim();
+  if (!compact || compact.length <= 3) return compact;
+  return `${compact.slice(0, -3)} ${compact.slice(-3)}`;
+}
+
+function isFullUkPostcode(value?: string) {
+  const normalised = normaliseUkPostcodeForDisplay(value);
+  return /^(GIR 0AA|[A-Z]{1,2}[0-9][0-9A-Z]?\s[0-9][A-Z]{2})$/.test(normalised);
+}
+
+function locationDetailsForPanel(state: State, key?: string) {
+  const selectedKey = String(key || "").trim();
+  const local = (state.locations || []).find((item: any) => item.key === selectedKey) || null;
+  const option = (state.options?.inventoryLocations || []).find((item: any) => String(item.id || item.value || "") === selectedKey) || null;
+  const rawAddress = option?.raw?.location?.address || option?.raw?.address || {};
+  return {
+    name: local?.name || option?.name || "Combay UK dispatch location",
+    postcode: normaliseUkPostcodeForDisplay(local?.postcode || rawAddress?.postalCode || ""),
+    city: local?.city || rawAddress?.city || "Chelmsford",
+    countryCode: local?.countryCode || rawAddress?.country || "GB",
+    addressLine1: local?.addressLine1 || rawAddress?.addressLine1 || "",
+  };
+}
+
 function stringifySpecifics(value: any) {
   if (!value) return "";
   if (typeof value === "string") return value;
@@ -144,6 +169,8 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     setState(result);
     const product = result.product || {};
     const options = result.options || {};
+    const selectedLocationKey = product.ebayInventoryLocationKey || result.config?.defaultInventoryLocationKey || options.inventoryLocations?.find((item: any) => item.isDefault)?.id || options.inventoryLocations?.[0]?.id || "";
+    const selectedLocationDetails = locationDetailsForPanel(result, selectedLocationKey);
     const nextForm = {
       ebayMarketplaceId: product.ebayMarketplaceId || result.config?.marketplaceId || "EBAY_GB",
       ebayCategoryId: product.ebayCategoryId || "",
@@ -154,7 +181,12 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
       ebayFulfillmentPolicyId: product.ebayFulfillmentPolicyId || result.config?.defaultFulfillmentPolicyId || product.shippingPolicy?.ebayFulfillmentPolicyId || options.fulfillmentPolicies?.find((item: any) => item.isDefault)?.id || options.fulfillmentPolicies?.[0]?.id || "",
       ebayPaymentPolicyId: product.ebayPaymentPolicyId || result.config?.defaultPaymentPolicyId || options.paymentPolicies?.find((item: any) => item.isDefault)?.id || options.paymentPolicies?.[0]?.id || "",
       ebayReturnPolicyId: product.ebayReturnPolicyId || result.config?.defaultReturnPolicyId || options.returnPolicies?.find((item: any) => item.isDefault)?.id || options.returnPolicies?.[0]?.id || "",
-      ebayInventoryLocationKey: product.ebayInventoryLocationKey || result.config?.defaultInventoryLocationKey || options.inventoryLocations?.find((item: any) => item.isDefault)?.id || options.inventoryLocations?.[0]?.id || "",
+      ebayInventoryLocationKey: selectedLocationKey,
+      inventoryLocationName: selectedLocationDetails.name,
+      inventoryLocationPostcode: selectedLocationDetails.postcode,
+      inventoryLocationCity: selectedLocationDetails.city,
+      inventoryLocationCountryCode: selectedLocationDetails.countryCode,
+      inventoryLocationAddressLine1: selectedLocationDetails.addressLine1,
       ebayDescriptionTemplateId: product.ebayDescriptionTemplateId || result.config?.defaultDescriptionTemplateId || result.templates?.find((template: any) => template.isDefault)?.id || "",
       ebayDescriptionHtml: product.ebayDescriptionHtml || "",
       ebaySourceOfTruth: product.ebaySourceOfTruth || "COMBAY",
@@ -210,6 +242,54 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     else if (action === "apply-category") setMessage("eBay category applied. Required item specifics were fetched and auto-mapped where possible.");
     else setMessage("Local eBay draft saved.");
     return result;
+  }
+
+  function handleInventoryLocationChange(value: string) {
+    const details = locationDetailsForPanel(state, value);
+    setForm((current: any) => ({
+      ...current,
+      ebayInventoryLocationKey: value,
+      inventoryLocationName: details.name,
+      inventoryLocationPostcode: details.postcode,
+      inventoryLocationCity: details.city,
+      inventoryLocationCountryCode: details.countryCode,
+      inventoryLocationAddressLine1: details.addressLine1,
+    }));
+  }
+
+  async function saveInventoryLocationDetails() {
+    setBusy("save-location");
+    setMessage("");
+    const response = await fetch("/api/admin/ebay/publishing/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        marketplaceId: form.ebayMarketplaceId || state.config?.marketplaceId || "EBAY_GB",
+        defaultInventoryLocationKey: form.ebayInventoryLocationKey || state.config?.defaultInventoryLocationKey || "COMBAY-UK-MAIN",
+        inventoryLocationName: form.inventoryLocationName || "Combay UK dispatch location",
+        inventoryLocationPostcode: form.inventoryLocationPostcode || "",
+        inventoryLocationCity: form.inventoryLocationCity || "Chelmsford",
+        inventoryLocationCountryCode: form.inventoryLocationCountryCode || "GB",
+        inventoryLocationAddressLine1: form.inventoryLocationAddressLine1 || "",
+        defaultPaymentPolicyId: form.ebayPaymentPolicyId || state.config?.defaultPaymentPolicyId || "",
+        defaultReturnPolicyId: form.ebayReturnPolicyId || state.config?.defaultReturnPolicyId || "",
+        defaultFulfillmentPolicyId: form.ebayFulfillmentPolicyId || state.config?.defaultFulfillmentPolicyId || "",
+        defaultListingDuration: state.config?.defaultListingDuration || "GTC",
+        defaultSkuPrefix: state.config?.defaultSkuPrefix || "CBUK",
+        defaultDescriptionTemplateId: form.ebayDescriptionTemplateId || state.config?.defaultDescriptionTemplateId || "",
+        autoGenerateSku: state.config?.autoGenerateSku !== false,
+        autoPublishToEbay: Boolean(state.config?.autoPublishToEbay),
+        manualApprovalBeforePublish: state.config?.manualApprovalBeforePublish !== false,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    setBusy(null);
+    if (!result.ok) {
+      setMessage(result.error || "Could not save eBay inventory location details.");
+      return;
+    }
+    setMessage("eBay inventory location details saved. Save the eBay draft, validate, then publish again.");
+    await load();
   }
 
   function saveDraft() {
@@ -298,13 +378,35 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
           <SelectField label="Marketplace" value={form.ebayMarketplaceId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayMarketplaceId: value }))} options={marketplaceOptions} />
           <label className="block"><span className="label">eBay SKU</span><input value={form.ebayInventoryItemSku || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayInventoryItemSku: e.target.value }))} className="input py-2 text-sm font-mono" /></label>
           <label className="block"><span className="label">Source of truth</span><select value={form.ebaySourceOfTruth || "COMBAY"} onChange={(e) => setForm((c: any) => ({ ...c, ebaySourceOfTruth: e.target.value }))} className="input py-2 text-sm"><option value="COMBAY">Combay controls listing</option><option value="EBAY">eBay controls listing</option><option value="MANUAL_REVIEW">Manual review</option></select></label>
-          <SelectField label="Inventory location" value={form.ebayInventoryLocationKey || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayInventoryLocationKey: value }))} options={inventoryOptions} placeholder="No inventory location found" />
+          <SelectField label="Inventory location" value={form.ebayInventoryLocationKey || ""} onChange={handleInventoryLocationChange} options={inventoryOptions} placeholder="No inventory location found" />
           <SelectField label="Fulfilment policy" value={form.ebayFulfillmentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayFulfillmentPolicyId: value }))} options={fulfillmentOptions} placeholder="No fulfilment policy found" />
           <SelectField label="Payment policy" value={form.ebayPaymentPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayPaymentPolicyId: value }))} options={paymentOptions} placeholder="No payment policy found" />
           <SelectField label="Return policy" value={form.ebayReturnPolicyId || ""} onChange={(value) => setForm((c: any) => ({ ...c, ebayReturnPolicyId: value }))} options={returnOptions} placeholder="No return policy found" />
           <label className="block"><span className="label">Listing ID</span><input value={form.ebayListingId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayListingId: e.target.value }))} className="input py-2 text-sm" />{liveListingUrl && <a href={liveListingUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-[11px] font-900 text-blue-700 hover:underline">Open eBay listing</a>}</label>
           <label className="block"><span className="label">Offer ID</span><input value={form.ebayOfferId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayOfferId: e.target.value }))} className="input py-2 text-sm" /></label>
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-900 text-navy-950 self-end"><input type="checkbox" checked={Boolean(form.ebayExcludedFromSync)} onChange={(e) => setForm((c: any) => ({ ...c, ebayExcludedFromSync: e.target.checked }))} /> Exclude from eBay sync/publish</label>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-2">
+              <MapPin size={17} className="mt-0.5 shrink-0 text-amber-700" />
+              <div>
+                <h4 className="text-sm font-900 text-amber-950">Inventory location details for eBay</h4>
+                <p className="mt-1 text-xs leading-5 text-amber-900">eBay UK requires a full dispatch postcode before it will publish an offer. Do not use only the outward code such as CM17.</p>
+              </div>
+            </div>
+            <Badge tone={form.inventoryLocationCountryCode === "GB" && isFullUkPostcode(form.inventoryLocationPostcode) ? "green" : "amber"}>{form.inventoryLocationCountryCode === "GB" && isFullUkPostcode(form.inventoryLocationPostcode) ? "Full postcode saved/ready" : "Full postcode required"}</Badge>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-4">
+            <label className="block lg:col-span-2"><span className="label">Location name</span><input value={form.inventoryLocationName || ""} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationName: e.target.value }))} className="input py-2 text-sm" placeholder="Combay UK dispatch location" /></label>
+            <label className="block"><span className="label">Full UK postcode</span><input value={form.inventoryLocationPostcode || ""} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationPostcode: e.target.value.toUpperCase() }))} className="input py-2 text-sm font-mono" placeholder="e.g. CM17 9AA" /></label>
+            <label className="block"><span className="label">Country</span><select value={form.inventoryLocationCountryCode || "GB"} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationCountryCode: e.target.value }))} className="input py-2 text-sm"><option value="GB">United Kingdom (GB)</option><option value="IE">Ireland (IE)</option><option value="US">United States (US)</option><option value="DE">Germany (DE)</option><option value="FR">France (FR)</option></select></label>
+            <label className="block lg:col-span-2"><span className="label">Address line 1 <span className="font-500 text-gray-400">optional</span></span><input value={form.inventoryLocationAddressLine1 || ""} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationAddressLine1: e.target.value }))} className="input py-2 text-sm" placeholder="Warehouse/unit address if required" /></label>
+            <label className="block"><span className="label">Town / city</span><input value={form.inventoryLocationCity || ""} onChange={(e) => setForm((c: any) => ({ ...c, inventoryLocationCity: e.target.value }))} className="input py-2 text-sm" placeholder="Chelmsford" /></label>
+            <div className="flex items-end"><button type="button" onClick={saveInventoryLocationDetails} disabled={busy === "save-location"} className="btn-secondary w-full py-2 text-xs"><Save size={14} /> {busy === "save-location" ? "Saving…" : "Save location details"}</button></div>
+          </div>
+          <p className="mt-2 text-[11px] leading-4 text-amber-900">This updates the selected Combay/eBay inventory location and the default publishing setting, then the live publish worker can create or repair the matching eBay Inventory API warehouse location.</p>
         </div>
       </section>
 
