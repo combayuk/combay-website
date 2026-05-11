@@ -1722,19 +1722,49 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
         await logEbayPublishEvent(product, "EBAY_CREATE_OFFER", "SUCCESS", "eBay offer created. It still needs to be published before it appears as a live eBay listing.", { offerResponse, offerPayload: offerRequestPayload, hadListingIdAtStart }, null, offerId, listingId || null);
       }
 
-      // Important: an old stored listing ID is not proof that the newly-created offer
-      // is live. If there was no saved offer ID at the start, we must call publishOffer
-      // even when a legacy/imported listing ID already exists on the product. Otherwise
-      // Combay reports success after createOffer, while nothing appears in eBay Active listings.
-      const mustPublishOffer = !listingId || offerCreatedThisRun || !hadOfferIdAtStart;
+      // Important: a stored listing ID is not proof that the offer is live.
+      // Imported/legacy products can have an old listingId and a saved offerId while the
+      // Inventory API offer itself is still UNPUBLISHED. In that case eBay will update
+      // the offer successfully, but there will be no public listing until publishOffer
+      // is called. Always inspect the offer state after create/update before deciding
+      // whether to publish.
+      let prePublishSummary: any = null;
+      try {
+        const prePublishOfferDetails = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`, "GET", undefined, marketplaceId);
+        prePublishSummary = offerPublicationSummary(prePublishOfferDetails);
+        await logEbayPublishEvent(
+          product,
+          "EBAY_CHECK_OFFER_PUBLICATION_STATE",
+          prePublishSummary.offerStatus === "PUBLISHED" && prePublishSummary.listingId && prePublishSummary.listingStatus === "ACTIVE" && !prePublishSummary.listingOnHold ? "SUCCESS" : "RUNNING",
+          `Checked eBay offer before publish decision. Offer: ${prePublishSummary.offerStatus || "UNKNOWN"}; listing: ${prePublishSummary.listingStatus || "NO_LISTING"}.`,
+          { offerId, marketplaceId, hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun, ...prePublishSummary },
+          null,
+          offerId,
+          prePublishSummary.listingId || listingId || null,
+        );
+      } catch (stateError) {
+        await logEbayPublishEvent(product, "EBAY_CHECK_OFFER_PUBLICATION_STATE", "RUNNING", "Could not read eBay offer state before publish decision, so Combay will attempt publishOffer safely.", { offerId, marketplaceId, error: stateError instanceof Error ? stateError.message : stateError }, null, offerId, listingId || null);
+      }
+
+      const offerAlreadyActive = Boolean(prePublishSummary?.offerStatus === "PUBLISHED" && prePublishSummary?.listingId && prePublishSummary?.listingStatus === "ACTIVE" && !prePublishSummary?.listingOnHold);
+      const mustPublishOffer = !offerAlreadyActive;
       if (mustPublishOffer) {
         const publishResponse = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`, "POST", undefined, marketplaceId);
         const returnedListingId = String(publishResponse.listingId || publishResponse.listing?.listingId || "");
-        if (!returnedListingId) throw new Error("eBay publish call completed but no listing ID was returned.");
-        listingId = returnedListingId;
-        await logEbayPublishEvent(product, "EBAY_PUBLISH_OFFER", "SUCCESS", offerCreatedThisRun || !hadOfferIdAtStart ? "eBay accepted publishOffer. Combay will now verify the offer is PUBLISHED and the listing is ACTIVE before marking it live." : "eBay accepted publishOffer. Combay will now verify the live listing state.", { publishResponse, hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun }, null, offerId, listingId);
+        if (returnedListingId) listingId = returnedListingId;
+        await logEbayPublishEvent(
+          product,
+          "EBAY_PUBLISH_OFFER",
+          "SUCCESS",
+          "eBay accepted publishOffer. Combay will now verify the offer is PUBLISHED and the listing is ACTIVE before marking it live.",
+          { publishResponse, prePublishSummary, hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun },
+          null,
+          offerId,
+          listingId || null,
+        );
       } else {
-        await logEbayPublishEvent(product, "EBAY_UPDATE_LIVE_LISTING", "SUCCESS", "Existing eBay offer/listing updated through Inventory API. Combay will now verify it is still ACTIVE before marking it live.", { offerId, listingId, hadOfferIdAtStart, hadListingIdAtStart }, null, offerId, listingId);
+        listingId = prePublishSummary.listingId || listingId;
+        await logEbayPublishEvent(product, "EBAY_UPDATE_LIVE_LISTING", "SUCCESS", "Existing eBay offer/listing is already published and was updated through Inventory API. Combay will now verify it is still ACTIVE before marking it live.", { offerId, listingId, prePublishSummary, hadOfferIdAtStart, hadListingIdAtStart }, null, offerId, listingId);
       }
 
       // Do not mark Combay as PUBLISHED merely because publishOffer returned an ID.

@@ -1,0 +1,5 @@
+Phase 26.2X.16 — eBay unpublished-offer publish decision fix
+
+Fixes the case where a product has a stored eBay listing ID and offer ID, but eBay's Inventory API reports the offer is still UNPUBLISHED with no listing container. The live publish worker now checks getOffer after create/update and calls publishOffer whenever the offer is not already PUBLISHED with an ACTIVE listing container.
+
+This prevents Combay from treating stale imported listing IDs as proof that the offer is public.
