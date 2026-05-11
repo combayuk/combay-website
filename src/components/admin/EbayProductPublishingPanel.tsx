@@ -64,9 +64,10 @@ function formatLogTime(value: any) {
   try { return new Date(value).toLocaleString("en-GB"); } catch { return "—"; }
 }
 
-function ebayListingUrl(listingId?: string, marketplaceId?: string) {
+function ebayListingUrl(listingId?: string, marketplaceId?: string, environment?: string) {
   const id = String(listingId || "").trim();
   if (!id) return "";
+  if (String(environment || "").toLowerCase() === "sandbox") return `https://sandbox.ebay.com/itm/${encodeURIComponent(id)}`;
   const marketplace = String(marketplaceId || "EBAY_GB").toUpperCase();
   if (marketplace === "EBAY_US") return `https://www.ebay.com/itm/${encodeURIComponent(id)}`;
   if (marketplace === "EBAY_DE") return `https://www.ebay.de/itm/${encodeURIComponent(id)}`;
@@ -181,7 +182,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
   const recentJobs = useMemo(() => state.jobs || [], [state.jobs]);
   const recentLogs = useMemo(() => state.logs || [], [state.logs]);
   const latestFailure = recentLogs.find((log: any) => String(log.status || "").toUpperCase() === "FAILED" || String(log.errorMessage || "").trim());
-  const liveListingUrl = ebayListingUrl(form.ebayListingId, form.ebayMarketplaceId);
+  const liveListingUrl = ebayListingUrl(form.ebayListingId, form.ebayMarketplaceId, state.config?.environment);
   const specificsJson = useMemo(() => aspectValuesFromText(specificsText), [specificsText]);
   const requiredAspects = aspectMetadata.filter((aspect) => aspect.required);
   const recommendedAspects = aspectMetadata.filter((aspect) => !aspect.required && aspect.recommended).slice(0, 12);

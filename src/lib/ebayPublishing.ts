@@ -1590,9 +1590,14 @@ async function logEbayPublishEvent(product: any, actionType: string, status: str
   }).catch(() => null);
 }
 
-function ebayListingUrl(listingId: string, marketplaceId?: string | null) {
+function ebayListingUrl(listingId: string, marketplaceId?: string | null, environment?: string | null) {
   const id = String(listingId || "").trim();
   if (!id) return "";
+  if (String(environment || "").toLowerCase() === "sandbox") {
+    // Sandbox listings do not resolve on the live ebay.co.uk domain.
+    // eBay's sandbox item view format is sandbox.ebay.com/itm/{listingId}.
+    return `https://sandbox.ebay.com/itm/${encodeURIComponent(id)}`;
+  }
   const marketplace = String(marketplaceId || MARKETPLACE).toUpperCase();
   if (marketplace === "EBAY_US") return `https://www.ebay.com/itm/${encodeURIComponent(id)}`;
   if (marketplace === "EBAY_DE") return `https://www.ebay.de/itm/${encodeURIComponent(id)}`;
@@ -1602,6 +1607,51 @@ function ebayListingUrl(listingId: string, marketplaceId?: string | null) {
   if (marketplace === "EBAY_AU") return `https://www.ebay.com.au/itm/${encodeURIComponent(id)}`;
   if (marketplace === "EBAY_CA") return `https://www.ebay.ca/itm/${encodeURIComponent(id)}`;
   return `https://www.ebay.co.uk/itm/${encodeURIComponent(id)}`;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function offerPublicationSummary(offerDetails: any) {
+  const listing = offerDetails?.listing || {};
+  return {
+    offerStatus: String(offerDetails?.status || "").toUpperCase(),
+    listingId: String(listing?.listingId || "").trim(),
+    listingStatus: String(listing?.listingStatus || "").toUpperCase(),
+    listingOnHold: Boolean(listing?.listingOnHold),
+    soldQuantity: listing?.soldQuantity,
+    rawOffer: offerDetails,
+  };
+}
+
+async function verifyPublishedEbayOffer(product: EbayProductRecord, offerId: string, marketplaceId: string, environment?: string | null) {
+  let lastSummary: any = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const offerDetails = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`, "GET", undefined, marketplaceId);
+    const summary = offerPublicationSummary(offerDetails);
+    lastSummary = summary;
+    await logEbayPublishEvent(product, "EBAY_VERIFY_PUBLISHED_OFFER", summary.offerStatus === "PUBLISHED" && summary.listingId ? "SUCCESS" : "RUNNING", `Verified eBay offer publication state. Offer: ${summary.offerStatus || "UNKNOWN"}; listing: ${summary.listingStatus || "NO_LISTING"}.`, { attempt, offerId, marketplaceId, listingUrl: summary.listingId ? ebayListingUrl(summary.listingId, marketplaceId, environment) : "", ...summary }, null, offerId, summary.listingId || null);
+
+    if (summary.offerStatus === "PUBLISHED" && summary.listingId && summary.listingStatus === "ACTIVE" && !summary.listingOnHold) {
+      return { ...summary, listingUrl: ebayListingUrl(summary.listingId, marketplaceId, environment) };
+    }
+    if (attempt < 3) await delay(1500);
+  }
+
+  if (!lastSummary?.listingId) {
+    throw new Error("eBay publish did not produce a verified listing container on the offer. The offer may still be unpublished or eBay has not created the public listing yet.");
+  }
+  if (lastSummary?.listingOnHold) {
+    throw new Error(`eBay created listing ${lastSummary.listingId}, but the listing is on hold and will not be visible publicly until the eBay issue is resolved.`);
+  }
+  if (lastSummary?.offerStatus !== "PUBLISHED") {
+    throw new Error(`eBay offer ${offerId} is ${lastSummary?.offerStatus || "UNKNOWN"}, not PUBLISHED. It will not show as a live eBay listing yet.`);
+  }
+  if (lastSummary?.listingStatus !== "ACTIVE") {
+    throw new Error(`eBay listing ${lastSummary?.listingId} is ${lastSummary?.listingStatus || "UNKNOWN"}, not ACTIVE. It may not be visible on the public item page yet.`);
+  }
+  return { ...lastSummary, listingUrl: ebayListingUrl(lastSummary.listingId, marketplaceId, environment) };
 }
 
 export async function publishProductToEbay(productId: string, input: { confirmLivePublish?: boolean; triggeredBy?: string } = {}) {
@@ -1631,6 +1681,7 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
     const hadOfferIdAtStart = Boolean(String(offerId || "").trim());
     const hadListingIdAtStart = Boolean(String(listingId || "").trim());
     let offerCreatedThisRun = false;
+    let verifiedPublication: any = null;
     const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
     const inventoryPayload = inventoryItemPayload(product);
     let offerRequestPayload = offerPayload(product, config, sku);
@@ -1681,10 +1732,17 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
         const returnedListingId = String(publishResponse.listingId || publishResponse.listing?.listingId || "");
         if (!returnedListingId) throw new Error("eBay publish call completed but no listing ID was returned.");
         listingId = returnedListingId;
-        await logEbayPublishEvent(product, "EBAY_PUBLISH_OFFER", "SUCCESS", offerCreatedThisRun || !hadOfferIdAtStart ? "eBay offer published as a live listing after creating/linking the offer." : "eBay offer published as a live listing.", { publishResponse, hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun }, null, offerId, listingId);
+        await logEbayPublishEvent(product, "EBAY_PUBLISH_OFFER", "SUCCESS", offerCreatedThisRun || !hadOfferIdAtStart ? "eBay accepted publishOffer. Combay will now verify the offer is PUBLISHED and the listing is ACTIVE before marking it live." : "eBay accepted publishOffer. Combay will now verify the live listing state.", { publishResponse, hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun }, null, offerId, listingId);
       } else {
-        await logEbayPublishEvent(product, "EBAY_UPDATE_LIVE_LISTING", "SUCCESS", "Existing eBay listing updated through Inventory API offer/inventory records.", { offerId, listingId, hadOfferIdAtStart, hadListingIdAtStart }, null, offerId, listingId);
+        await logEbayPublishEvent(product, "EBAY_UPDATE_LIVE_LISTING", "SUCCESS", "Existing eBay offer/listing updated through Inventory API. Combay will now verify it is still ACTIVE before marking it live.", { offerId, listingId, hadOfferIdAtStart, hadListingIdAtStart }, null, offerId, listingId);
       }
+
+      // Do not mark Combay as PUBLISHED merely because publishOffer returned an ID.
+      // eBay's getOffer response is the safer source of truth: for published offers it
+      // returns status=PUBLISHED and a listing container with listingStatus, listingId,
+      // and listingOnHold. This prevents Combay from showing a public URL that 404s.
+      verifiedPublication = await verifyPublishedEbayOffer(product, offerId, marketplaceId, config?.environment);
+      listingId = verifiedPublication.listingId;
 
       const previousJson = {
         ebayListingId: product.ebayListingId,
@@ -1713,14 +1771,14 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
           sku,
           action: listingId === product.ebayListingId ? "UPDATE_EXISTING_EBAY_LISTING" : "PUBLISH_NEW_EBAY_LISTING",
           previousJson,
-          nextJson: { ebayListingId: listingId, ebayOfferId: offerId, marketplaceId, inventoryPayload, offerPayload: offerRequestPayload },
+          nextJson: { ebayListingId: listingId, ebayOfferId: offerId, marketplaceId, inventoryPayload, offerPayload: offerRequestPayload, verifiedPublication },
           reason: "Controlled live eBay publish/update from Combay admin.",
           createdBy: input.triggeredBy || "admin",
         },
       }).catch(() => null);
-      await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "SUCCESS", finishedAt: new Date(), payload: { inventoryPayload, offerPayload: offerRequestPayload, offerId, listingId } } }).catch(() => null);
-      await logEbayPublishEvent(updated, "LIVE_EBAY_PUBLISH_COMPLETE", "SUCCESS", mustPublishOffer ? "eBay offer published successfully. Check the direct eBay listing URL and allow a short indexing delay before searching by keyword." : "eBay listing updated successfully.", { offerId, listingId, listingUrl: ebayListingUrl(listingId, marketplaceId), hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun }, null, offerId, listingId);
-      return { product: updated, offerId, listingId, listingUrl: ebayListingUrl(listingId, marketplaceId), validation, jobId: job.id };
+      await prisma.ebayPublishJob.update({ where: { id: job.id }, data: { status: "SUCCESS", finishedAt: new Date(), payload: { inventoryPayload, offerPayload: offerRequestPayload, offerId, listingId, verifiedPublication } } }).catch(() => null);
+      await logEbayPublishEvent(updated, "LIVE_EBAY_PUBLISH_COMPLETE", "SUCCESS", mustPublishOffer ? "eBay offer published and verified as an ACTIVE listing." : "eBay listing updated and verified as ACTIVE.", { offerId, listingId, listingUrl: ebayListingUrl(listingId, marketplaceId, config?.environment), verifiedPublication, hadOfferIdAtStart, hadListingIdAtStart, offerCreatedThisRun }, null, offerId, listingId);
+      return { product: updated, offerId, listingId, listingUrl: ebayListingUrl(listingId, marketplaceId, config?.environment), verifiedPublication, validation, jobId: job.id };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Live eBay publish failed.";
       const apiError = error instanceof EbayInventoryApiError ? error : null;

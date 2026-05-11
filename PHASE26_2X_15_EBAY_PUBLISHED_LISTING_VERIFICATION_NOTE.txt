@@ -1,0 +1,14 @@
+Phase 26.2X.15 — eBay published listing verification
+
+Purpose:
+- Prevent Combay from marking an eBay listing as fully published merely because publishOffer returned a listingId.
+- After create/update offer and publishOffer, Combay now calls getOffer and verifies:
+  - offer status is PUBLISHED
+  - listing container exists
+  - listingId exists
+  - listingStatus is ACTIVE
+  - listingOnHold is not true
+- If these checks fail, Combay records the exact offer/listing state in the eBay logs and does not show a false success state.
+- Listing URLs now respect sandbox vs production environment.
+
+No Prisma schema change.
