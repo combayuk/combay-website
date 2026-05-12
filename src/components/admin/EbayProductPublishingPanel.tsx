@@ -192,6 +192,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
       ebaySourceOfTruth: product.ebaySourceOfTruth || "COMBAY",
       ebayExcludedFromSync: Boolean(product.ebayExcludedFromSync || product.syncExcluded),
       ebayShowOnUsCanada: Boolean(product.ebayShowOnUsCanada),
+      ebayBestOfferEnabled: Boolean(product.ebayBestOfferEnabled),
       ebayPublishStatus: product.ebayPublishStatus || "NOT_LISTED",
     };
     setForm(nextForm);
@@ -315,6 +316,36 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
     }).then(() => load());
   }
 
+  function normaliseAspectInputValue(value: any): string {
+    if (Array.isArray(value)) return value.join(", ");
+    return String(value || "");
+  }
+
+  function updateAspectValue(name: string, value: string) {
+    const current = aspectValuesFromText(specificsText);
+    const metadata = current._aspectMetadata || aspectMetadata;
+    const required = current._requiredAspects || requiredAspects.map((aspect) => aspect.name);
+    const next: any = { ...current, _aspectMetadata: metadata, _requiredAspects: required };
+    const values = value.split(",").map((item) => item.trim()).filter(Boolean);
+    if (values.length) next[name] = values;
+    else delete next[name];
+    setSpecificsText(JSON.stringify(next, null, 2));
+  }
+
+  function addCustomAspect() {
+    const name = window.prompt("Specific name, for example MPN, Unit Quantity or Controller Platform");
+    if (!name?.trim()) return;
+    const value = window.prompt(`Value for ${name.trim()}`) || "";
+    updateAspectValue(name.trim(), value);
+  }
+
+  function removeAspectValue(name: string) {
+    const current = aspectValuesFromText(specificsText);
+    const next: any = { ...current };
+    delete next[name];
+    setSpecificsText(JSON.stringify(next, null, 2));
+  }
+
   async function suggestCategories() {
     const result = await post("suggest-categories", { query: categoryQuery, marketplaceId: form.ebayMarketplaceId || "EBAY_GB" });
     if (!result) return;
@@ -431,6 +462,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
           <label className="block"><span className="label">Offer ID</span><input value={form.ebayOfferId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayOfferId: e.target.value }))} className="input py-2 text-sm" /></label>
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-900 text-navy-950 self-end"><input type="checkbox" checked={Boolean(form.ebayExcludedFromSync)} onChange={(e) => setForm((c: any) => ({ ...c, ebayExcludedFromSync: e.target.checked }))} /> Exclude from eBay sync/publish</label>
           {String(form.ebayMarketplaceId || "").toUpperCase() === "EBAY_GB" && <label className="lg:col-span-2 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-800 text-blue-900"><input type="checkbox" className="mt-0.5" checked={Boolean(form.ebayShowOnUsCanada)} onChange={(e) => setForm((c: any) => ({ ...c, ebayShowOnUsCanada: e.target.checked }))} /> <span><span className="font-900">Also show to eBay US & Canada buyers</span><br/><span className="font-600 text-blue-700">Uses the selected UK fulfilment policy’s international postage coverage. Inventory API does not support the old CrossBorderTrade switch directly; separate US/Canada offers need dedicated marketplace policy/category mapping.</span></span></label>}
+          <label className="lg:col-span-2 flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-800 text-navy-950"><input type="checkbox" className="mt-0.5" checked={Boolean(form.ebayBestOfferEnabled)} onChange={(e) => setForm((c: any) => ({ ...c, ebayBestOfferEnabled: e.target.checked }))} /> <span><span className="font-900">Allow offers / Best Offer on eBay</span><br/><span className="font-600 text-slate-600">Mapped into eBay Inventory API listing policies. eBay may reject it if the selected category does not support Best Offer.</span></span></label>
         </div>
 
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -501,14 +533,64 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div><h3 className="font-display text-lg font-900 text-navy-950">eBay item specifics / aspects</h3><p className="mt-1 text-xs text-gray-500">Required aspects are fetched from eBay for the selected category and auto-mapped from Combay specs where possible.</p></div>
-          {aspectMetadata.length ? <Badge tone="blue">{requiredAspects.length} required · {recommendedAspects.length} recommended</Badge> : <Badge tone="amber">Fetch category aspects</Badge>}
+          <div><h3 className="font-display text-lg font-900 text-navy-950">eBay item specifics / aspects</h3><p className="mt-1 text-xs text-gray-500">Edit item specifics in structured rows. Combay saves them as eBay aspects automatically; JSON is only kept as an advanced fallback.</p></div>
+          <div className="flex flex-wrap gap-2">
+            {aspectMetadata.length ? <Badge tone="blue">{requiredAspects.length} required · {recommendedAspects.length} recommended</Badge> : <Badge tone="amber">Fetch category aspects</Badge>}
+            <button type="button" onClick={addCustomAspect} className="btn-secondary py-1.5 text-xs">+ Add specific</button>
+          </div>
         </div>
-        {aspectMetadata.length > 0 && <div className="mb-3 grid gap-2 md:grid-cols-2">
-          {requiredAspects.slice(0, 12).map((aspect) => <div key={aspect.name} className={`rounded-lg border px-3 py-2 text-xs ${aspectHasValue(specificsJson, aspect.name) ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"}`}><span className="font-900">Required:</span> {aspect.name}{aspectHasValue(specificsJson, aspect.name) ? " — mapped" : " — missing"}</div>)}
-          {recommendedAspects.map((aspect) => <div key={aspect.name} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"><span className="font-900">Recommended:</span> {aspect.name}{aspectHasValue(specificsJson, aspect.name) ? " — mapped" : ""}</div>)}
+
+        {aspectMetadata.length > 0 && <div className="mb-4 grid gap-2 md:grid-cols-2">
+          {requiredAspects.slice(0, 12).map((aspect) => <div key={aspect.name} className={`rounded-lg border px-3 py-2 text-xs ${aspectHasValue(specificsJson, aspect.name) ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"}`}><span className="font-900">Required:</span> {aspect.name}{aspectHasValue(specificsJson, aspect.name) ? " — complete" : " — missing"}</div>)}
+          {recommendedAspects.map((aspect) => <div key={aspect.name} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"><span className="font-900">Recommended:</span> {aspect.name}{aspectHasValue(specificsJson, aspect.name) ? " — complete" : ""}</div>)}
         </div>}
-        <label className="block"><span className="label">Aspects JSON</span><textarea value={specificsText} onChange={(e) => setSpecificsText(e.target.value)} className="input min-h-[150px] font-mono text-xs" placeholder={`{"Brand":["Siemens"],"MPN":["6ES7..."]}`} /></label>
+
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-left uppercase tracking-wide text-slate-500">
+              <tr><th className="w-[34%] px-3 py-2">Specific</th><th className="px-3 py-2">Value</th><th className="w-[90px] px-3 py-2 text-right">Action</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {[...new Set([
+                ...requiredAspects.map((aspect) => aspect.name),
+                ...recommendedAspects.map((aspect) => aspect.name),
+                ...Object.keys(specificsJson || {}).filter((key) => !key.startsWith("_")),
+              ])].map((name) => {
+                const meta = aspectMetadata.find((aspect) => aspect.name === name);
+                const value = normaliseAspectInputValue(specificsJson?.[name]);
+                const options = Array.isArray(meta?.values) ? meta?.values || [] : [];
+                return (
+                  <tr key={name}>
+                    <td className="px-3 py-2 align-top">
+                      <div className="font-900 text-navy-950">{name}</div>
+                      <div className="mt-0.5 flex flex-wrap gap-1">{meta?.required && <Badge tone="red">Required</Badge>}{meta?.recommended && !meta?.required && <Badge tone="blue">Recommended</Badge>}{meta?.selectionOnly && <Badge tone="amber">Select value</Badge>}</div>
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      {options.length ? (
+                        <select value={value.split(",")[0] || ""} onChange={(event) => updateAspectValue(name, event.target.value)} className="input py-2 text-xs">
+                          <option value="">Select {name}</option>
+                          {options.slice(0, 120).map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      ) : (
+                        <input value={value} onChange={(event) => updateAspectValue(name, event.target.value)} className="input py-2 text-xs" placeholder={`Enter ${name}`} />
+                      )}
+                      <p className="mt-1 text-[10px] text-gray-400">Use comma-separated values if more than one value applies.</p>
+                    </td>
+                    <td className="px-3 py-2 text-right align-top">
+                      {!meta?.required && <button type="button" onClick={() => removeAspectValue(name)} className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-900 text-slate-500 hover:bg-slate-50">Remove</button>}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!Object.keys(specificsJson || {}).filter((key) => !key.startsWith("_")).length && !aspectMetadata.length && <tr><td colSpan={3} className="px-3 py-6 text-center text-sm text-gray-500">Select an eBay category to fetch required aspects, or add a custom item specific.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+          <summary className="cursor-pointer font-900 text-navy-950">Advanced JSON view</summary>
+          <p className="mt-1 text-gray-500">Use this only for developer-level correction. Normal editing should be done through the structured rows above.</p>
+          <textarea value={specificsText} onChange={(e) => setSpecificsText(e.target.value)} className="input mt-2 min-h-[150px] font-mono text-xs" placeholder={`{"Brand":["Siemens"],"MPN":["6ES7..."]}`} />
+        </details>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">

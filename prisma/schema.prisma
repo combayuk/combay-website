@@ -202,6 +202,7 @@ model Product {
   ebayValidationErrorsJson Json?
   ebaySkuLocked    Boolean       @default(false)
   ebayShowOnUsCanada Boolean     @default(false)
+  ebayBestOfferEnabled Boolean   @default(false)
 
   // deletion / lifecycle controls
   deletedAt        DateTime?

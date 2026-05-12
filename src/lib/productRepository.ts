@@ -429,7 +429,7 @@ export async function getAdminProductsListFromRepository(params: {
         select: {
           id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, mpn: true, condition: true,
           price: true, priceOnRequest: true, stockQty: true, status: true, source: true, updatedAt: true,
-          ebayPublishStatus: true, ebayListingId: true, ebayOfferId: true, ebayMarketplaceId: true,
+          ebayPublishStatus: true, ebayListingId: true, ebayOfferId: true, ebayMarketplaceId: true, ebayItemId: true,
           deleteStatus: true, deletedAt: true,
           category: { select: { name: true, slug: true } },
           images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { url: true } },
@@ -465,6 +465,7 @@ export async function getAdminProductsListFromRepository(params: {
           updatedAt: product.updatedAt?.toISOString?.() ?? "",
           ebayPublishStatus: product.ebayPublishStatus ?? "NOT_LISTED",
           ebayListingId: product.ebayListingId ?? "",
+          ebayItemId: product.ebayItemId ?? "",
           ebayOfferId: product.ebayOfferId ?? "",
           ebayMarketplaceId: product.ebayMarketplaceId ?? "EBAY_GB",
           deleteStatus: product.deleteStatus ?? null,
@@ -693,16 +694,19 @@ export async function hardDeleteProductInRepository(id: string) {
       prisma.orderItem.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }] } }).catch(() => 0),
       prisma.invoiceLine.count({ where: { sku: product.sku } }).catch(() => 0),
       prisma.inventoryMovement.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }] } }).catch(() => 0),
-      prisma.ebaySyncLog.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }, { ebayListingId: product.ebayListingId || "__none__" }, { ebayOfferId: product.ebayOfferId || "__none__" }] } }).catch(() => 0),
+      prisma.ebaySyncLog.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }, { ebayListingId: product.ebayListingId || product.ebayItemId || "__none__" }, { ebayOfferId: product.ebayOfferId || "__none__" }] } }).catch(() => 0),
     ]);
-    const blockers = { orderItems, invoiceLines, movements, ebayLogs, ebayListingId: Boolean(product.ebayListingId), ebayOfferId: Boolean(product.ebayOfferId) };
-    const blocked = orderItems || invoiceLines || movements || ebayLogs || product.ebayListingId || product.ebayOfferId;
+    const blockers = { orderItems, invoiceLines, movements, ebayLogs, ebayListingId: Boolean(product.ebayListingId || product.ebayItemId), ebayOfferId: Boolean(product.ebayOfferId) };
+    // eBay history alone must not block removing a product from the Combay website/admin catalogue.
+    // It remains traceable through eBay logs/revisions, and eBay ending is handled by the separate End eBay listing action.
+    // Business/accounting/stock history still blocks physical DB destruction because orders/invoices/stock ledgers must remain intact.
+    const blocked = orderItems || invoiceLines || movements;
     if (blocked) {
       await prisma.product.update({ where: { id: product.id }, data: { status: "ARCHIVED", deleteRequestedAt: new Date(), deleteStatus: "DELETE_BLOCKED", deletedAt: new Date() } as any }).catch(() => null);
-      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has business/eBay/accounting history, so it was archived and marked delete-blocked instead of being destroyed." };
+      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has order/invoice/stock history, so it was removed from active Combay views and marked delete-blocked instead of destroying accounting evidence." };
     }
     await prisma.product.delete({ where: { id: product.id } });
-    return { deleted: true, archived: false, blocked: false, blockers };
+    return { deleted: true, archived: false, blocked: false, blockers, message: ebayLogs || product.ebayListingId || product.ebayItemId || product.ebayOfferId ? "Product deleted from Combay. eBay history was not treated as a deletion blocker; use/end eBay listing separately where needed." : "Product deleted from Combay." };
   });
 }
 

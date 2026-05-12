@@ -1,0 +1,11 @@
+Phase 27C — eBay deletion, policies, item specifics and offers refinement
+
+This cumulative build fixes the issues raised in NEW CHANGES.docx:
+- eBay history alone no longer blocks deleting a product from Combay. Hard delete is still blocked by true business/accounting/stock history such as order items, invoice lines, or inventory movements.
+- Imported eBay products now expose ebayItemId in the admin product list and the eBay preview eye is active when either ebayListingId or ebayItemId exists.
+- eBay validation now uses and persists effective policy/location defaults shown in the UI, so payment/return/fulfilment/location dropdown selections do not appear selected while validation still says missing.
+- eBay item specifics now have structured editable rows with required/recommended badges, selectable values where eBay provides values, custom specific add/remove controls, and an advanced JSON fallback only.
+- Added Allow offers / Best Offer checkbox in the eBay listing tab and mapped it into Inventory API listingPolicies.bestOfferTerms.bestOfferEnabled.
+- Added Product.ebayBestOfferEnabled and runtime schema bootstrap for the column.
+
+No Prisma db push is required; runtime bootstrap adds the new eBay best-offer column.

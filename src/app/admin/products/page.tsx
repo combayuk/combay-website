@@ -10,6 +10,7 @@ type AdminProduct = CatalogProduct & {
   source?: string;
   updatedAt?: string;
   ebayListingId?: string;
+  ebayItemId?: string;
   ebayOfferId?: string;
   ebayPublishStatus?: string;
   ebayMarketplaceId?: string;
@@ -21,8 +22,9 @@ function priceLabel(product: AdminProduct) {
 }
 
 function ebayUrl(product: AdminProduct) {
-  if (!product.ebayListingId) return "";
-  return product.ebayMarketplaceId === "EBAY_US" ? `https://www.ebay.com/itm/${product.ebayListingId}` : `https://www.ebay.co.uk/itm/${product.ebayListingId}`;
+  const listingId = product.ebayListingId || product.ebayItemId || "";
+  if (!listingId) return "";
+  return product.ebayMarketplaceId === "EBAY_US" ? `https://www.ebay.com/itm/${listingId}` : `https://www.ebay.co.uk/itm/${listingId}`;
 }
 
 
@@ -81,15 +83,15 @@ export default function AdminProducts() {
   }
 
   async function hardDeleteProduct(product: AdminProduct) {
-    if (!confirm(`Fully delete ${product.sku}? This is only allowed when the product has no orders, invoices, eBay history or stock movements. If blocked, the system will archive and mark it delete-blocked instead.`)) return;
+    if (!confirm(`Fully delete ${product.sku} from the Combay website/admin catalogue? This does not end an eBay listing; use the separate eBay end action for marketplace listings. Products with order, invoice, or stock movement history will be blocked and archived instead.`)) return;
     const response = await fetch(`/api/products/${encodeURIComponent(product.id)}?mode=hard`, { method: "DELETE" });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) {
       setMessage(result.error || result.reason || `Could not delete ${product.sku}.`);
       return;
     }
-    if (result.result?.blocked) setMessage(`${product.sku} could not be hard-deleted because it has business/eBay history. It has been archived and marked delete-blocked.`);
-    else setMessage(`${product.sku} fully deleted from Combay.`);
+    if (result.result?.blocked) setMessage(`${product.sku} could not be fully deleted because it has order/invoice/stock history. It has been archived and marked delete-blocked.`);
+    else setMessage(result.result?.message || `${product.sku} fully deleted from Combay.`);
     await loadProducts();
   }
 
@@ -255,10 +257,10 @@ export default function AdminProducts() {
                     <td className="px-3 py-3 align-top">
                       <div className="flex flex-wrap justify-end gap-1">
                         <Link href={`/shop/${product.slug}`} target="_blank" className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Preview website product"><Eye size={12} /><span className="sr-only">Website</span></Link>
-                        {product.ebayListingId ? (
-                          <a href={ebayUrl(product)} target="_blank" rel="noreferrer" className="rounded-md border border-blue-200 px-2 py-1 text-[10px] font-900 text-blue-700 hover:bg-blue-50" title="Preview eBay listing"><Eye size={12} /> eBay</a>
+                        {product.ebayListingId || product.ebayItemId ? (
+                          <a href={ebayUrl(product)} target="_blank" rel="noreferrer" className="rounded-md border border-blue-200 px-2 py-1 text-[10px] font-900 text-blue-700 hover:bg-blue-50" title={product.ebayListingId ? "Preview active eBay listing" : "Preview imported eBay listing by original eBay item ID"}><Eye size={12} /> eBay</a>
                         ) : (
-                          <span className="rounded-md border border-slate-100 px-2 py-1 text-[10px] font-900 text-slate-300" title="No active eBay listing"><Eye size={12} /> eBay</span>
+                          <span className="rounded-md border border-slate-100 px-2 py-1 text-[10px] font-900 text-slate-300" title="No eBay listing or imported eBay item ID"><Eye size={12} /> eBay</span>
                         )}
                         <Link href={`/admin/products/${product.id}`} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Edit"><Edit size={12} /></Link>
                         <button onClick={() => duplicateProduct(product)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Duplicate"><Copy size={12} /></button>

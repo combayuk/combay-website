@@ -403,6 +403,36 @@ function pickDefault(options: EbayOption[], current?: string | null) {
   return options.find((item) => item.isDefault)?.id || options[0]?.id || current || "";
 }
 
+function firstPolicyId(options?: EbayOption[], current?: string | null) {
+  return pickDefault(options || [], current || "") || "";
+}
+
+async function ensureProductHasEffectiveEbayDefaults(product: EbayProductRecord, config?: any): Promise<EbayProductRecord> {
+  const marketplaceId = String(product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE);
+  const localOptions = await getLocalPolicyOptions(marketplaceId);
+  const effectivePaymentPolicyId = product.ebayPaymentPolicyId || config?.defaultPaymentPolicyId || firstPolicyId(localOptions.paymentPolicies);
+  const effectiveReturnPolicyId = product.ebayReturnPolicyId || config?.defaultReturnPolicyId || firstPolicyId(localOptions.returnPolicies);
+  const effectiveFulfillmentPolicyId = product.ebayFulfillmentPolicyId || product.shippingPolicy?.ebayFulfillmentPolicyId || config?.defaultFulfillmentPolicyId || firstPolicyId(localOptions.fulfillmentPolicies);
+  const effectiveInventoryLocationKey = product.ebayInventoryLocationKey || config?.defaultInventoryLocationKey || firstPolicyId(localOptions.inventoryLocations) || "COMBAY-UK-MAIN";
+  const data: any = {};
+  if (!product.ebayMarketplaceId && marketplaceId) data.ebayMarketplaceId = marketplaceId;
+  if (!product.ebayPaymentPolicyId && effectivePaymentPolicyId) data.ebayPaymentPolicyId = effectivePaymentPolicyId;
+  if (!product.ebayReturnPolicyId && effectiveReturnPolicyId) data.ebayReturnPolicyId = effectiveReturnPolicyId;
+  if (!product.ebayFulfillmentPolicyId && effectiveFulfillmentPolicyId) data.ebayFulfillmentPolicyId = effectiveFulfillmentPolicyId;
+  if (!product.ebayInventoryLocationKey && effectiveInventoryLocationKey) data.ebayInventoryLocationKey = effectiveInventoryLocationKey;
+  if (Object.keys(data).length) {
+    await prisma.product.update({ where: { id: product.id }, data }).catch(() => null);
+  }
+  return {
+    ...product,
+    ebayMarketplaceId: product.ebayMarketplaceId || marketplaceId,
+    ebayPaymentPolicyId: product.ebayPaymentPolicyId || effectivePaymentPolicyId || null,
+    ebayReturnPolicyId: product.ebayReturnPolicyId || effectiveReturnPolicyId || null,
+    ebayFulfillmentPolicyId: product.ebayFulfillmentPolicyId || effectiveFulfillmentPolicyId || null,
+    ebayInventoryLocationKey: product.ebayInventoryLocationKey || effectiveInventoryLocationKey || null,
+  };
+}
+
 
 let ebayPublishingSchemaPromise: Promise<void> | null = null;
 
@@ -616,6 +646,7 @@ async function ensureEbayPublishingDatabaseSchema() {
       `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayValidationErrorsJson" JSONB;`,
       `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebaySkuLocked" BOOLEAN NOT NULL DEFAULT false;`,
       `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayShowOnUsCanada" BOOLEAN NOT NULL DEFAULT false;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayBestOfferEnabled" BOOLEAN NOT NULL DEFAULT false;`,
       `CREATE INDEX IF NOT EXISTS "Product_ebayPublishStatus_idx" ON "Product"("ebayPublishStatus");`,
       `CREATE INDEX IF NOT EXISTS "Product_ebayMarketplaceId_idx" ON "Product"("ebayMarketplaceId");`,
       `CREATE INDEX IF NOT EXISTS "Product_ebayCategoryId_idx" ON "Product"("ebayCategoryId");`,
@@ -1154,6 +1185,9 @@ export function validateEbayProductRecord(product: EbayProductRecord) {
   if (product.ebayShowOnUsCanada && String(product.ebayMarketplaceId || MARKETPLACE).toUpperCase() === "EBAY_GB") {
     warnings.push("US/Canada visibility is enabled. Inventory API does not support the old CrossBorderTrade field directly; Combay relies on the selected UK fulfilment policy offering international postage to US/Canada buyers, or a later dedicated separate US/Canada offer mapping phase.");
   }
+  if (product.ebayBestOfferEnabled) {
+    warnings.push("Allow offers / Best Offer is enabled. eBay may reject this if the selected category or variation configuration does not support Best Offer.");
+  }
   if (product.shippingManualQuoteRequired || product.shippingCollectionOnly || product.shippingPolicy?.manualQuoteRequired) errors.push("Product uses manual quote/collection-only shipping. Use freight/collection policy mapping before live eBay publish.");
   errors.push(...imageValidation(product.images || []));
 
@@ -1203,7 +1237,7 @@ export async function getEbayProductPublishingState(productId: string) {
     const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
     const refreshedProduct = await refreshEbayOfferLifecycleState(product, marketplaceId);
     if (!refreshedProduct) throw new Error("Product not found.");
-    const activeProduct: EbayProductRecord = refreshedProduct;
+    const activeProduct: EbayProductRecord = await ensureProductHasEffectiveEbayDefaults(refreshedProduct, config);
     const logs = await prisma.ebaySyncLog.findMany({ where: { productId: activeProduct.id }, orderBy: { startedAt: "desc" }, take: 8 });
     const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: activeProduct.id }, orderBy: { queuedAt: "desc" }, take: 5 });
     const templates = await prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] });
@@ -1234,8 +1268,10 @@ export async function getEbayProductPublishingState(productId: string) {
 export async function saveEbayProductDraft(productId: string, input: any) {
   return withDatabase(async () => {
     await ensureEbayPublishingDefaults();
-    const product = await getProductForEbay(productId);
+    let product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
+    const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } }).catch(() => null);
+    product = await ensureProductHasEffectiveEbayDefaults(product, config);
     if (product.ebaySkuLocked && input.sku && input.sku !== product.sku) throw new Error("SKU is locked because this product has already been prepared/published for eBay.");
     const condition = mapConditionToEbay(product);
     const data: any = {
@@ -1247,10 +1283,10 @@ export async function saveEbayProductDraft(productId: string, input: any) {
       ebayInventoryItemSku: input.ebayInventoryItemSku || product.sku,
       ebayConditionId: conditionIdForEnum(normaliseEbayConditionEnum(input.ebayConditionEnum || condition.conditionEnum)),
       ebayConditionEnum: normaliseEbayConditionEnum(input.ebayConditionEnum || condition.conditionEnum),
-      ebayFulfillmentPolicyId: input.ebayFulfillmentPolicyId || null,
-      ebayPaymentPolicyId: input.ebayPaymentPolicyId || null,
-      ebayReturnPolicyId: input.ebayReturnPolicyId || null,
-      ebayInventoryLocationKey: input.ebayInventoryLocationKey || null,
+      ebayFulfillmentPolicyId: input.ebayFulfillmentPolicyId || product.ebayFulfillmentPolicyId || null,
+      ebayPaymentPolicyId: input.ebayPaymentPolicyId || product.ebayPaymentPolicyId || null,
+      ebayReturnPolicyId: input.ebayReturnPolicyId || product.ebayReturnPolicyId || null,
+      ebayInventoryLocationKey: input.ebayInventoryLocationKey || product.ebayInventoryLocationKey || null,
       ebayDescriptionTemplateId: input.ebayDescriptionTemplateId || null,
       ebayDescriptionHtml: stripUnsafeHtml(input.ebayDescriptionHtml || product.ebayDescriptionHtml || ""),
       ebaySpecificsJson: input.ebaySpecificsJson || product.ebaySpecificsJson || null,
@@ -1258,6 +1294,7 @@ export async function saveEbayProductDraft(productId: string, input: any) {
       ebayExcludedFromSync: Boolean(input.ebayExcludedFromSync),
       syncExcluded: Boolean(input.ebayExcludedFromSync),
       ebayShowOnUsCanada: Boolean(input.ebayShowOnUsCanada),
+      ebayBestOfferEnabled: Boolean(input.ebayBestOfferEnabled),
       ebayPublishStatus: input.ebayPublishStatus || product.ebayPublishStatus || "DRAFTED_FOR_EBAY",
     };
     const validation = validateEbayProductRecord({ ...product, ...data });
@@ -1298,8 +1335,10 @@ export async function generateEbayDescriptionForProduct(productId: string, templ
 export async function validateEbayProduct(productId: string) {
   return withDatabase(async () => {
     await ensureEbayPublishingDefaults();
-    const product = await getProductForEbay(productId);
+    let product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
+    const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } }).catch(() => null);
+    product = await ensureProductHasEffectiveEbayDefaults(product, config);
     const validation = validateEbayProductRecord(product);
     const updated = await prisma.product.update({
       where: { id: product.id },
@@ -1313,8 +1352,10 @@ export async function validateEbayProduct(productId: string) {
 export async function queueEbayPublishReview(productId: string) {
   return withDatabase(async () => {
     await ensureEbayPublishingDefaults();
-    const product = await getProductForEbay(productId);
+    let product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
+    const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } }).catch(() => null);
+    product = await ensureProductHasEffectiveEbayDefaults(product, config);
     const validation = validateEbayProductRecord(product);
     if (!validation.valid) throw new Error(`Product cannot be queued until validation passes: ${validation.errors.join(" ")}`);
     const job = await prisma.ebayPublishJob.create({
@@ -1771,6 +1812,7 @@ function offerPayload(product: EbayProductRecord, config: any, sku: string) {
       fulfillmentPolicyId: String(fulfillmentPolicyId || ""),
       paymentPolicyId: String(product.ebayPaymentPolicyId || ""),
       returnPolicyId: String(product.ebayReturnPolicyId || ""),
+      ...(product.ebayBestOfferEnabled ? { bestOfferTerms: { bestOfferEnabled: true } } : {}),
     },
     pricingSummary: {
       price: { currency: marketplaceCurrency(marketplaceId), value: moneyValue(product.price) },
@@ -1864,9 +1906,10 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
   return withDatabase(async () => {
     await ensureEbayPublishingDefaults();
     if (!input.confirmLivePublish) throw new Error("Live eBay publish requires explicit confirmation.");
-    const product = await getProductForEbay(productId);
+    let product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
+    product = await ensureProductHasEffectiveEbayDefaults(product, config);
     const validation = livePublishValidation(product);
     if (!validation.valid) {
       await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "VALIDATION_FAILED", ebayValidationErrorsJson: validation } }).catch(() => null);
