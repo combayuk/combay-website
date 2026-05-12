@@ -1,0 +1,5 @@
+Phase 27C.1 Build Fix
+
+Fixes a TypeScript strict-null narrowing error in src/lib/ebayPublishing.ts after applying effective eBay defaults to a product. The code now explicitly checks the product after default application before accessing product fields.
+
+No Prisma/database change required.

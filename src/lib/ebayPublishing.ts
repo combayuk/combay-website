@@ -1272,6 +1272,7 @@ export async function saveEbayProductDraft(productId: string, input: any) {
     if (!product) throw new Error("Product not found.");
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } }).catch(() => null);
     product = await ensureProductHasEffectiveEbayDefaults(product, config);
+    if (!product) throw new Error("Product not found after applying eBay defaults.");
     if (product.ebaySkuLocked && input.sku && input.sku !== product.sku) throw new Error("SKU is locked because this product has already been prepared/published for eBay.");
     const condition = mapConditionToEbay(product);
     const data: any = {
@@ -1339,6 +1340,7 @@ export async function validateEbayProduct(productId: string) {
     if (!product) throw new Error("Product not found.");
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } }).catch(() => null);
     product = await ensureProductHasEffectiveEbayDefaults(product, config);
+    if (!product) throw new Error("Product not found after applying eBay defaults.");
     const validation = validateEbayProductRecord(product);
     const updated = await prisma.product.update({
       where: { id: product.id },
@@ -1356,6 +1358,7 @@ export async function queueEbayPublishReview(productId: string) {
     if (!product) throw new Error("Product not found.");
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } }).catch(() => null);
     product = await ensureProductHasEffectiveEbayDefaults(product, config);
+    if (!product) throw new Error("Product not found after applying eBay defaults.");
     const validation = validateEbayProductRecord(product);
     if (!validation.valid) throw new Error(`Product cannot be queued until validation passes: ${validation.errors.join(" ")}`);
     const job = await prisma.ebayPublishJob.create({
@@ -1910,6 +1913,7 @@ export async function publishProductToEbay(productId: string, input: { confirmLi
     if (!product) throw new Error("Product not found.");
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
     product = await ensureProductHasEffectiveEbayDefaults(product, config);
+    if (!product) throw new Error("Product not found after applying eBay defaults.");
     const validation = livePublishValidation(product);
     if (!validation.valid) {
       await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "VALIDATION_FAILED", ebayValidationErrorsJson: validation } }).catch(() => null);
