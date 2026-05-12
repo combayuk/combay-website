@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, FileText, Search, X } from "lucide-react";
+import { ExternalLink, FileText, Mail, Search, X } from "lucide-react";
 
 const COURIERS: Record<string, string> = {
   "Royal Mail": "https://www.royalmail.com/track-your-item#/tracking-results/",
@@ -48,6 +48,12 @@ type Order = {
   trackingCarrier?: string | null;
   trackingNumber?: string | null;
   trackingUrl?: string | null;
+  trackingEmailSentAt?: string | null;
+  trackingEmailAttemptedAt?: string | null;
+  trackingEmailStatus?: string | null;
+  trackingEmailProviderId?: string | null;
+  trackingEmailRecipient?: string | null;
+  trackingEmailLastError?: string | null;
   shippingAddress?: unknown;
   shippingSnapshot?: {
     shippingPolicyName?: string | null;
@@ -78,6 +84,23 @@ function label(value: string) {
   return value.replace(/_/g, " ");
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  try {
+    return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function trackingEmailBadge(status?: string | null) {
+  const value = status || "NOT_SENT";
+  if (value === "SENT") return "border-green-200 bg-green-50 text-green-700";
+  if (value === "FAILED" || value === "NOT_CONFIGURED") return "border-red-200 bg-red-50 text-red-700";
+  if (value === "ATTEMPTED") return "border-blue-200 bg-blue-50 text-blue-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
@@ -88,6 +111,7 @@ export default function AdminOrders() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [sendingTrackingEmail, setSendingTrackingEmail] = useState(false);
 
   function loadOrders() {
     setLoading(true);
@@ -176,7 +200,41 @@ export default function AdminOrders() {
 
     setOrders((current) => current.map((order) => (order.id === selected.id ? data.order : order)));
     setSelected(data.order);
-    setMessage("Order updated.");
+    const email = data.trackingEmail;
+    if (email?.sent) {
+      setMessage(`Order updated. Tracking email sent to ${email.recipient || data.order.customerEmail}${email.id ? ` (Resend ID: ${email.id})` : ""}.`);
+    } else if (email) {
+      setMessage(`Order updated. Tracking email not sent: ${email.reason || email.error || email.message || "unknown reason"}.`);
+    } else {
+      setMessage("Order updated.");
+    }
+  }
+
+  async function resendTrackingEmail() {
+    if (!selected) return;
+    if (!selected.trackingNumber) {
+      setMessage("Add a tracking number before sending a tracking email.");
+      return;
+    }
+    const confirmed = window.confirm(`Send/resend the tracking email to ${selected.customerEmail}? This will contact the customer.`);
+    if (!confirmed) return;
+    setSendingTrackingEmail(true);
+    setMessage("");
+    const response = await fetch("/api/orders/tracking-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: selected.id, force: true }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setSendingTrackingEmail(false);
+    if (!response.ok || !data.ok) {
+      setMessage(data.reason || data.error || "Could not send tracking email.");
+      return;
+    }
+    const nextOrder = { ...selected, ...(data.order || {}) };
+    setSelected(nextOrder);
+    setOrders((current) => current.map((order) => (order.id === selected.id ? { ...order, ...nextOrder } : order)));
+    setMessage(data.trackingEmail?.sent ? `Tracking email sent to ${data.trackingEmail.recipient || nextOrder.customerEmail}${data.trackingEmail.id ? ` (Resend ID: ${data.trackingEmail.id})` : ""}.` : `Tracking email not sent: ${data.trackingEmail?.reason || data.trackingEmail?.message || "unknown reason"}.`);
   }
 
   return (
@@ -308,6 +366,26 @@ export default function AdminOrders() {
                 <input name="trackingUrl" defaultValue={selected.trackingUrl ?? ""} className="input py-2 text-sm" placeholder="Leave blank to use courier tracking URL" />
               </div>
 
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Mail size={14} className="text-navy-700" />
+                    <h3 className="font-display text-sm font-900 text-navy-950">Tracking email status</h3>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-900 ${trackingEmailBadge(selected.trackingEmailStatus)}`}>{label(selected.trackingEmailStatus || "NOT SENT")}</span>
+                  </div>
+                  <button type="button" disabled={sendingTrackingEmail || !selected.trackingNumber} onClick={resendTrackingEmail} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-900 text-navy-950 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">
+                    <Mail size={12} /> {sendingTrackingEmail ? "Sending..." : "Send/resend"}
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <p><span className="font-900 text-navy-950">Recipient:</span> {selected.trackingEmailRecipient || selected.customerEmail || "—"}</p>
+                  <p><span className="font-900 text-navy-950">Last attempt:</span> {formatDateTime(selected.trackingEmailAttemptedAt)}</p>
+                  <p><span className="font-900 text-navy-950">Last sent:</span> {formatDateTime(selected.trackingEmailSentAt)}</p>
+                  <p><span className="font-900 text-navy-950">Resend ID:</span> {selected.trackingEmailProviderId || "—"}</p>
+                </div>
+                {selected.trackingEmailLastError ? <p className="mt-2 rounded-md border border-red-100 bg-white px-2 py-1 text-red-700"><span className="font-900">Last email issue:</span> {selected.trackingEmailLastError}</p> : null}
+                <p className="mt-2 text-[11px] text-slate-500">This panel records whether Resend accepted the tracking email. If status is Sent but the customer still cannot find it, check the Resend message ID/delivery log before manually resending.</p>
+              </div>
 
               {selected.shippingSnapshot ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
@@ -339,7 +417,7 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {message && <p className={`text-sm ${message === "Order updated." ? "text-green-700" : "text-red-600"}`}>{message}</p>}
+              {message && <p className={`text-sm ${message.includes("not sent") || message.includes("Could not") || message.includes("failed") || message.includes("unknown") ? "text-red-600" : "text-green-700"}`}>{message}</p>}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setSelected(null)} className="btn-secondary px-4 py-2">Close</button>

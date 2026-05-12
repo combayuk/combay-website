@@ -47,13 +47,54 @@ export async function createAdminActivityNotification(input: {
   });
 }
 
-export async function sendTrackingEmailIfNeeded(order: any) {
+async function updateTrackingEmailState(orderId: string, data: Record<string, any>) {
+  return prisma.order.update({ where: { id: orderId }, data }).catch((error: unknown) => {
+    console.error("[tracking-email-state-update-failed]", error);
+    return null;
+  });
+}
+
+function trackingEmailReason(result: any) {
+  if (result?.sent) return "sent";
+  if (!result?.configured) return "not-configured";
+  return result?.reason || result?.error || result?.message || "not-sent";
+}
+
+export async function sendTrackingEmailIfNeeded(order: any, options: { force?: boolean; reason?: string } = {}) {
   await ensureOperationalTables();
-  if (!order?.customerEmail || !order?.trackingNumber) return { sent: false, reason: "missing-recipient-or-tracking" };
-  const nextHash = hashTracking(order);
-  if (order.trackingEmailLastHash === nextHash && order.trackingEmailSentAt) {
-    return { sent: false, reason: "unchanged-tracking" };
+  const attemptedAt = new Date();
+  const recipient = String(order?.customerEmail ?? "").trim().toLowerCase();
+  const trackingNumber = String(order?.trackingNumber ?? "").trim();
+
+  if (!order?.id) return { configured: false, sent: false, provider: "not-configured", message: "Order is missing.", reason: "missing-order" };
+
+  if (!recipient || !trackingNumber) {
+    const reason = !recipient ? "missing-recipient" : "missing-tracking-number";
+    await updateTrackingEmailState(order.id, {
+      trackingEmailAttemptedAt: attemptedAt,
+      trackingEmailStatus: "SKIPPED",
+      trackingEmailRecipient: recipient || null,
+      trackingEmailLastError: reason,
+    });
+    return { configured: true, sent: false, provider: "resend", message: `Tracking email skipped: ${reason}.`, reason };
   }
+
+  const nextHash = hashTracking(order);
+  if (!options.force && order.trackingEmailLastHash === nextHash && order.trackingEmailSentAt) {
+    await updateTrackingEmailState(order.id, {
+      trackingEmailStatus: "SENT",
+      trackingEmailRecipient: recipient,
+      trackingEmailLastError: null,
+    });
+    return { configured: true, sent: false, provider: "resend", message: "Tracking email was already sent for these exact tracking details.", reason: "unchanged-tracking" };
+  }
+
+  await updateTrackingEmailState(order.id, {
+    trackingEmailAttemptedAt: attemptedAt,
+    trackingEmailStatus: "ATTEMPTED",
+    trackingEmailRecipient: recipient,
+    trackingEmailLastError: null,
+  });
 
   const trackingLink = order.trackingUrl
     ? `<p style="margin:10px 0;"><strong>Tracking link:</strong> <a href="${escapeHtml(order.trackingUrl)}" style="color:#2D4F7A;">${escapeHtml(order.trackingUrl)}</a></p>`
@@ -73,16 +114,32 @@ export async function sendTrackingEmailIfNeeded(order: any) {
   );
 
   const result = await sendEmail({
-    to: order.customerEmail,
+    to: recipient,
     subject: `Your Combay order has been dispatched — ${order.orderNumber}`,
     html,
     headers: { "X-Combay-Email-Type": "tracking-update", "X-Combay-Order": String(order.orderNumber) },
   });
 
   if (result.sent) {
-    await prisma.order.update({ where: { id: order.id }, data: { trackingEmailSentAt: new Date(), trackingEmailLastHash: nextHash } }).catch((error: unknown) => console.error("[tracking-email-state-update-failed]", error));
+    await updateTrackingEmailState(order.id, {
+      trackingEmailSentAt: new Date(),
+      trackingEmailLastHash: nextHash,
+      trackingEmailAttemptedAt: attemptedAt,
+      trackingEmailStatus: "SENT",
+      trackingEmailProviderId: result.id ?? null,
+      trackingEmailRecipient: recipient,
+      trackingEmailLastError: null,
+    });
+  } else {
+    await updateTrackingEmailState(order.id, {
+      trackingEmailAttemptedAt: attemptedAt,
+      trackingEmailStatus: result.configured ? "FAILED" : "NOT_CONFIGURED",
+      trackingEmailProviderId: result.id ?? null,
+      trackingEmailRecipient: recipient,
+      trackingEmailLastError: trackingEmailReason(result),
+    });
   }
-  return result;
+  return { ...result, recipient, reason: result.sent ? "sent" : trackingEmailReason(result), force: Boolean(options.force), trigger: options.reason || "tracking-update" };
 }
 
 async function findVariantForItem(item: any) {

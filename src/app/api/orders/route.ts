@@ -38,6 +38,11 @@ function normalizeAdminOrder(order: any) {
     trackingUrl: order.trackingUrl ?? null,
     dispatchedAt: order.dispatchedAt ?? null,
     trackingEmailSentAt: order.trackingEmailSentAt ?? null,
+    trackingEmailAttemptedAt: order.trackingEmailAttemptedAt ?? null,
+    trackingEmailStatus: order.trackingEmailStatus ?? null,
+    trackingEmailProviderId: order.trackingEmailProviderId ?? null,
+    trackingEmailRecipient: order.trackingEmailRecipient ?? null,
+    trackingEmailLastError: order.trackingEmailLastError ?? null,
     salesChannel: order.salesChannel ?? "WEBSITE",
     externalOrderId: order.externalOrderId ?? null,
     externalMarketplace: order.externalMarketplace ?? null,
@@ -107,12 +112,15 @@ export async function GET(request: NextRequest) {
     const email = sessionEmail;
 
 
-    const dbResult = await withDatabase(async () => prisma.order.findMany({
+    const dbResult = await withDatabase(async () => {
+      await ensureOperationalTables();
+      return prisma.order.findMany({
       where: { customerEmail: { equals: email, mode: "insensitive" as const } },
       orderBy: { createdAt: "desc" },
       take: 100,
       include: { items: true, returns: true, shippingSnapshot: true },
-    }));
+    });
+    });
 
     if (dbResult.ok) {
       const orders = dbResult.data.map(normalizeAdminOrder);
@@ -128,6 +136,7 @@ export async function GET(request: NextRequest) {
   const email = requestedEmail;
 
   const dbResult = await withDatabase(async () => {
+    await ensureOperationalTables();
     const where = email ? { customerEmail: { equals: email, mode: "insensitive" as const } } : undefined;
     return prisma.order.findMany({
       where,
@@ -201,7 +210,7 @@ export async function PATCH(request: NextRequest) {
   const dbResult = await withDatabase(async () => {
     await ensureOperationalTables();
     const before = await prisma.order.findUnique({ where: id ? { id } : { orderNumber } }).catch(() => null);
-    const updated = await prisma.order.update({
+    let updated = await prisma.order.update({
       where: id ? { id } : { orderNumber },
       data,
       include: { items: true, returns: true, shippingSnapshot: true },
@@ -215,26 +224,33 @@ export async function PATCH(request: NextRequest) {
         before.status !== updated.status
       )
     );
+    let trackingEmailResult: any = null;
     if (trackingChanged || updated.status === "DISPATCHED") {
-      await sendTrackingEmailIfNeeded(updated).catch((emailError) => console.error("[tracking-email-failed]", emailError));
+      trackingEmailResult = await sendTrackingEmailIfNeeded(updated, { reason: "admin-order-update" }).catch((emailError) => {
+        console.error("[tracking-email-failed]", emailError);
+        return { sent: false, configured: true, provider: "resend", message: "Tracking email send failed.", error: emailError instanceof Error ? emailError.message : "Unknown email error" };
+      });
       await createAdminActivityNotification({
-        type: "TRACKING_UPDATED",
-        title: `Tracking updated for ${updated.orderNumber}`,
-        message: `${updated.trackingCarrier || "Courier"}: ${updated.trackingNumber || "tracking added"}`,
+        type: trackingEmailResult?.sent ? "TRACKING_EMAIL_SENT" : "TRACKING_UPDATED",
+        title: trackingEmailResult?.sent ? `Tracking email sent for ${updated.orderNumber}` : `Tracking updated for ${updated.orderNumber}`,
+        message: trackingEmailResult?.sent
+          ? `Sent to ${updated.customerEmail}. Resend ID: ${trackingEmailResult.id || "not returned"}`
+          : `${updated.trackingCarrier || "Courier"}: ${updated.trackingNumber || "tracking added"}${trackingEmailResult?.reason ? ` · Email: ${trackingEmailResult.reason}` : ""}`,
         sourceModel: "Order",
         sourceId: updated.id,
         customerName: updated.customerName,
         customerEmail: updated.customerEmail,
         amount: Number(updated.total || 0),
       }).catch(() => null);
+      updated = await prisma.order.findUnique({ where: { id: updated.id }, include: { items: true, returns: true, shippingSnapshot: true } }) as any || updated;
     }
-    return updated;
+    return { order: updated, trackingEmailResult };
   });
 
   if (!dbResult.ok) {
     return NextResponse.json({ ok: false, mode: "preview", error: "Could not update order", reason: dbResult.reason }, { status: 500 });
   }
 
-  const order = normalizeAdminOrder(dbResult.data);
-  return NextResponse.json({ ok: true, mode: "database", order, data: order });
+  const order = normalizeAdminOrder((dbResult.data as any).order ?? dbResult.data);
+  return NextResponse.json({ ok: true, mode: "database", order, data: order, trackingEmail: (dbResult.data as any).trackingEmailResult ?? null });
 }

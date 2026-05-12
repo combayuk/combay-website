@@ -1,0 +1,19 @@
+Phase 27F — Tracking Email Reliability and Observability
+
+Purpose
+- Fix the blind spot where admin could mark orders as dispatched/update tracking while not being able to see whether the tracking email was actually sent, skipped, rejected, or accepted by Resend.
+- This phase does not automatically send any retroactive tracking emails to existing customers.
+
+Changes
+- Added tracking email audit fields to Order via Prisma schema and runtime bootstrap:
+  trackingEmailAttemptedAt, trackingEmailStatus, trackingEmailProviderId, trackingEmailRecipient, trackingEmailLastError.
+- sendTrackingEmailIfNeeded now records every outcome: SENT, FAILED, NOT_CONFIGURED, SKIPPED, ATTEMPTED.
+- Admin order update response now returns the tracking email result.
+- Orders drawer now shows a Tracking email status panel with recipient, last attempt, last sent, Resend ID and last error.
+- Added a manual Send/resend tracking email action with confirmation. It only sends if admin clicks and confirms.
+- Added /api/orders/tracking-email for explicit admin resend/check-send workflow.
+- Order GET now runs the operational bootstrap before Prisma Order reads to prevent missing-column runtime errors.
+
+Important
+- If a customer did not receive a tracking email but the panel shows SENT with a Resend ID, the next investigation is deliverability in Resend logs using that ID.
+- If the panel shows NOT_CONFIGURED, FAILED, SKIPPED, or no attempt, the issue is now visible in admin rather than silently hidden.

@@ -551,6 +551,11 @@ model Order {
   dispatchedAt    DateTime?
   trackingEmailSentAt DateTime?
   trackingEmailLastHash String?
+  trackingEmailAttemptedAt DateTime?
+  trackingEmailStatus String?
+  trackingEmailProviderId String?
+  trackingEmailRecipient String?
+  trackingEmailLastError String? @db.Text
   salesChannel    String       @default("WEBSITE")
   externalOrderId String?
   externalMarketplace String?
