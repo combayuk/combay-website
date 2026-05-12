@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/ebay-order-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }

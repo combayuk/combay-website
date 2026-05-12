@@ -1,0 +1,13 @@
+Phase 27G.1 — Vercel Hobby Cron Compatibility Fix
+
+Vercel Hobby accounts do not allow cron expressions that run more than once per day.
+Phase 27G originally added the eBay order sync cron at */15 * * * *, which caused Vercel deployment to fail.
+
+This cumulative archive keeps the manual Admin → eBay → Sync eBay orders & stock button and keeps the eBay order-sync endpoint.
+The Vercel cron schedule has been changed to a Hobby-compatible daily run:
+
+/api/cron/ebay-order-sync → 0 8 * * *
+
+For near-real-time eBay stock protection on Hobby, use the manual sync button after eBay sales, or later configure an external scheduler/Pro plan to call /api/cron/ebay-order-sync every few minutes with CRON_SECRET.
+
+No Prisma command is required.
