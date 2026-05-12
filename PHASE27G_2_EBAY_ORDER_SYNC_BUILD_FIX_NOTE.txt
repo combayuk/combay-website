@@ -1,0 +1,7 @@
+Phase 27G.2 — eBay order sync TypeScript build fix
+
+Fixes Vercel build error in src/lib/ebayOrders.ts where TypeScript treated the existing eBay order lookup as possibly null when checking existing.items after an order update.
+
+The fix keeps the Phase 27G eBay order stock sync functionality intact and safely checks existing order items through a narrowed optional access path.
+
+No Prisma command required.

@@ -280,7 +280,7 @@ async function importOneEbayOrder(ebayOrder: any) {
     imported = true;
   } else {
     order = await prisma.order.update({ where: { id: order.id }, data: commonData });
-    if (!existing.items?.length) await createOrderItemsForEbayOrder(order.id, ebayOrder);
+    if (!Array.isArray((existing as any)?.items) || !(existing as any).items.length) await createOrderItemsForEbayOrder(order.id, ebayOrder);
   }
 
   const withItems = await prisma.order.findUnique({ where: { id: order.id }, include: { items: true } });
