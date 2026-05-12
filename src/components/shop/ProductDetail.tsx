@@ -167,10 +167,9 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
 
             <div className="mb-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-2">
               <DetailLine label="SKU" value={product.sku} />
-              <DetailLine label="Brand" value={product.brand || product.manufacturer || "—"} />
+              <DetailLine label="Brand / Manufacturer" value={product.brand || product.manufacturer || "—"} />
               <DetailLine label="MPN" value={product.mpn || product.model || "—"} />
               <DetailLine label="Model" value={product.model || "—"} />
-              <DetailLine label="Manufacturer" value={product.manufacturer || product.brand || "—"} />
               <DetailLine label="Location" value={(product as any).itemLocation || "United Kingdom"} />
             </div>
 

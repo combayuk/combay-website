@@ -1,0 +1,15 @@
+Phase 27E — Product Editor Operations Refinement
+
+Cumulative full-project archive built on Phase 27D.2.
+
+Implemented:
+- Product editor no longer uses launch-era right-panel language.
+- Right panel now shows an operations snapshot: SKU, website status, eBay status, price, stock, image count, shipping policy, category, MPN/model, location, last updated and eBay ID.
+- Launch checklist/editor guidance replaced with compact sellability checks and quick actions.
+- Basic tab now uses a single Brand / Manufacturer field. It writes the same canonical value to both brand and manufacturer for compatibility with existing public/eBay mappings.
+- Save behaviour improved for daily admin work: editing an existing product no longer forces admin back to the products table after every save; new product creation redirects into the saved edit page.
+- Bottom save bar wording changed from launch language to operational readiness language.
+- Quick action panel adds website preview, eBay preview, eBay tab review and shipping review shortcuts.
+
+No Prisma/database command required.
+- Public product detail page now displays Brand / Manufacturer as one row instead of showing duplicate Brand and Manufacturer values.

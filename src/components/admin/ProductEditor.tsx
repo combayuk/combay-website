@@ -178,6 +178,10 @@ export default function ProductEditor({ mode, productId }: Props) {
     setProduct((current) => ({ ...current, [key]: value }));
   }
 
+  function updateBrandManufacturer(value: string) {
+    setProduct((current) => ({ ...current, brand: value, manufacturer: value }));
+  }
+
   function shippingOverrides(): Record<string, ShippingOverrideRow> {
     const value = (product as any).shippingOverrides;
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, ShippingOverrideRow> : {};
@@ -316,8 +320,11 @@ export default function ProductEditor({ mode, productId }: Props) {
 
     const preparedImages = cleanImages(imageRows, product.title);
     const preparedVariants = cleanVariants(variantRows);
+    const canonicalBrandManufacturer = (product.brand || product.manufacturer || "").trim();
     const payload: AdminProduct = {
       ...product,
+      brand: canonicalBrandManufacturer,
+      manufacturer: canonicalBrandManufacturer,
       status,
       slug: product.slug || slugifyProductTitle(product.title, product.sku),
       image: preparedImages.find((image) => image.isPrimary)?.url || preparedImages[0]?.url || null,
@@ -348,8 +355,10 @@ export default function ProductEditor({ mode, productId }: Props) {
     setImageRows(normaliseImages(savedProduct));
     setVariantRows(normaliseVariants((savedProduct as any).variants));
     setSaved(true);
-    setMessage("Product saved to PostgreSQL/Neon.");
-    setTimeout(() => router.push("/admin/products"), 700);
+    setMessage(status === "PUBLISHED" ? "Product published on Combay." : "Product draft saved.");
+    if (mode === "new" && savedProduct.id) {
+      setTimeout(() => router.push(`/admin/products/${encodeURIComponent(savedProduct.id)}`), 500);
+    }
   }
 
   function triggerEbayAction(action: "validate" | "publish") {
@@ -386,6 +395,14 @@ export default function ProductEditor({ mode, productId }: Props) {
     { label: "Shipping", ok: Boolean((product as any).shippingPolicyId) || Boolean((product as any).shippingManualQuoteRequired) || Boolean((product as any).shippingCollectionOnly) },
   ];
   const readyCount = editorChecks.filter((item) => item.ok).length;
+  const stockTotal = variantRows.length ? variantRows.reduce((sum, row) => sum + Number(row.stockQty || 0), 0) : Number(product.stockQty || 0);
+  const selectedShippingPolicy = shippingPolicies.find((policy) => policy.id === (product as any).shippingPolicyId);
+  const ebayListingId = String((product as any).ebayListingId || (product as any).ebayItemId || "").trim();
+  const ebayUrl = ebayListingId ? `https://www.ebay.co.uk/itm/${encodeURIComponent(ebayListingId)}` : "";
+  const productUrl = product.slug ? `/shop/${product.slug}` : "";
+  const lastUpdated = (product as any).updatedAt ? new Date((product as any).updatedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Not saved";
+  const shippingSummary = selectedShippingPolicy?.name || ((product as any).shippingManualQuoteRequired ? "Manual quote" : (product as any).shippingCollectionOnly ? "Collection only" : "No policy");
+  const canonicalBrandManufacturer = product.brand || product.manufacturer || "";
 
   if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-8 text-sm text-gray-500">Loading product from database…</div>;
 
@@ -444,8 +461,11 @@ export default function ProductEditor({ mode, productId }: Props) {
             <div><label className="label">SKU</label><input value={product.sku} onChange={(e) => update("sku", e.target.value)} className="input py-2 text-sm font-mono" /></div>
             <div><label className="label">Status</label><select value={product.status} onChange={(e) => update("status", e.target.value as AdminProductStatus)} className="input py-2 text-sm"><option value="PUBLISHED">Published</option><option value="DRAFT">Draft</option><option value="ARCHIVED">Archived</option></select></div>
             <div className="lg:col-span-2"><label className="label">Product title *</label><input value={product.title} onChange={(e) => update("title", e.target.value)} className="input py-2 text-sm" placeholder="e.g. Siemens S7-400 CPU 412-2 PLC Module" /></div>
-            <div><label className="label">Brand</label><input value={product.brand} onChange={(e) => update("brand", e.target.value)} className="input py-2 text-sm" /></div>
-            <div><label className="label">Manufacturer</label><input value={product.manufacturer} onChange={(e) => update("manufacturer", e.target.value)} className="input py-2 text-sm" /></div>
+            <div className="lg:col-span-2">
+              <label className="label">Brand / Manufacturer</label>
+              <input value={product.brand || product.manufacturer || ""} onChange={(e) => updateBrandManufacturer(e.target.value)} className="input py-2 text-sm" placeholder="e.g. Siemens, Allen-Bradley, Fluke" />
+              <p className="mt-1 text-[11px] text-gray-400">One canonical field is used across website display and eBay Brand item specific. Legacy manufacturer is kept in sync for compatibility.</p>
+            </div>
             <div><label className="label">Model</label><input value={product.model} onChange={(e) => update("model", e.target.value)} className="input py-2 text-sm" /></div>
             <div><label className="label">MPN / Part number</label><input value={product.mpn} onChange={(e) => update("mpn", e.target.value)} className="input py-2 text-sm" /></div>
             <div><label className="label">Category</label><select value={product.category} onChange={(e) => updateCategory(e.target.value)} className="input py-2 text-sm">{product.category && !CATEGORIES.some((category) => category.label === product.category) && <option value={product.category}>{product.category}</option>}{CATEGORIES.filter((category) => category.slug).map((category) => <option key={category.slug} value={category.label}>{category.label}</option>)}</select></div>
@@ -567,7 +587,10 @@ export default function ProductEditor({ mode, productId }: Props) {
 
         <aside className="space-y-3">
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] font-900 uppercase tracking-widest text-gray-400">Product summary</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-900 uppercase tracking-widest text-gray-400">Operations snapshot</p>
+              <span className={`rounded-full px-2 py-1 text-[10px] font-900 ${product.status === "PUBLISHED" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{websiteStatusLabel}</span>
+            </div>
             <div className="mt-3 flex items-start gap-3">
               <div className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
                 {imageRows[0]?.url ? <img src={imageRows[0].url} alt="" className="h-full w-full object-contain" /> : <span className="text-gray-300">📦</span>}
@@ -575,38 +598,52 @@ export default function ProductEditor({ mode, productId }: Props) {
               <div className="min-w-0">
                 <p className="truncate font-display text-sm font-900 text-navy-950">{product.title || "Untitled product"}</p>
                 <p className="mt-1 font-mono text-[11px] text-accent">{product.sku || "No SKU"}</p>
-                <p className="mt-1 text-xs text-gray-500">{product.category || "No category"} · {product.condition}</p>
+                <p className="mt-1 truncate text-xs text-gray-500">{canonicalBrandManufacturer || "No brand"} · {product.condition}</p>
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
               <SummaryStat label="Price" value={product.priceOnRequest ? "POA" : product.price === null ? "—" : `£${Number(product.price).toLocaleString("en-GB")}`} />
-              <SummaryStat label="Stock" value={String(variantRows.length ? variantRows.reduce((sum, row) => sum + Number(row.stockQty || 0), 0) : product.stockQty)} />
+              <SummaryStat label="Stock" value={String(stockTotal)} />
               <SummaryStat label="Images" value={`${imageRows.length}/${MAX_PRODUCT_IMAGES}`} />
-              <SummaryStat label="Variants" value={String(variantRows.length)} />
+              <SummaryStat label="Shipping" value={shippingSummary} />
+              <SummaryStat label="Website" value={websiteStatusLabel} />
+              <SummaryStat label="eBay" value={ebayStatusLabel} />
+            </div>
+            <div className="mt-4 space-y-2 text-xs">
+              <SnapshotRow label="Category" value={product.category || "No category"} />
+              <SnapshotRow label="MPN / model" value={[product.mpn, product.model].filter(Boolean).join(" / ") || "—"} />
+              <SnapshotRow label="Location" value={(product as any).locationBin || (product as any).itemLocation || "—"} />
+              <SnapshotRow label="Last updated" value={lastUpdated} />
+              <SnapshotRow label="eBay ID" value={ebayListingId || "Not listed"} />
             </div>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-[11px] font-900 uppercase tracking-widest text-gray-400">Launch checklist</p>
+            <p className="text-[11px] font-900 uppercase tracking-widest text-gray-400">Sellability checks</p>
             <div className="mt-3 space-y-2">
               {editorChecks.map((item) => (
                 <div key={item.label} className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-gray-600">{item.label}</span>
-                  <span className={`font-900 ${item.ok ? "text-green-700" : "text-amber-700"}`}>{item.ok ? "OK" : "Needs check"}</span>
+                  <span className={`font-900 ${item.ok ? "text-green-700" : "text-amber-700"}`}>{item.ok ? "Ready" : "Check"}</span>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="font-display text-sm font-900 text-amber-950">Editor guidance</p>
-            <p className="mt-1 text-xs leading-5 text-amber-900">Save as draft while checking images, pricing, variants and SEO. Publish only after the summary looks complete.</p>
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[11px] font-900 uppercase tracking-widest text-gray-400">Quick actions</p>
+            <div className="mt-3 grid gap-2">
+              {productUrl ? <a href={productUrl} target="_blank" rel="noreferrer" className="btn-secondary justify-center text-xs"><Eye size={14} /> Website preview</a> : <button type="button" disabled className="btn-secondary justify-center text-xs opacity-50"><Eye size={14} /> Website preview</button>}
+              {ebayUrl ? <a href={ebayUrl} target="_blank" rel="noreferrer" className="btn-secondary justify-center text-xs"><Eye size={14} /> eBay preview</a> : <button type="button" disabled className="btn-secondary justify-center text-xs opacity-50"><Eye size={14} /> eBay preview</button>}
+              <button type="button" onClick={() => setTab("ebay")} className="btn-secondary justify-center text-xs"><ShieldCheck size={14} /> Review eBay tab</button>
+              <button type="button" onClick={() => setTab("shipping")} className="btn-secondary justify-center text-xs"><Truck size={14} /> Review shipping</button>
+            </div>
           </section>
         </aside>
       </div>
 
       <div className="sticky bottom-4 z-20 rounded-xl border border-slate-200 bg-white/95 backdrop-blur p-3 shadow-2xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-xs text-gray-500"><span className="font-display font-900 text-navy-950">{readyCount}/{editorChecks.length}</span> launch fields complete · save as draft if still checking images, price or content.</div>
+        <div className="text-xs text-gray-500"><span className="font-display font-900 text-navy-950">{readyCount}/{editorChecks.length}</span> operational checks complete · keep draft while stock, images, shipping or eBay readiness needs review.</div>
         <div className="flex flex-wrap gap-2"><Link href="/admin/products" className="btn-secondary">Cancel</Link><button disabled={saving} onClick={() => handleSave("DRAFT")} className="btn-secondary"><Save size={14} /> Save draft</button><button disabled={saving} onClick={() => handleSave("PUBLISHED")} className="btn-primary">Save & publish</button></div>
       </div>
     </div>
@@ -618,7 +655,16 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
       <p className="text-[10px] font-900 uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-0.5 truncate font-display text-xs font-900 text-navy-950">{value}</p>
+      <p className="mt-0.5 truncate font-display text-xs font-900 text-navy-950" title={value}>{value}</p>
+    </div>
+  );
+}
+
+function SnapshotRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2 first:border-t-0 first:pt-0">
+      <span className="text-gray-500">{label}</span>
+      <span className="min-w-0 truncate text-right font-display font-800 text-navy-950" title={value}>{value}</span>
     </div>
   );
 }
