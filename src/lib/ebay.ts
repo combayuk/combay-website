@@ -328,6 +328,29 @@ export async function getEbayFulfillmentAccessToken() {
   }
 }
 
+export async function clearEbayOAuthConnection() {
+  const config = await getEbayConfig();
+  const updated = await prisma.ebaySyncConfig.update({
+    where: { id: config.id },
+    data: {
+      refreshToken: null,
+      accessToken: null,
+      accessTokenExpiresAt: null,
+      syncDone: true,
+      syncLastStartedAt: null,
+      syncLastCompletedAt: null,
+    },
+  });
+  return {
+    environment: updated.environment,
+    marketplaceId: updated.marketplaceId,
+    clientIdConfigured: Boolean(updated.clientId || process.env.EBAY_CLIENT_ID),
+    clientSecretConfigured: Boolean(updated.clientSecret || process.env.EBAY_CLIENT_SECRET),
+    ruNameConfigured: Boolean(updated.ruName || process.env.EBAY_RUNAME),
+    refreshTokenConfigured: false,
+  };
+}
+
 function aspect(aspects: Record<string, string[] | string> | undefined, keys: string[]) {
   if (!aspects) return "";
   for (const key of keys) {

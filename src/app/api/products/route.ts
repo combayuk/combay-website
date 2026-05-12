@@ -39,6 +39,8 @@ export async function GET(req: Request) {
     includeArchived: admin,
     priceMin: Number.isFinite(priceMin) ? priceMin : null,
     priceMax: Number.isFinite(priceMax) ? priceMax : null,
+    page,
+    pageSize,
   });
 
   return Response.json({
@@ -47,6 +49,9 @@ export async function GET(req: Request) {
     message: result.message,
     count: result.products.length,
     total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+    totalPages: result.totalPages,
     categories: result.categories,
     products: result.products,
   });

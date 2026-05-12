@@ -1,6 +1,6 @@
 import { prisma, withDatabase } from "@/lib/db";
 import { CATEGORIES, PRODUCTS, searchProducts, type CatalogProduct, type ConditionCode, type StockStatus } from "@/lib/catalog";
-import { PUBLIC_CATEGORY_LIST, canonicalCategoryForText, isPublicCategoryMatch } from "@/lib/categoryTaxonomy";
+import { PUBLIC_CATEGORY_LIST, canonicalCategoryForText, getCanonicalBySlug, isPublicCategoryMatch, type PublicSubcategory } from "@/lib/categoryTaxonomy";
 import { buildProductShippingSummary } from "@/lib/shipping";
 import { ensureOperationalTables } from "@/lib/operationalSchema";
 
@@ -345,6 +345,106 @@ function relationPayload(input: ProductWriteInput) {
   };
 }
 
+type PublicCategoryListItem = {
+  label: string;
+  slug: string;
+  image?: string;
+  count?: number;
+  subcategories: Array<PublicSubcategory & { count?: number }>;
+};
+
+function publicCategoryImage(slug?: string | null, icon?: string | null) {
+  if (icon) return icon;
+  const canonical = getCanonicalBySlug(slug);
+  const staticGroup = PUBLIC_CATEGORY_LIST.find((item) => item.slug === (canonical?.groupSlug || slug));
+  return (staticGroup as any)?.image || "/images/categories/real/electrical-components.svg";
+}
+
+let publicCategoryCache: { expiresAt: number; data: PublicCategoryListItem[] } | null = null;
+
+export async function getPublicCategoryGroupsFromRepository(): Promise<PublicCategoryListItem[]> {
+  const now = Date.now();
+  if (publicCategoryCache && publicCategoryCache.expiresAt > now) return publicCategoryCache.data;
+
+  const dbResult = await withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
+    const rows = await prisma.category.findMany({
+      where: { products: { some: { status: "PUBLISHED", deletedAt: null } } },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        icon: true,
+        parentId: true,
+        parent: { select: { id: true, name: true, slug: true, icon: true } },
+        _count: { select: { products: { where: { status: "PUBLISHED", deletedAt: null } } } },
+      },
+      orderBy: { name: "asc" },
+      take: 500,
+    });
+
+    const groups = new Map<string, PublicCategoryListItem>();
+    const addGroup = (label: string, slug: string, image?: string | null) => {
+      const cleanSlug = slugify(slug || label, "category");
+      const existing = groups.get(cleanSlug);
+      if (existing) return existing;
+      const group: PublicCategoryListItem = { label, slug: cleanSlug, image: publicCategoryImage(cleanSlug, image), count: 0, subcategories: [] };
+      groups.set(cleanSlug, group);
+      return group;
+    };
+
+    for (const row of rows as any[]) {
+      const count = Number(row._count?.products || 0);
+      if (!count) continue;
+      const exact = getCanonicalBySlug(row.slug);
+      const parentExact = row.parent ? getCanonicalBySlug(row.parent.slug) : null;
+
+      if (row.parent) {
+        const groupSlug = parentExact?.groupSlug || slugify(row.parent.slug || row.parent.name, "category");
+        const groupLabel = parentExact?.groupLabel || row.parent.name;
+        const group = addGroup(groupLabel, groupSlug, row.parent.icon);
+        const subSlug = exact?.subcategorySlug || slugify(row.slug || row.name, "subcategory");
+        const subLabel = exact?.subcategoryLabel || row.name;
+        if (!group.subcategories.some((sub) => sub.slug === subSlug)) group.subcategories.push({ label: subLabel, slug: subSlug, count });
+        group.count = (group.count || 0) + count;
+        continue;
+      }
+
+      if (exact?.subcategorySlug) {
+        const group = addGroup(exact.groupLabel, exact.groupSlug, publicCategoryImage(exact.groupSlug));
+        if (!group.subcategories.some((sub) => sub.slug === exact.subcategorySlug)) group.subcategories.push({ label: exact.subcategoryLabel || row.name, slug: exact.subcategorySlug, count });
+        group.count = (group.count || 0) + count;
+      } else if (exact?.groupSlug) {
+        const group = addGroup(exact.groupLabel, exact.groupSlug, row.icon);
+        group.count = (group.count || 0) + count;
+      } else {
+        const group = addGroup(row.name, row.slug, row.icon);
+        group.count = (group.count || 0) + count;
+      }
+    }
+
+    const ordered = Array.from(groups.values())
+      .map((group) => ({ ...group, subcategories: group.subcategories.sort((a, b) => a.label.localeCompare(b.label)) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    return ordered.length ? [{ label: "All Categories", slug: "", subcategories: [] }, ...ordered] : PUBLIC_CATEGORY_LIST;
+  });
+
+  const data = dbResult.ok ? dbResult.data : PUBLIC_CATEGORY_LIST;
+  publicCategoryCache = { expiresAt: now + 60_000, data: data as PublicCategoryListItem[] };
+  return publicCategoryCache.data;
+}
+
+const publicProductCardSelect = {
+  id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, model: true, mpn: true,
+  condition: true, price: true, priceOnRequest: true, stockQty: true, status: true, source: true,
+  description: true, productOverview: true, dispatchNote: true, leadTime: true, warranty: true,
+  createdAt: true, updatedAt: true,
+  category: { select: { name: true, slug: true } },
+  images: { orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }], take: 1, select: { url: true } },
+  variants: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { id: true, sku: true, label: true, optionName: true, optionValue: true, price: true, stockQty: true, sortOrder: true } },
+};
+
 export async function getProductsFromRepository(params: {
   query?: string;
   category?: string;
@@ -353,7 +453,13 @@ export async function getProductsFromRepository(params: {
   includeArchived?: boolean;
   priceMin?: number | null;
   priceMax?: number | null;
+  page?: number;
+  pageSize?: number;
 }) {
+  const page = Math.max(1, Number(params.page || 1));
+  const pageSize = Math.min(48, Math.max(12, Number(params.pageSize || 24)));
+  const selectedCategory = String(params.category || "").trim();
+
   const dbResult = await withDatabase(async () => {
     await ensureOperationalTables().catch(() => null);
     const where: any = { deletedAt: null };
@@ -377,40 +483,82 @@ export async function getProductsFromRepository(params: {
       ];
     }
 
-    // Phase 27H speed fix: public shop list uses a lightweight product-card query.
-    // Full specs/documents/all images/shipping rates are loaded only on the product detail page.
-    const rawProducts = await prisma.product.findMany({
-      where,
-      select: {
-        id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, model: true, mpn: true,
-        condition: true, price: true, priceOnRequest: true, stockQty: true, status: true, source: true,
-        description: true, productOverview: true, dispatchNote: true, leadTime: true, warranty: true,
-        createdAt: true, updatedAt: true,
-        category: { select: { name: true, slug: true } },
-        images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { url: true } },
-        variants: { orderBy: { sortOrder: "asc" }, take: 1, select: { id: true, sku: true, label: true, optionName: true, optionValue: true, price: true, stockQty: true, sortOrder: true } },
-      },
-      orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
-      take: params.category ? 240 : 96,
-    });
+    let total = 0;
+    let rawProducts: any[] = [];
 
+    if (selectedCategory) {
+      // Category membership is canonicalised from historical/imported product data. Keep this query light:
+      // identify matching product IDs from narrow rows, then load only the current visible page's card payload.
+      const candidates = await prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          sku: true,
+          brand: true,
+          manufacturer: true,
+          model: true,
+          mpn: true,
+          updatedAt: true,
+          category: { select: { name: true, slug: true } },
+        },
+        orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
+        take: 5000,
+      });
+      const matchingIds = candidates
+        .filter((product: any) => isPublicCategoryMatch({
+          title: product.title,
+          brand: product.brand,
+          manufacturer: product.manufacturer,
+          model: product.model,
+          mpn: product.mpn,
+          category: product.category?.name,
+          categorySlug: product.category?.slug,
+        }, selectedCategory))
+        .map((product: any) => product.id);
+      total = matchingIds.length;
+      const pageIds = matchingIds.slice((page - 1) * pageSize, page * pageSize);
+      if (pageIds.length) {
+        rawProducts = await prisma.product.findMany({
+          where: { id: { in: pageIds } },
+          select: publicProductCardSelect,
+          orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
+        });
+        const order = new Map<string, number>(pageIds.map((id: string, index: number) => [id, index]));
+        rawProducts.sort((a: any, b: any) => Number(order.get(a.id) ?? 0) - Number(order.get(b.id) ?? 0));
+      }
+    } else {
+      [total, rawProducts] = await Promise.all([
+        prisma.product.count({ where }),
+        prisma.product.findMany({
+          where,
+          select: publicProductCardSelect,
+          orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+    }
+
+    const categories = await getPublicCategoryGroupsFromRepository();
     const mappedProducts = rawProducts.map(mapPublicListProduct);
-    const filteredProducts = params.category ? mappedProducts.filter((product: CatalogProduct & Record<string, unknown>) => isPublicCategoryMatch(product, params.category)).slice(0, 96) : mappedProducts;
-
-    return { products: filteredProducts, categories: PUBLIC_CATEGORY_LIST };
+    return { products: mappedProducts, categories, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
   });
 
   if (dbResult.ok) {
     return {
       source: "database",
-      message: "Products served from a lightweight PostgreSQL public catalogue query.",
+      message: "Products served from a paginated lightweight PostgreSQL public catalogue query.",
       products: dbResult.data.products,
-      total: dbResult.data.products.length,
+      total: dbResult.data.total,
+      page: dbResult.data.page,
+      pageSize: dbResult.data.pageSize,
+      totalPages: dbResult.data.totalPages,
       categories: dbResult.data.categories,
     };
   }
 
-  const products = searchProducts({
+  const allProducts = searchProducts({
     query: params.query ?? "",
     category: "",
     condition: params.condition ?? "",
@@ -430,14 +578,17 @@ export async function getProductsFromRepository(params: {
       });
       return { ...product, category: canonical.groupLabel, categorySlug: canonical.groupSlug, subcategory: canonical.subcategoryLabel ?? "", subcategorySlug: canonical.subcategorySlug ?? "" };
     })
-    .filter((product) => isPublicCategoryMatch(product, params.category))
-    .slice(0, 96);
+    .filter((product) => isPublicCategoryMatch(product, params.category));
 
+  const start = (page - 1) * pageSize;
   return {
     source: "catalog-fallback",
     message: dbResult.reason,
-    products,
-    total: products.length,
+    products: allProducts.slice(start, start + pageSize),
+    total: allProducts.length,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(allProducts.length / pageSize)),
     categories: PUBLIC_CATEGORY_LIST,
   };
 }

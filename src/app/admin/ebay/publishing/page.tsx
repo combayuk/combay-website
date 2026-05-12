@@ -260,6 +260,21 @@ export default function EbayPublishingPage() {
     await load();
   }
 
+
+  async function forceReconnectEbay() {
+    const confirmed = window.confirm("Clear the saved eBay OAuth token and reconnect with the latest required permissions? This does not delete products, policies or local settings.");
+    if (!confirmed) return;
+    setMessage("Clearing saved eBay OAuth token…");
+    const response = await fetch("/api/ebay/auth/reset", { method: "POST" });
+    const result = await response.json().catch(() => ({}));
+    if (!result.ok) {
+      setMessage(result.error || "Could not reset eBay connection.");
+      return;
+    }
+    setMessage(result.message || "eBay connection cleared. Redirecting to reconnect…");
+    if (result.reconnectUrl) window.location.href = result.reconnectUrl;
+  }
+
   if (loading) return <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-gray-500">Loading eBay publishing foundation…</div>;
 
   return (
@@ -273,6 +288,7 @@ export default function EbayPublishingPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={load} className="btn-secondary text-xs py-2"><RefreshCw size={14} /> Refresh / fetch eBay options</button>
+            <button onClick={forceReconnectEbay} className="btn-secondary text-xs py-2"><RefreshCw size={14} /> Force reconnect eBay</button>
             <button onClick={processApprovedJob} disabled={processingJob || !schemaReady || stats.pendingJobs < 1} className="btn-secondary text-xs py-2"><PlayCircle size={14} /> {processingJob ? "Processing…" : "Process approved publish job"}</button>
             <button onClick={save} disabled={saving || !schemaReady} className="btn-primary text-xs py-2"><Save size={14} /> {saving ? "Saving…" : "Save settings"}</button>
           </div>
@@ -280,6 +296,19 @@ export default function EbayPublishingPage() {
       </section>
 
       {message && <div className={`rounded-xl border px-4 py-2 text-sm font-700 ${schemaReady ? "border-blue-200 bg-blue-50 text-blue-900" : "border-red-200 bg-red-50 text-red-900"}`}>{message}</div>}
+
+      {!options.fetchedFromEbay && options.fetchMessage ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 shrink-0" size={18} />
+            <div>
+              <h2 className="font-display text-base font-900">eBay policy permission diagnostic</h2>
+              <p className="mt-1 leading-6">{options.fetchMessage}</p>
+              <p className="mt-2 leading-6">If this says Access denied, the saved eBay token usually predates the Account/Fulfillment permission update or belongs to the wrong environment. Use <strong>Force reconnect eBay</strong> above to clear the stored OAuth token and grant the latest scopes.</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {!schemaReady && <section className="rounded-xl border border-red-200 bg-white p-4 shadow-sm">
         <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 text-red-600" size={18} /><div><h2 className="font-display text-base font-900 text-red-900">Database schema update required</h2><p className="mt-1 text-sm leading-6 text-red-800">The page is protected from crashing, but the eBay publishing tables are not available in the active database yet. Run the Prisma generate and db push commands below against the same DATABASE_URL used by Vercel, then redeploy.</p><pre className="mt-3 overflow-x-auto rounded-lg bg-red-950 p-3 text-xs text-red-50">npm install{`\n`}npx --yes prisma@5.22.0 generate{`\n`}npx --yes prisma@5.22.0 db push</pre></div></div>

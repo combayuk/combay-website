@@ -6,17 +6,20 @@ import { ChevronDown, Menu, Search, ShoppingCart, X } from "lucide-react";
 import { readCartLines } from "@/lib/cart";
 import { PUBLIC_CATEGORY_GROUPS } from "@/lib/categoryTaxonomy";
 
-const SHOP_CATS = PUBLIC_CATEGORY_GROUPS.map((group) => ({
+const FALLBACK_SHOP_CATS = PUBLIC_CATEGORY_GROUPS.map((group) => ({
   name: group.label,
   slug: group.slug,
   image: group.image,
-  items: group.subcategories.slice(0, 2).map((item) => ({ name: item.label, slug: item.slug })),
+  items: group.subcategories.slice(0, 3).map((item) => ({ name: item.label, slug: item.slug })),
 }));
+
+type ShopMenuCategory = { name: string; slug: string; image?: string; items: { name: string; slug: string }[] };
 
 const NAV = [
   { label: "Asset Recovery", href: "/asset-recovery" },
   { label: "Repairs", href: "/repair" },
   { label: "Manufacturers", href: "/manufacturers" },
+  { label: "Resources", href: "/resources" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
@@ -35,6 +38,7 @@ export default function Navigation() {
   const [cartCount, setCartCount] = useState(0);
   const [megaSearch, setMegaSearch] = useState("");
   const [megaSearchError, setMegaSearchError] = useState(false);
+  const [shopCats, setShopCats] = useState<ShopMenuCategory[]>(FALLBACK_SHOP_CATS);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -46,6 +50,26 @@ export default function Navigation() {
       window.removeEventListener("storage", syncCart);
       window.removeEventListener("combay-cart-updated", syncCart as EventListener);
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/categories/public", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((result) => {
+        if (cancelled || !Array.isArray(result?.categories)) return;
+        const mapped = result.categories
+          .filter((cat: any) => cat?.slug)
+          .map((cat: any) => ({
+            name: String(cat.label || cat.name || cat.slug),
+            slug: String(cat.slug),
+            image: cat.image || "/images/categories/real/electrical-components.svg",
+            items: Array.isArray(cat.subcategories) ? cat.subcategories.slice(0, 4).map((item: any) => ({ name: String(item.label || item.name || item.slug), slug: String(item.slug) })) : [],
+          }));
+        if (mapped.length) setShopCats(mapped);
+      })
+      .catch(() => null);
+    return () => { cancelled = true; };
   }, []);
 
   const openShop = () => { if (closeTimer.current) clearTimeout(closeTimer.current); setShopOpen(true); };
@@ -67,16 +91,16 @@ export default function Navigation() {
               {shopOpen && (
                 <div className="absolute left-0 top-full max-h-[calc(100vh-120px)] w-[780px] overflow-y-auto rounded-b-xl border border-slate-200 bg-white shadow-2xl">
                   <div className="grid grid-cols-3 gap-px bg-slate-100 p-px">
-                    {SHOP_CATS.map((cat) => (
+                    {shopCats.map((cat) => (
                       <div key={cat.slug} className="group bg-white p-2.5 transition-colors hover:bg-slate-50">
-                        <Link href={`/shop?category=${cat.slug}`} className="mb-1 flex items-center gap-2">
+                        <Link href={`/shop?category=${cat.slug}`} onClick={() => setShopOpen(false)} className="mb-1 flex items-center gap-2">
                           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-slate-50">
                             <img src={cat.image} alt="" className="h-8 w-8 object-contain" />
                           </span>
                           <span className="font-display text-[12px] font-900 leading-tight text-[#2D4F7A] group-hover:text-[#C9872F]">{cat.name}</span>
                         </Link>
                         <ul className="space-y-0.5 pl-10">
-                          {cat.items.map((item) => <li key={item.slug}><Link href={`/shop?category=${item.slug}`} className="text-[10.5px] leading-3.5 text-slate-500 hover:text-[#2D4F7A]">{item.name}</Link></li>)}
+                          {cat.items.map((item) => <li key={item.slug}><Link href={`/shop?category=${item.slug}`} onClick={() => setShopOpen(false)} className="text-[10.5px] leading-3.5 text-slate-500 hover:text-[#2D4F7A]">{item.name}</Link></li>)}
                         </ul>
                       </div>
                     ))}

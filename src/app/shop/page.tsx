@@ -25,6 +25,8 @@ type ShopPageProps = {
     max?: string;
     priceMin?: string;
     priceMax?: string;
+    page?: string;
+    pageSize?: string;
   };
 };
 
@@ -36,6 +38,8 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
   const maxRaw = searchParams?.max ?? searchParams?.priceMax ?? "";
   const min = minRaw ? Number(minRaw) : null;
   const max = maxRaw ? Number(maxRaw) : null;
+  const page = Math.max(1, Number(searchParams?.page || 1));
+  const pageSize = Math.min(48, Math.max(12, Number(searchParams?.pageSize || 24)));
 
   const [promotions, content, initialInventory] = await Promise.all([
     getPublicPromotions("shop", 2),
@@ -46,6 +50,8 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
       condition,
       priceMin: Number.isFinite(min) ? min : null,
       priceMax: Number.isFinite(max) ? max : null,
+      page,
+      pageSize,
     }),
   ]) as [PublicPromotion[], Awaited<ReturnType<typeof getSiteContent>>, Awaited<ReturnType<typeof getProductsFromRepository>>];
 
@@ -64,6 +70,10 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           initialProducts={initialInventory.products}
           initialCategories={initialInventory.categories}
           initialSource={initialInventory.source}
+          initialTotal={initialInventory.total}
+          initialPage={initialInventory.page}
+          initialPageSize={initialInventory.pageSize}
+          initialTotalPages={initialInventory.totalPages}
           promotions={promotions}
         />
       </div>

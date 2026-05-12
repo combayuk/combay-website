@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf", "video/mp4", "video/webm", "video/quicktime"]);
 
 function safeFolder(value: string) {
-  return ["products", "docs", "avatars", "company-docs"].includes(value) ? value : "products";
+  return ["products", "docs", "avatars", "company-docs", "resources"].includes(value) ? value : "products";
 }
 
 export async function POST(req: Request) {

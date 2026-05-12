@@ -96,6 +96,18 @@ export const PUBLIC_CATEGORY_GROUPS: PublicCategoryGroup[] = [
       { label: "Displays & Video Walls", slug: "displays-video-walls", aliases: ["display", "video wall", "screen", "signage", "interactive display", "webex board", "smart board", "lcd panel", "led wall"] },
     ],
   },
+
+  {
+    label: "Military & Surplus",
+    slug: "military-surplus",
+    image: "/images/categories/real/electrical-components.svg",
+    aliases: ["military surplus", "army surplus", "raf", "royal air force", "british forces", "uniform", "defence", "defense", "mod surplus"],
+    subcategories: [
+      { label: "Uniforms & Clothing", slug: "uniforms-clothing", aliases: ["uniform", "shirt", "trousers", "skirt", "jacket", "wool", "no 1 dress", "no 2 dress", "raf skirt", "british army clothing"] },
+      { label: "Field Gear & Accessories", slug: "field-gear-accessories", aliases: ["field gear", "webbing", "belt", "pouch", "helmet", "bag", "rucksack", "kit", "accessory"] },
+      { label: "Surplus Equipment", slug: "surplus-equipment", aliases: ["military equipment", "surplus stock", "mod equipment", "defence equipment", "army surplus"] },
+    ],
+  },
   {
     label: "Process & Workshop",
     slug: "process-workshop",
@@ -146,6 +158,10 @@ const LEGACY_SELECTED_SLUGS: Record<string, string> = {
   "tv-video-home-audio": "av-broadcast",
   "cameras-photo": "broadcast-video",
   "facility-maintenance-safety": "test-measurement",
+  "military": "military-surplus",
+  "military-surplus-clothing": "uniforms-clothing",
+  "collectables-militaria": "military-surplus",
+  "surplus": "military-surplus",
 };
 
 export function normaliseSelectedCategorySlug(slug?: string | null) {
@@ -245,6 +261,10 @@ const PRIORITY_RULES: TaxonomyRule[] = [
   { slug: "broadcast-video", weight: 94, keywords: ["broadcast", "video router", "matrix", "studio camera", "broadcast monitor", "vision mixer", "video switcher"], brands: ["blackmagic", "aja", "grass valley"] },
   { slug: "audio-equipment", weight: 82, keywords: ["audio", "amplifier", "mixer", "speaker", "microphone", "dsp"], brands: ["shure", "sennheiser"] },
   { slug: "displays-video-walls", weight: 86, keywords: ["display", "video wall", "screen", "signage", "interactive display", "webex board", "smart board", "lcd panel", "led wall"] },
+
+  { slug: "uniforms-clothing", weight: 116, keywords: ["raf", "royal air force", "british army", "british forces", "uniform", "trousers", "skirt", "jacket", "wool", "no 1 dress", "no 2 dress", "military clothing"], brands: ["raf", "royal air force", "british army"] },
+  { slug: "field-gear-accessories", weight: 100, keywords: ["webbing", "helmet", "pouch", "belt", "field gear", "rucksack", "kit bag", "military accessory"] },
+  { slug: "surplus-equipment", weight: 90, keywords: ["military surplus", "army surplus", "mod surplus", "defence equipment", "surplus equipment", "militaria"] },
 
   { slug: "process-instrumentation", weight: 94, keywords: ["flowmeter", "flow meter", "pressure transmitter", "level transmitter", "temperature transmitter", "process instrument", "instrumentation", "control valve", "positioner"], brands: ["endress", "rosemount", "yokogawa"] },
   { slug: "machine-tools-workshop", weight: 82, keywords: ["cnc", "lathe", "milling", "workshop", "cutting", "drill", "fixture", "chuck", "press", "welder", "welding", "grinder", "saw"] },

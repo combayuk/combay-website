@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Search, SlidersHorizontal, X, ShoppingCart, RotateCcw, AlertTriangle } from "lucide-react";
 import { CONDITION_LABELS, type CatalogProduct } from "@/lib/catalog";
 import { PUBLIC_CATEGORY_LIST, normaliseSelectedCategorySlug, selectedCategoryLabel, type PublicSubcategory } from "@/lib/categoryTaxonomy";
@@ -32,6 +33,10 @@ type ShopClientProps = {
   initialProducts?: CatalogProduct[];
   initialCategories?: typeof PUBLIC_CATEGORY_LIST;
   initialSource?: string;
+  initialTotal?: number;
+  initialPage?: number;
+  initialPageSize?: number;
+  initialTotalPages?: number;
   promotions?: PromotionCardData[];
 };
 
@@ -68,8 +73,15 @@ export default function ShopClient({
   initialProducts = [],
   initialCategories = PUBLIC_CATEGORY_LIST,
   initialSource = "",
+  initialTotal = initialProducts.length,
+  initialPage = 1,
+  initialPageSize = 24,
+  initialTotalPages = 1,
   promotions = [],
 }: ShopClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlSignature = searchParams.toString();
   const initialCategoryNormalised = normaliseSelectedCategorySlug(initialCategory);
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState(() => initialCategoryNormalised);
@@ -82,17 +94,23 @@ export default function ShopClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [source, setSource] = useState(initialSource);
+  const [total, setTotal] = useState(initialTotal);
+  const [page, setPage] = useState(initialPage);
+  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [totalPages, setTotalPages] = useState(initialTotalPages);
   const [categories, setCategories] = useState(initialCategories.length ? initialCategories : PUBLIC_CATEGORY_LIST);
   const [openCategory, setOpenCategory] = useState(() => initialCategories.find((cat) => cat.slug === initialCategoryNormalised || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === initialCategoryNormalised))?.slug || "automation-control");
   const firstFetchSkipped = useRef(false);
 
-  function buildParams() {
+  function buildParams(pageOverride = page) {
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (category) params.set("category", category);
     if (condition) params.set("condition", condition);
     if (priceMin) params.set("min", priceMin);
     if (priceMax) params.set("max", priceMax);
+    if (pageOverride > 1) params.set("page", String(pageOverride));
+    if (pageSize !== 24) params.set("pageSize", String(pageSize));
     return params;
   }
 
@@ -100,7 +118,7 @@ export default function ShopClient({
     if (typeof window === "undefined") return;
     const params = buildParams();
     const nextUrl = params.toString() ? `/shop?${params.toString()}` : "/shop";
-    window.history.replaceState(null, "", nextUrl);
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) router.replace(nextUrl, { scroll: false });
   }
 
   async function loadProducts() {
@@ -113,6 +131,10 @@ export default function ShopClient({
       const result = await response.json();
       setProducts(result.products ?? []);
       setSource(result.source ?? "");
+      setTotal(Number(result.total ?? result.products?.length ?? 0));
+      setPage(Number(result.page ?? 1));
+      setPageSize(Number(result.pageSize ?? pageSize));
+      setTotalPages(Number(result.totalPages ?? 1));
       if (Array.isArray(result.categories) && result.categories.length) setCategories(result.categories);
     } catch {
       setError("Inventory could not be loaded. Please refresh the page or contact sales@combay.co.uk.");
@@ -130,14 +152,17 @@ export default function ShopClient({
       setCondition(params.get("condition") ?? "");
       setPriceMin(params.get("min") ?? params.get("priceMin") ?? "");
       setPriceMax(params.get("max") ?? params.get("priceMax") ?? "");
+      setPage(Math.max(1, Number(params.get("page") || 1)));
+      setPageSize(Math.min(48, Math.max(12, Number(params.get("pageSize") || 24))));
       if (nextCategory) {
         const parent = categories.find((cat) => cat.slug === nextCategory || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === nextCategory));
         if (parent?.slug) setOpenCategory(parent.slug);
       }
     }
+    applyUrlState();
     window.addEventListener("popstate", applyUrlState);
     return () => window.removeEventListener("popstate", applyUrlState);
-  }, [categories]);
+  }, [categories, urlSignature]);
 
   useEffect(() => {
     if (!firstFetchSkipped.current) {
@@ -150,7 +175,7 @@ export default function ShopClient({
       loadProducts();
     }, 180);
     return () => clearTimeout(timer);
-  }, [category, condition, priceMax, priceMin, query]);
+  }, [category, condition, priceMax, priceMin, query, page, pageSize]);
 
   const sortedProducts = useMemo(() => {
     return [...products].sort((a, b) => {
@@ -169,10 +194,13 @@ export default function ShopClient({
     setCondition("");
     setPriceMin("");
     setPriceMax("");
+    setPage(1);
   };
 
   const hasFilters = Boolean(query || category || condition || priceMin || priceMax);
-  const activeCategoryLabel = selectedCategoryLabel(category);
+  const activeCategoryLabel = categories.find((cat) => cat.slug === category)?.label
+    || categories.flatMap((cat) => cat.subcategories || []).find((sub: PublicSubcategory) => sub.slug === category)?.label
+    || selectedCategoryLabel(category);
   const activeFilters = [
     query ? { key: "q", type: "search", value: query, label: `Search: ${query}` } : null,
     category ? { key: "category", type: "category", value: category, label: activeFilterLabel("category", category) } : null,
@@ -187,10 +215,12 @@ export default function ShopClient({
     if (key === "condition") setCondition("");
     if (key === "min") setPriceMin("");
     if (key === "max") setPriceMax("");
+    setPage(1);
   }
 
   function selectCategory(slug: string) {
     setCategory(slug);
+    setPage(1);
     if (slug) {
       const parent = categories.find((cat) => cat.slug === slug || cat.subcategories?.some((sub: PublicSubcategory) => sub.slug === slug));
       if (parent?.slug) setOpenCategory(parent.slug);
@@ -229,7 +259,7 @@ export default function ShopClient({
             <input
               type="text"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => { setQuery(event.target.value); setPage(1); }}
               placeholder="Search SKU, MPN, model, manufacturer, brand or product name..."
               className="input h-10 pl-9 text-sm"
             />
@@ -294,7 +324,7 @@ export default function ShopClient({
               <FilterGroup title="Condition" summary={condition ? activeFilterLabel("condition", condition) : "Any condition"} defaultOpen>
                 <div className="space-y-1">
                   {CONDITIONS.map((cond) => (
-                    <button key={cond.value || "all"} onClick={() => setCondition(cond.value)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-display font-800 transition-colors ${condition === cond.value ? "bg-navy-950 text-white" : "text-slate-700 hover:bg-slate-50"}`}>
+                    <button key={cond.value || "all"} onClick={() => { setCondition(cond.value); setPage(1); }} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-display font-800 transition-colors ${condition === cond.value ? "bg-navy-950 text-white" : "text-slate-700 hover:bg-slate-50"}`}>
                       <span>{cond.label}</span>
                     </button>
                   ))}
@@ -303,9 +333,9 @@ export default function ShopClient({
 
               <FilterGroup title="Price range" summary={priceMin || priceMax ? `${priceMin ? `£${priceMin}` : "£0"} – ${priceMax ? `£${priceMax}` : "Any"}` : "Any price"} defaultOpen>
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                  <input type="number" placeholder="Min" value={priceMin} onChange={(event) => setPriceMin(event.target.value)} className="input h-9 text-xs" />
+                  <input type="number" placeholder="Min" value={priceMin} onChange={(event) => { setPriceMin(event.target.value); setPage(1); }} className="input h-9 text-xs" />
                   <span className="text-gray-400">–</span>
-                  <input type="number" placeholder="Max" value={priceMax} onChange={(event) => setPriceMax(event.target.value)} className="input h-9 text-xs" />
+                  <input type="number" placeholder="Max" value={priceMax} onChange={(event) => { setPriceMax(event.target.value); setPage(1); }} className="input h-9 text-xs" />
                 </div>
               </FilterGroup>
 
@@ -324,7 +354,7 @@ export default function ShopClient({
                   ) : error ? (
                     <p className="font-display text-sm font-900 text-red-700">Inventory unavailable</p>
                   ) : (
-                    <p className="font-display text-sm font-900 text-navy-950">{sortedProducts.length} product{sortedProducts.length === 1 ? "" : "s"}</p>
+                    <p className="font-display text-sm font-900 text-navy-950">{total > 0 ? `Showing ${((page - 1) * pageSize) + 1}–${Math.min(page * pageSize, total)} of ${total} products` : "0 products"}</p>
                   )}
                   <p className="mt-0.5 text-[11px] text-gray-400">{category ? `Showing ${activeCategoryLabel}` : "All published inventory"} {source ? `· Source: ${source}` : ""}</p>
                 </div>
@@ -353,9 +383,20 @@ export default function ShopClient({
             ) : sortedProducts.length === 0 ? (
               <EmptyState onClear={clearFilters} />
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {sortedProducts.map((product) => <ProductCard key={product.id} product={product} />)}
-              </div>
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {sortedProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+                </div>
+                {totalPages > 1 ? (
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <p className="text-xs font-800 text-slate-500">Page {page} of {totalPages}</p>
+                    <div className="flex items-center gap-2">
+                      <button type="button" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))} className="btn-secondary py-2 text-xs disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+                      <button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="btn-primary py-2 text-xs disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
           </section>
         </div>

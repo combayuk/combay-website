@@ -1,0 +1,45 @@
+Phase 27I — Shop Performance, Category Integrity, eBay Reconnect Diagnostics, Resources Module
+
+This cumulative archive builds on Phase 27H and addresses the latest unresolved items:
+
+1. Public shop performance / catalogue architecture
+- Changed the public shop from a hard 96-product catalogue load to true lightweight pagination.
+- Initial shop load now requests a page/pageSize from the repository, defaulting to 24 products per page.
+- Product cards still use lightweight selects only: one image, basic price/stock/category fields and first variant indicator.
+- API /api/products now returns page, pageSize, total and totalPages for public catalogue responses.
+- Shop UI now displays “Showing X–Y of Z products” instead of implying the capped batch is the full inventory.
+- Added Previous/Next pagination controls.
+
+2. Mega menu / shop filter reactivity
+- ShopClient now listens to same-page URL/search-param changes so clicking a mega-menu category while already on /shop applies the filter rather than only changing the URL.
+- Filter changes reset the page to 1.
+- Category labels are resolved from the active category payload first, then the static fallback taxonomy.
+
+3. Dynamic public categories / mega menu integrity
+- Added /api/categories/public.
+- Navigation fetches public categories dynamically and falls back to the static taxonomy only if DB/category fetch fails.
+- Mega menu links close the menu and point to /shop?category=<slug>.
+- Added Military & Surplus taxonomy with Uniforms & Clothing, Field Gear & Accessories and Surplus Equipment, so military apparel such as RAF uniform products no longer falls into Electrical & Components by inference.
+- Footer shop links were updated to current category names and direct category URLs.
+
+4. eBay publishing Access Denied diagnostics
+- Added /api/ebay/auth/reset to clear saved OAuth access/refresh tokens without deleting products, policies or local publishing settings.
+- Added “Force reconnect eBay” button on Admin → eBay Publish.
+- Added a policy permission diagnostic panel explaining Access denied and directing admin to force reconnect when the saved token lacks current Account/Fulfillment scopes or belongs to the wrong environment.
+
+5. Resources module
+- Added ResourceArticle model to Prisma schema.
+- Added runtime ResourceArticle table bootstrap in src/lib/resources.ts, so the feature can create the missing table at runtime where permitted.
+- Added public /resources listing page.
+- Added public /resources/[slug] detail page.
+- Added Admin → Resources sidebar item.
+- Added /admin/resources compact management screen with search, status/type filters, add/edit/delete, draft/publish/archive, cover image URL/upload, video URL, gallery URLs, tags and SEO fields.
+- Added /api/resources and /api/resources/[id] API routes.
+- Upload route now accepts folder=resources.
+
+6. Deployment/version check
+- Added /api/system/version returning the archive/phase label so live deployments can be checked against the expected phase.
+
+Build note:
+- npm ci --ignore-scripts completed successfully in the container.
+- npm run build could not complete because Prisma binary download failed from binaries.prisma.sh with DNS error getaddrinfo EAI_AGAIN. This is an environment/network failure before Next.js compilation, not a confirmed TypeScript/build error in the patch.

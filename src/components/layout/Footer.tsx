@@ -4,7 +4,16 @@ import { cmsBackgroundStyle } from "@/lib/cmsBackground";
 
 type FooterContent = { description?: string; backgroundImageUrl?: string; contact?: { salesEmail?: string; infoEmail?: string; phone?: string; location?: string; whatsapp?: string } };
 
-const shopLinks = ["All Categories", "Lab & Scientific", "Automation & Control", "IT & Networking", "Test & Detection", "Display & AV", "Oil & Gas", "New Arrivals"];
+const shopLinks = [
+  { label: "All Categories", href: "/shop" },
+  { label: "Automation & Control", href: "/shop?category=automation-control" },
+  { label: "Lab & Scientific", href: "/shop?category=lab-scientific" },
+  { label: "Test & Measurement", href: "/shop?category=test-measurement" },
+  { label: "IT & Networking", href: "/shop?category=it-networking" },
+  { label: "AV & Broadcast", href: "/shop?category=av-broadcast" },
+  { label: "Military & Surplus", href: "/shop?category=military-surplus" },
+  { label: "Resources", href: "/resources" },
+];
 const serviceLinks = [
   { label: "Repair Services", href: "/repair" },
   { label: "Calibration", href: "/repair#calibration" },
@@ -65,7 +74,7 @@ export default function Footer({ content }: { content?: FooterContent }) {
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             <div>
               <h4 className="mb-3 font-display text-sm font-900 text-white">Shop</h4>
-              <ul className="space-y-1.5 text-sm">{shopLinks.map((label) => <li key={label}><Link href="/shop" className="text-white/55 transition-colors hover:text-[#E8A44A]">{label}</Link></li>)}</ul>
+              <ul className="space-y-1.5 text-sm">{shopLinks.map((link) => <li key={link.href}><Link href={link.href} className="text-white/55 transition-colors hover:text-[#E8A44A]">{link.label}</Link></li>)}</ul>
             </div>
             <LinkList title="Services" links={serviceLinks} />
             <LinkList title="Company" links={companyLinks} />
