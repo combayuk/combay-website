@@ -1,0 +1,19 @@
+Phase 27D — Critical Product Stability Patch
+
+This cumulative archive addresses the product-module blocker reported after Phase 27C:
+- Product delete failed because Product.ebayBestOfferEnabled existed in Prisma schema/client but not in production DB.
+- Product editor showed Product not found when the real backend problem was a DB/schema mismatch.
+- Product module needed multi-select archive/delete/end-eBay workflows and stronger delete responses.
+
+Implemented:
+1. Runtime schema bootstrap now creates Product.ebayBestOfferEnabled and all currently expected Product eBay/lifecycle scalar columns before product queries run.
+2. Product list/detail/save/archive/delete repository methods now call the operational schema bootstrap before Product queries.
+3. GET /api/products/[id] distinguishes genuine 404 Product not found from database/schema/API errors.
+4. DELETE /api/products/[id] returns structured system/delete errors instead of a misleading preview response.
+5. Added POST /api/products/bulk for bulk archive/delete/restore.
+6. Admin products table now has row checkboxes, select-all visible, selected count and bulk action bar.
+7. Bulk actions include Archive, Delete, Restore when viewing archived products, End eBay listings, Clear selection.
+8. Hard delete is defensive: products with business/eBay/audit history are archived/delete-blocked instead of physically destroyed; clean draft/products with no history can be permanently deleted.
+9. Adds clearer user messages for protected products and partial bulk outcomes.
+
+No Prisma command is required. Runtime bootstrap aligns the production DB using the app's existing database connection.
