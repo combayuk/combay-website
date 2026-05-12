@@ -1,0 +1,1 @@
+Phase 27F.2 fixes the tracking-email API route TypeScript union issue by avoiding direct result.id access and using explicit safe field readers. No Prisma command required.

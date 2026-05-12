@@ -4,6 +4,16 @@ import { requireAdminApiSession } from "@/lib/apiAccess";
 import { ensureOperationalTables } from "@/lib/operationalSchema";
 import { sendTrackingEmailIfNeeded, createAdminActivityNotification } from "@/lib/operations";
 
+function getTrackingEmailResultField(result: unknown, field: "id" | "reason" | "message"): string | null {
+  if (!result || typeof result !== "object") return null;
+  const value = (result as Record<string, unknown>)[field];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function isTrackingEmailSent(result: unknown): boolean {
+  return Boolean(result && typeof result === "object" && (result as Record<string, unknown>).sent === true);
+}
+
 function normalizeOrder(order: any) {
   return {
     id: order.id,
@@ -39,10 +49,15 @@ export async function POST(request: NextRequest) {
     const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true, returns: true, shippingSnapshot: true } });
     if (!order) throw new Error("Order not found");
     const result = await sendTrackingEmailIfNeeded(order, { force, reason: force ? "manual-admin-resend" : "manual-admin-send" });
+    const sent = isTrackingEmailSent(result);
+    const providerId = getTrackingEmailResultField(result, "id");
+    const notSentReason = getTrackingEmailResultField(result, "reason") || getTrackingEmailResultField(result, "message") || "Not sent";
     await createAdminActivityNotification({
-      type: result.sent ? "TRACKING_EMAIL_SENT" : "TRACKING_EMAIL_NOT_SENT",
-      title: result.sent ? `Tracking email sent for ${order.orderNumber}` : `Tracking email not sent for ${order.orderNumber}`,
-      message: result.sent ? `Sent to ${order.customerEmail}. Resend ID: ${result.id || "not returned"}` : `${result.reason || result.message || "Not sent"}`,
+      type: sent ? "TRACKING_EMAIL_SENT" : "TRACKING_EMAIL_NOT_SENT",
+      title: sent ? `Tracking email sent for ${order.orderNumber}` : `Tracking email not sent for ${order.orderNumber}`,
+      message: sent
+        ? `Sent to ${order.customerEmail}. Resend ID: ${providerId || "not returned"}`
+        : notSentReason,
       sourceModel: "Order",
       sourceId: order.id,
       customerName: order.customerName,
