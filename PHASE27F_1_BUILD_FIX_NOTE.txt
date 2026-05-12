@@ -1,0 +1,11 @@
+Phase 27F.1 — Tracking Email Route Build Fix
+
+This cumulative archive fixes a TypeScript build failure in src/app/api/orders/tracking-email/route.ts.
+
+Cause:
+The sendTrackingEmailIfNeeded return type is a union. Some non-sent/skipped branches do not include a provider id field, but the notification code accessed result.id directly. Vercel TypeScript correctly rejected this.
+
+Fix:
+The route now narrows/casts the tracking email result into a small local shape with optional id/reason/message before building the admin notification message.
+
+No database or Prisma command is required.
