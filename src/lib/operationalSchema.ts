@@ -12,6 +12,9 @@ export function ensureOperationalTables() {
         await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "trackingEmailStatus" TEXT`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "trackingEmailProviderId" TEXT`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "trackingEmailRecipient" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "trackingEmailType" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "trackingEmailSubject" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "trackingEmailTrigger" TEXT`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "trackingEmailLastError" TEXT`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "salesChannel" TEXT NOT NULL DEFAULT 'WEBSITE'`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "externalOrderId" TEXT`);

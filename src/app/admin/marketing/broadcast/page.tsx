@@ -55,6 +55,19 @@ type AttachmentDraft = {
   size: number;
 };
 
+type BroadcastLog = {
+  id: string;
+  recipientEmail: string;
+  subject: string;
+  preview?: string;
+  category?: string;
+  status: string;
+  message?: string;
+  providerId?: string | null;
+  sentAt?: string | null;
+  createdAt?: string | null;
+};
+
 const FALLBACK_TEMPLATES: EmailTemplate[] = [
   {
     id: "local:new-stock",
@@ -115,6 +128,22 @@ function parseManualEmails(value: string) {
 function dateLabel(value?: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("en-GB");
+}
+
+function dateTimeLabel(value?: string | null) {
+  if (!value) return "—";
+  try {
+    return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function logStatusClass(status: string) {
+  if (status === "SENT") return "border-green-200 bg-green-50 text-green-700";
+  if (status === "FAILED") return "border-red-200 bg-red-50 text-red-700";
+  if (status === "SKIPPED") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function plainToHtml(value: string) {
@@ -182,12 +211,24 @@ export default function BroadcastPage() {
   const [newTemplateName, setNewTemplateName] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [logs, setLogs] = useState<BroadcastLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(true);
 
   const parsedManualEmails = useMemo(() => parseManualEmails(manualEmails), [manualEmails]);
   const selectedLeadSet = useMemo(() => new Set(selectedLeadIds), [selectedLeadIds]);
   const excludedLeadSet = useMemo(() => new Set(excludedLeadIds), [excludedLeadIds]);
   const selectedLeads = useMemo(() => leads.filter((lead) => selectedLeadSet.has(lead.id)), [leads, selectedLeadSet]);
   const excludedLeads = useMemo(() => leads.filter((lead) => excludedLeadSet.has(lead.id)), [leads, excludedLeadSet]);
+
+  function loadBroadcastLogs() {
+    setLogsLoading(true);
+    fetch("/api/marketing/broadcast", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => setLogs(Array.isArray(data.logs) ? data.logs : []))
+      .catch(() => setLogs([]))
+      .finally(() => setLogsLoading(false));
+  }
 
   useEffect(() => {
     setLeadsLoading(true);
@@ -204,6 +245,8 @@ export default function BroadcastPage() {
         if (rows.length) setTemplates(rows);
       })
       .catch(() => undefined);
+
+    loadBroadcastLogs();
   }, []);
 
   const filteredLeads = useMemo(() => {
@@ -352,6 +395,7 @@ export default function BroadcastPage() {
     const data = await response.json().catch(() => ({}));
     setBusy(false);
     setMsg(data.ok ? `Checked ${data.checked}; sent ${data.sent}; skipped ${data.skipped}; failed ${data.failed}.` : data.error || "Broadcast failed.");
+    loadBroadcastLogs();
   }
 
   return (
@@ -568,6 +612,42 @@ export default function BroadcastPage() {
           </div>
         </div>
       </form>
+
+      <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-base font-900 text-navy-950">Custom email logs</h2>
+            <p className="text-xs text-gray-500">Recent sends from this custom email page. Use this to confirm recipient, subject, status and Resend message ID.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setLogsOpen((value) => !value)} className="btn-secondary py-2 text-xs">{logsOpen ? "Hide logs" : "Show logs"}</button>
+            <button type="button" onClick={loadBroadcastLogs} className="btn-secondary py-2 text-xs">Refresh logs</button>
+          </div>
+        </div>
+        {logsOpen && (
+          <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+            <div className="grid grid-cols-[120px_1.2fr_1.4fr_120px_150px] gap-2 bg-slate-50 px-3 py-2 text-[11px] font-900 uppercase tracking-wide text-slate-500">
+              <span>Status</span><span>Recipient</span><span>Subject / type</span><span>Resend ID</span><span>Time</span>
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+              {logs.map((log) => (
+                <div key={log.id} className="grid grid-cols-[120px_1.2fr_1.4fr_120px_150px] gap-2 px-3 py-2 text-xs">
+                  <span><span className={`rounded-full border px-2 py-0.5 font-900 ${logStatusClass(log.status)}`}>{log.status}</span></span>
+                  <span className="truncate text-slate-700" title={log.recipientEmail}>{log.recipientEmail}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-800 text-navy-950" title={log.subject}>{log.subject || "—"}</span>
+                    <span className="block truncate text-[11px] text-slate-400" title={log.message || log.category || ""}>{log.category || "broadcast"}{log.message ? ` · ${log.message}` : ""}</span>
+                  </span>
+                  <span className="truncate font-mono text-[11px] text-slate-500" title={log.providerId || ""}>{log.providerId || "—"}</span>
+                  <span className="text-slate-500">{dateTimeLabel(log.sentAt || log.createdAt)}</span>
+                </div>
+              ))}
+              {logsLoading && <p className="px-3 py-4 text-sm text-gray-400">Loading email logs…</p>}
+              {!logsLoading && logs.length === 0 && <p className="px-3 py-4 text-sm text-gray-400">No custom email logs found yet.</p>}
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
         <strong>Tokens:</strong> <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code>, <code>{"{{company}}"}</code>, <code>{"{{shopUrl}}"}</code>, <code>{"{{portalUrl}}"}</code>, <code>{"{{contactUrl}}"}</code>

@@ -53,6 +53,9 @@ type Order = {
   trackingEmailStatus?: string | null;
   trackingEmailProviderId?: string | null;
   trackingEmailRecipient?: string | null;
+  trackingEmailType?: string | null;
+  trackingEmailSubject?: string | null;
+  trackingEmailTrigger?: string | null;
   trackingEmailLastError?: string | null;
   shippingAddress?: unknown;
   shippingSnapshot?: {
@@ -93,12 +96,29 @@ function formatDateTime(value?: string | null) {
   }
 }
 
+function trackingEmailStatusValue(order: Order) {
+  return order.trackingEmailStatus || (order.trackingEmailSentAt ? "SENT" : "NOT_SENT");
+}
+
 function trackingEmailBadge(status?: string | null) {
   const value = status || "NOT_SENT";
   if (value === "SENT") return "border-green-200 bg-green-50 text-green-700";
   if (value === "FAILED" || value === "NOT_CONFIGURED") return "border-red-200 bg-red-50 text-red-700";
   if (value === "ATTEMPTED") return "border-blue-200 bg-blue-50 text-blue-700";
   return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function trackingEmailTypeLabel(value?: string | null) {
+  if (!value || value === "TRACKING_DISPATCH") return "Dispatch / tracking email";
+  return label(value);
+}
+
+function trackingEmailTriggerLabel(value?: string | null) {
+  if (!value) return "Historical send / trigger not recorded";
+  if (value === "admin-order-update") return "Automatic after admin tracking update";
+  if (value === "manual-admin-resend") return "Manual admin resend";
+  if (value === "manual-admin-send") return "Manual admin send";
+  return label(value);
 }
 
 export default function AdminOrders() {
@@ -371,13 +391,16 @@ export default function AdminOrders() {
                   <div className="flex items-center gap-2">
                     <Mail size={14} className="text-navy-700" />
                     <h3 className="font-display text-sm font-900 text-navy-950">Tracking email status</h3>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-900 ${trackingEmailBadge(selected.trackingEmailStatus)}`}>{label(selected.trackingEmailStatus || "NOT SENT")}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-900 ${trackingEmailBadge(trackingEmailStatusValue(selected))}`}>{label(trackingEmailStatusValue(selected))}</span>
                   </div>
                   <button type="button" disabled={sendingTrackingEmail || !selected.trackingNumber} onClick={resendTrackingEmail} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-900 text-navy-950 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">
                     <Mail size={12} /> {sendingTrackingEmail ? "Sending..." : "Send/resend"}
                   </button>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
+                  <p><span className="font-900 text-navy-950">Email type:</span> {trackingEmailTypeLabel(selected.trackingEmailType)}</p>
+                  <p><span className="font-900 text-navy-950">Trigger/source:</span> {trackingEmailTriggerLabel(selected.trackingEmailTrigger)}</p>
+                  <p><span className="font-900 text-navy-950">Subject:</span> {selected.trackingEmailSubject || `Your Combay order has been dispatched — ${selected.orderNumber}`}</p>
                   <p><span className="font-900 text-navy-950">Recipient:</span> {selected.trackingEmailRecipient || selected.customerEmail || "—"}</p>
                   <p><span className="font-900 text-navy-950">Last attempt:</span> {formatDateTime(selected.trackingEmailAttemptedAt)}</p>
                   <p><span className="font-900 text-navy-950">Last sent:</span> {formatDateTime(selected.trackingEmailSentAt)}</p>

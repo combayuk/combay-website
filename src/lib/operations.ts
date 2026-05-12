@@ -60,6 +60,12 @@ function trackingEmailReason(result: any) {
   return result?.reason || result?.error || result?.message || "not-sent";
 }
 
+function trackingEmailSubject(order: any) {
+  return `Your Combay order has been dispatched — ${order.orderNumber}`;
+}
+
+const TRACKING_EMAIL_TYPE = "TRACKING_DISPATCH";
+
 export async function sendTrackingEmailIfNeeded(order: any, options: { force?: boolean; reason?: string } = {}) {
   await ensureOperationalTables();
   const attemptedAt = new Date();
@@ -74,6 +80,9 @@ export async function sendTrackingEmailIfNeeded(order: any, options: { force?: b
       trackingEmailAttemptedAt: attemptedAt,
       trackingEmailStatus: "SKIPPED",
       trackingEmailRecipient: recipient || null,
+      trackingEmailType: TRACKING_EMAIL_TYPE,
+      trackingEmailSubject: order?.orderNumber ? trackingEmailSubject(order) : "Your Combay order has been dispatched",
+      trackingEmailTrigger: options.reason || "tracking-update",
       trackingEmailLastError: reason,
     });
     return { configured: true, sent: false, provider: "resend", message: `Tracking email skipped: ${reason}.`, reason };
@@ -84,6 +93,9 @@ export async function sendTrackingEmailIfNeeded(order: any, options: { force?: b
     await updateTrackingEmailState(order.id, {
       trackingEmailStatus: "SENT",
       trackingEmailRecipient: recipient,
+      trackingEmailType: TRACKING_EMAIL_TYPE,
+      trackingEmailSubject: trackingEmailSubject(order),
+      trackingEmailTrigger: options.reason || "tracking-update",
       trackingEmailLastError: null,
     });
     return { configured: true, sent: false, provider: "resend", message: "Tracking email was already sent for these exact tracking details.", reason: "unchanged-tracking" };
@@ -93,6 +105,9 @@ export async function sendTrackingEmailIfNeeded(order: any, options: { force?: b
     trackingEmailAttemptedAt: attemptedAt,
     trackingEmailStatus: "ATTEMPTED",
     trackingEmailRecipient: recipient,
+    trackingEmailType: TRACKING_EMAIL_TYPE,
+    trackingEmailSubject: trackingEmailSubject(order),
+    trackingEmailTrigger: options.reason || "tracking-update",
     trackingEmailLastError: null,
   });
 
@@ -115,7 +130,7 @@ export async function sendTrackingEmailIfNeeded(order: any, options: { force?: b
 
   const result = await sendEmail({
     to: recipient,
-    subject: `Your Combay order has been dispatched — ${order.orderNumber}`,
+    subject: trackingEmailSubject(order),
     html,
     headers: { "X-Combay-Email-Type": "tracking-update", "X-Combay-Order": String(order.orderNumber) },
   });
@@ -128,6 +143,9 @@ export async function sendTrackingEmailIfNeeded(order: any, options: { force?: b
       trackingEmailStatus: "SENT",
       trackingEmailProviderId: result.id ?? null,
       trackingEmailRecipient: recipient,
+      trackingEmailType: TRACKING_EMAIL_TYPE,
+      trackingEmailSubject: trackingEmailSubject(order),
+      trackingEmailTrigger: options.reason || "tracking-update",
       trackingEmailLastError: null,
     });
   } else {
@@ -136,6 +154,9 @@ export async function sendTrackingEmailIfNeeded(order: any, options: { force?: b
       trackingEmailStatus: result.configured ? "FAILED" : "NOT_CONFIGURED",
       trackingEmailProviderId: result.id ?? null,
       trackingEmailRecipient: recipient,
+      trackingEmailType: TRACKING_EMAIL_TYPE,
+      trackingEmailSubject: trackingEmailSubject(order),
+      trackingEmailTrigger: options.reason || "tracking-update",
       trackingEmailLastError: trackingEmailReason(result),
     });
   }

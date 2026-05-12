@@ -141,6 +141,41 @@ async function recipientsFromRequest(body: any): Promise<{ recipients: Recipient
   return { recipients: dedupeRecipients(recipients), invalidManualCount, mode };
 }
 
+
+function publicBroadcastLog(log: any) {
+  return {
+    id: log.id,
+    recipientEmail: log.recipientEmail,
+    subject: log.subject || "",
+    preview: log.preview || "",
+    category: log.category || "broadcast",
+    status: log.status,
+    message: log.message || log.skippedReason || "",
+    providerId: log.providerId || null,
+    sentAt: log.sentAt?.toISOString?.() || null,
+    createdAt: log.createdAt?.toISOString?.() || null,
+  };
+}
+
+export async function GET() {
+  const logs = await prisma.emailAutomationLog.findMany({
+    where: { category: { startsWith: "broadcast" } },
+    orderBy: { createdAt: "desc" },
+    take: 60,
+  }).catch(() => []);
+
+  const summary = logs.reduce((acc: any, log: any) => {
+    acc[log.status] = (acc[log.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  return NextResponse.json({
+    ok: true,
+    logs: logs.map(publicBroadcastLog),
+    summary: { sent: summary.SENT || 0, failed: summary.FAILED || 0, skipped: summary.SKIPPED || 0, pending: summary.PENDING || 0 },
+  });
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const subject = String(body.subject || "").trim();

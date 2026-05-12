@@ -1,0 +1,11 @@
+Phase 27F.3 — Tracking email type visibility and custom email logs
+
+Changes:
+- Order tracking email panel now shows the actual email type, subject and trigger/source.
+- If an older order only has trackingEmailSentAt but no status, the admin panel now derives the visible state as SENT instead of NOT SENT.
+- Tracking email sends now persist trackingEmailType, trackingEmailSubject and trackingEmailTrigger for future diagnostics.
+- Runtime schema bootstrap adds the new tracking email diagnostic columns automatically.
+- Custom email/broadcast page now includes a recent email log panel showing recipient, subject, status, Resend provider ID, category/message and send time.
+- Added GET /api/marketing/broadcast to return recent custom email logs from EmailAutomationLog.
+
+No Prisma db push is required; runtime bootstrap handles the added Order diagnostic columns.

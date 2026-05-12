@@ -31,6 +31,9 @@ function normalizeOrder(order: any) {
     trackingEmailStatus: order.trackingEmailStatus ?? null,
     trackingEmailProviderId: order.trackingEmailProviderId ?? null,
     trackingEmailRecipient: order.trackingEmailRecipient ?? null,
+    trackingEmailType: order.trackingEmailType ?? null,
+    trackingEmailSubject: order.trackingEmailSubject ?? null,
+    trackingEmailTrigger: order.trackingEmailTrigger ?? null,
     trackingEmailLastError: order.trackingEmailLastError ?? null,
   };
 }

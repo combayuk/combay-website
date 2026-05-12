@@ -555,6 +555,9 @@ model Order {
   trackingEmailStatus String?
   trackingEmailProviderId String?
   trackingEmailRecipient String?
+  trackingEmailType String?
+  trackingEmailSubject String?
+  trackingEmailTrigger String?
   trackingEmailLastError String? @db.Text
   salesChannel    String       @default("WEBSITE")
   externalOrderId String?
