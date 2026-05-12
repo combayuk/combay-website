@@ -615,6 +615,7 @@ async function ensureEbayPublishingDatabaseSchema() {
       `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebaySpecificsJson" JSONB;`,
       `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayValidationErrorsJson" JSONB;`,
       `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebaySkuLocked" BOOLEAN NOT NULL DEFAULT false;`,
+      `ALTER TABLE IF EXISTS "Product" ADD COLUMN IF NOT EXISTS "ebayShowOnUsCanada" BOOLEAN NOT NULL DEFAULT false;`,
       `CREATE INDEX IF NOT EXISTS "Product_ebayPublishStatus_idx" ON "Product"("ebayPublishStatus");`,
       `CREATE INDEX IF NOT EXISTS "Product_ebayMarketplaceId_idx" ON "Product"("ebayMarketplaceId");`,
       `CREATE INDEX IF NOT EXISTS "Product_ebayCategoryId_idx" ON "Product"("ebayCategoryId");`,
@@ -1150,6 +1151,9 @@ export function validateEbayProductRecord(product: EbayProductRecord) {
   if (!product.ebayPaymentPolicyId) errors.push("No eBay payment policy is selected yet.");
   if (!product.ebayReturnPolicyId) errors.push("No eBay return policy is selected yet.");
   if (!product.ebayInventoryLocationKey) errors.push("No eBay inventory location is selected yet.");
+  if (product.ebayShowOnUsCanada && String(product.ebayMarketplaceId || MARKETPLACE).toUpperCase() === "EBAY_GB") {
+    warnings.push("US/Canada visibility is enabled. Inventory API does not support the old CrossBorderTrade field directly; Combay relies on the selected UK fulfilment policy offering international postage to US/Canada buyers, or a later dedicated separate US/Canada offer mapping phase.");
+  }
   if (product.shippingManualQuoteRequired || product.shippingCollectionOnly || product.shippingPolicy?.manualQuoteRequired) errors.push("Product uses manual quote/collection-only shipping. Use freight/collection policy mapping before live eBay publish.");
   errors.push(...imageValidation(product.images || []));
 
@@ -1168,15 +1172,38 @@ export function validateEbayProductRecord(product: EbayProductRecord) {
   return { valid: errors.length === 0, errors, warnings };
 }
 
+async function refreshEbayOfferLifecycleState(product: EbayProductRecord, marketplaceId: string) {
+  const offerId = String(product.ebayOfferId || "").trim();
+  if (!offerId) return product;
+  try {
+    const details = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`, "GET", undefined, marketplaceId);
+    const summary = offerPublicationSummary(details);
+    const hasHistoricListing = Boolean(product.ebayListingId || summary.listingId);
+    const looksEnded = hasHistoricListing && (!summary.listingId || summary.listingStatus === "ENDED" || summary.offerStatus === "UNPUBLISHED");
+    const looksLive = summary.offerStatus === "PUBLISHED" && summary.listingId && summary.listingStatus === "ACTIVE" && !summary.listingOnHold;
+    if (looksLive && (product.ebayPublishStatus !== "PUBLISHED" || product.ebayListingId !== summary.listingId)) {
+      return prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "PUBLISHED", ebayListingId: summary.listingId, ebayLastError: null } as any });
+    }
+    if (looksEnded && product.ebayPublishStatus !== "ENDED") {
+      await logEbayPublishEvent(product, "EBAY_OFFER_STATE_REFRESH", "SUCCESS", "eBay offer appears ended/unpublished on eBay. Combay marked the product as ENDED so admin can relist instead of trying to end it again.", { offerId, marketplaceId, ...summary }, null, offerId, product.ebayListingId || summary.listingId || null);
+      return prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "ENDED", ebayLastError: null } as any });
+    }
+  } catch {
+    return product;
+  }
+  return product;
+}
+
 export async function getEbayProductPublishingState(productId: string) {
   return withDatabase(async () => {
     await ensureEbayPublishingDefaults();
-    const product = await getProductForEbay(productId);
+    let product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
-    const logs = await prisma.ebaySyncLog.findMany({ where: { productId: product.id }, orderBy: { startedAt: "desc" }, take: 8 });
-    const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: product.id }, orderBy: { queuedAt: "desc" }, take: 5 });
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
     const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
+    product = await refreshEbayOfferLifecycleState(product, marketplaceId);
+    const logs = await prisma.ebaySyncLog.findMany({ where: { productId: product.id }, orderBy: { startedAt: "desc" }, take: 8 });
+    const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: product.id }, orderBy: { queuedAt: "desc" }, take: 5 });
     const templates = await prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] });
     const locations = await prisma.ebayInventoryLocation.findMany({ where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] });
     const localOptions = await getLocalPolicyOptions(marketplaceId);
@@ -1228,6 +1255,7 @@ export async function saveEbayProductDraft(productId: string, input: any) {
       ebaySourceOfTruth: input.ebaySourceOfTruth || "COMBAY",
       ebayExcludedFromSync: Boolean(input.ebayExcludedFromSync),
       syncExcluded: Boolean(input.ebayExcludedFromSync),
+      ebayShowOnUsCanada: Boolean(input.ebayShowOnUsCanada),
       ebayPublishStatus: input.ebayPublishStatus || product.ebayPublishStatus || "DRAFTED_FOR_EBAY",
     };
     const validation = validateEbayProductRecord({ ...product, ...data });

@@ -23,6 +23,13 @@ export function ensureOperationalTables() {
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_updatedAt_idx" ON "Product"("updatedAt")`);
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_ebayListingId_idx" ON "Product"("ebayListingId")`);
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_ebayOfferId_idx" ON "Product"("ebayOfferId")`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "deleteRequestedAt" TIMESTAMP(3)`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "deletePurgeAfter" TIMESTAMP(3)`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "deleteStatus" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayShowOnUsCanada" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_deletedAt_idx" ON "Product"("deletedAt")`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_deleteStatus_idx" ON "Product"("deleteStatus")`);
         await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "InventoryMovement" (
           "id" TEXT PRIMARY KEY,
           "productId" TEXT,

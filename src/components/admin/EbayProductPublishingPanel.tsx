@@ -191,6 +191,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
       ebayDescriptionHtml: product.ebayDescriptionHtml || "",
       ebaySourceOfTruth: product.ebaySourceOfTruth || "COMBAY",
       ebayExcludedFromSync: Boolean(product.ebayExcludedFromSync || product.syncExcluded),
+      ebayShowOnUsCanada: Boolean(product.ebayShowOnUsCanada),
       ebayPublishStatus: product.ebayPublishStatus || "NOT_LISTED",
     };
     setForm(nextForm);
@@ -429,6 +430,7 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
           <label className="block"><span className="label">Listing ID</span><input value={form.ebayListingId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayListingId: e.target.value }))} className="input py-2 text-sm" />{liveListingUrl && <a href={liveListingUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-[11px] font-900 text-blue-700 hover:underline">Open eBay listing</a>}</label>
           <label className="block"><span className="label">Offer ID</span><input value={form.ebayOfferId || ""} onChange={(e) => setForm((c: any) => ({ ...c, ebayOfferId: e.target.value }))} className="input py-2 text-sm" /></label>
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-900 text-navy-950 self-end"><input type="checkbox" checked={Boolean(form.ebayExcludedFromSync)} onChange={(e) => setForm((c: any) => ({ ...c, ebayExcludedFromSync: e.target.checked }))} /> Exclude from eBay sync/publish</label>
+          {String(form.ebayMarketplaceId || "").toUpperCase() === "EBAY_GB" && <label className="lg:col-span-2 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-800 text-blue-900"><input type="checkbox" className="mt-0.5" checked={Boolean(form.ebayShowOnUsCanada)} onChange={(e) => setForm((c: any) => ({ ...c, ebayShowOnUsCanada: e.target.checked }))} /> <span><span className="font-900">Also show to eBay US & Canada buyers</span><br/><span className="font-600 text-blue-700">Uses the selected UK fulfilment policy’s international postage coverage. Inventory API does not support the old CrossBorderTrade switch directly; separate US/Canada offers need dedicated marketplace policy/category mapping.</span></span></label>}
         </div>
 
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -550,8 +552,8 @@ export default function EbayProductPublishingPanel({ productId, currentSku, titl
           <button type="button" onClick={saveDraft} disabled={Boolean(busy)} className="btn-secondary text-xs py-2"><Save size={14} /> Save eBay draft</button>
           <button type="button" onClick={() => post("validate").then(() => load())} disabled={Boolean(busy)} className="btn-secondary text-xs py-2"><ShieldCheck size={14} /> Validate</button>
           <button type="button" onClick={() => post("queue-review").then(() => load())} disabled={Boolean(busy) || !ready} className="btn-secondary text-xs py-2"><UploadCloud size={14} /> Queue publish review</button>
-          <button type="button" onClick={endLiveListing} disabled={Boolean(busy) || !form.ebayOfferId} className="btn-secondary text-xs py-2 text-red-700"><Trash2 size={14} /> End eBay listing</button>
-          <button type="button" onClick={publishLiveNow} disabled={Boolean(busy) || !ready} className="btn-primary text-xs py-2"><Rocket size={14} /> Publish / update live eBay listing</button>
+          <button type="button" onClick={endLiveListing} disabled={Boolean(busy) || !form.ebayOfferId || String(form.ebayPublishStatus || "").toUpperCase() === "ENDED"} className="btn-secondary text-xs py-2 text-red-700"><Trash2 size={14} /> {String(form.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Ended on eBay" : "End eBay listing"}</button>
+          <button type="button" onClick={publishLiveNow} disabled={Boolean(busy) || !ready} className="btn-primary text-xs py-2"><Rocket size={14} /> {String(form.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Relist on eBay" : form.ebayListingId ? "Update eBay listing" : "Publish to eBay"}</button>
         </div>
       </div>
     </div>

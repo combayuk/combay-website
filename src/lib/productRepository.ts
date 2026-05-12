@@ -2,6 +2,7 @@ import { prisma, withDatabase } from "@/lib/db";
 import { CATEGORIES, PRODUCTS, searchProducts, type CatalogProduct, type ConditionCode, type StockStatus } from "@/lib/catalog";
 import { PUBLIC_CATEGORY_LIST, canonicalCategoryForText, isPublicCategoryMatch } from "@/lib/categoryTaxonomy";
 import { buildProductShippingSummary } from "@/lib/shipping";
+import { ensureOperationalTables } from "@/lib/operationalSchema";
 
 export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs" | "variants" | "documents"> & {
   id?: string;
@@ -162,6 +163,9 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     ebayValidationErrorsJson: (product as any).ebayValidationErrorsJson ?? null,
     syncExcluded: product.syncExcluded ?? false,
     ebayExcludedFromSync: (product as any).ebayExcludedFromSync ?? product.syncExcluded ?? false,
+    ebayShowOnUsCanada: Boolean((product as any).ebayShowOnUsCanada),
+    deletedAt: (product as any).deletedAt?.toISOString?.() ?? null,
+    deleteStatus: (product as any).deleteStatus ?? null,
     rawEbayDescription: (product as any).rawEbayDescription ?? "",
     titleLocked: (product as any).titleLocked ?? false,
     priceLocked: (product as any).priceLocked ?? false,
@@ -205,21 +209,41 @@ async function getCategoryId(input?: { category?: string; categorySlug?: string;
   return category.id;
 }
 
-async function nextSku() {
-  // Phase 27 rule: new products use highest existing CBUK number + 1.
-  // This avoids reusing historical gaps that may have existed in eBay, invoices, quotes, logs or deleted drafts.
-  const existing = await prisma.product.findMany({
-    where: { sku: { startsWith: "CBUK" } },
-    select: { sku: true },
-    orderBy: { sku: "desc" },
-    take: 10000,
-  });
+function cbuKNumber(value?: string | null) {
+  const match = String(value || "").trim().match(/^CBUK(\d+)$/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function formatCombaySku(number: number) {
+  return `CBUK${String(Math.max(1, Math.floor(number))).padStart(5, "0")}`;
+}
+
+export async function nextSku() {
+  await ensureOperationalTables().catch(() => null);
+  // Phase 27B rule: new products use highest existing/historical CBUK number + 1.
+  // Supports legacy short SKUs such as CBUK0009 as well as standard CBUK00009/CBUK00001.
+  const [products, auditLogs] = await Promise.all([
+    prisma.product.findMany({ where: { sku: { startsWith: "CBUK" } }, select: { sku: true }, take: 50000 }),
+    prisma.skuAuditLog.findMany({ select: { oldSku: true, newSku: true }, take: 50000 }).catch(() => [] as Array<{ oldSku?: string | null; newSku?: string | null }>),
+  ]);
   let highest = 0;
-  for (const item of existing as Array<{ sku: string }>) {
-    const match = item.sku.match(/^CBUK(\d{5})$/i);
-    if (match) highest = Math.max(highest, Number(match[1]));
+  for (const item of products as Array<{ sku: string }>) highest = Math.max(highest, cbuKNumber(item.sku));
+  for (const item of auditLogs as Array<{ oldSku?: string | null; newSku?: string | null }>) {
+    highest = Math.max(highest, cbuKNumber(item.oldSku), cbuKNumber(item.newSku));
   }
-  return `CBUK${String(highest + 1).padStart(5, "0")}`;
+  return formatCombaySku(highest + 1);
+}
+
+async function safeSkuForCreate(desired?: string | null) {
+  const cleanDesired = String(desired || "").trim().toUpperCase();
+  if (cleanDesired) {
+    const existing = await prisma.product.findUnique({ where: { sku: cleanDesired } }).catch(() => null);
+    if (!existing) {
+      const n = cbuKNumber(cleanDesired);
+      return n ? formatCombaySku(n) : cleanDesired;
+    }
+  }
+  return nextSku();
 }
 
 function relationPayload(input: ProductWriteInput) {
@@ -282,7 +306,7 @@ export async function getProductsFromRepository(params: {
   priceMax?: number | null;
 }) {
   const dbResult = await withDatabase(async () => {
-    const where: any = {};
+    const where: any = { deletedAt: null };
 
     if (params.status) where.status = params.status;
     else if (!params.includeArchived) where.status = "PUBLISHED";
@@ -379,7 +403,7 @@ export async function getAdminProductsListFromRepository(params: {
   const page = Math.max(1, Number(params.page || 1));
   const pageSize = Math.min(100, Math.max(10, Number(params.pageSize || 50)));
   const dbResult = await withDatabase(async () => {
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (params.status) where.status = params.status;
     if (params.category) {
       where.category = { OR: [{ slug: params.category }, { name: { contains: params.category, mode: "insensitive" } }] };
@@ -406,6 +430,7 @@ export async function getAdminProductsListFromRepository(params: {
           id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, mpn: true, condition: true,
           price: true, priceOnRequest: true, stockQty: true, status: true, source: true, updatedAt: true,
           ebayPublishStatus: true, ebayListingId: true, ebayOfferId: true, ebayMarketplaceId: true,
+          deleteStatus: true, deletedAt: true,
           category: { select: { name: true, slug: true } },
           images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { url: true } },
         },
@@ -442,6 +467,8 @@ export async function getAdminProductsListFromRepository(params: {
           ebayListingId: product.ebayListingId ?? "",
           ebayOfferId: product.ebayOfferId ?? "",
           ebayMarketplaceId: product.ebayMarketplaceId ?? "EBAY_GB",
+          deleteStatus: product.deleteStatus ?? null,
+          deletedAt: product.deletedAt?.toISOString?.() ?? null,
         };
       }),
       total,
@@ -477,14 +504,22 @@ export async function getProductByIdFromRepository(id: string) {
 
 export async function saveProductToRepository(input: ProductWriteInput) {
   return withDatabase(async () => {
-    const sku = input.sku?.trim() || await nextSku();
+    await ensureOperationalTables().catch(() => null);
+    const existingById = input.id ? await prisma.product.findUnique({ where: { id: input.id } }).catch(() => null) : null;
     const title = input.title?.trim() || "Untitled product";
+    let sku = existingById?.sku || input.sku?.trim().toUpperCase() || "";
+    if (!existingById) {
+      // Never update an existing product just because the browser submitted a duplicated SKU.
+      // This fixes repeated new products being saved as the same SKU such as CBUK0009.
+      sku = await safeSkuForCreate(sku);
+    } else if (sku && sku !== existingById.sku) {
+      const conflict = await prisma.product.findFirst({ where: { sku, NOT: { id: existingById.id } } }).catch(() => null);
+      if (conflict) sku = existingById.sku;
+    }
     const slug = slugify(input.slug || title, sku.toLowerCase());
     const categoryId = await getCategoryId({ category: input.category, categorySlug: input.categorySlug, title, brand: input.brand, manufacturer: input.manufacturer, model: input.model, mpn: input.mpn });
     const relations = relationPayload(input);
-    const existing = input.id
-      ? await prisma.product.findFirst({ where: { OR: [{ id: input.id }, { sku }, { slug }] } })
-      : await prisma.product.findUnique({ where: { sku } });
+    const existing = existingById;
 
     const data: any = {
       title,
@@ -518,6 +553,7 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       ebayItemId: (input as any).ebayItemId ?? null,
       syncExcluded: Boolean((input as any).syncExcluded ?? (input as any).ebayExcludedFromSync),
       ebayExcludedFromSync: Boolean((input as any).ebayExcludedFromSync ?? (input as any).syncExcluded),
+      ebayShowOnUsCanada: Boolean((input as any).ebayShowOnUsCanada),
       shippingPolicyId: (input as any).shippingPolicyId || null,
       packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
       packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,
@@ -597,6 +633,76 @@ export async function saveProductToRepository(input: ProductWriteInput) {
     });
 
     return saved ? mapDbProduct(saved) : product;
+  });
+}
+
+export async function getNextSkuFromRepository() {
+  return withDatabase(async () => ({ sku: await nextSku() }));
+}
+
+export async function migrateExistingProductsToSequentialSkus() {
+  return withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
+    const products = await prisma.product.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, sku: true, ebayListingId: true, ebayOfferId: true, ebayInventoryItemSku: true },
+    });
+    const migrationRun = `sku-migration-${Date.now()}`;
+    // Avoid unique conflicts when SKUs are being swapped/re-numbered by temporarily moving all rows first.
+    for (let index = 0; index < products.length; index += 1) {
+      await prisma.product.update({ where: { id: products[index].id }, data: { sku: `TMP-${migrationRun}-${index + 1}` } });
+    }
+
+    const changed: Array<{ id: string; oldSku: string; newSku: string; ebayLinked: boolean }> = [];
+    for (let index = 0; index < products.length; index += 1) {
+      const product = products[index];
+      const newSku = formatCombaySku(index + 1);
+      const oldSku = product.sku;
+      await prisma.product.update({
+        where: { id: product.id },
+        data: {
+          sku: newSku,
+          ebayInventoryItemSku: product.ebayListingId || product.ebayOfferId ? (product.ebayInventoryItemSku || oldSku) : newSku,
+          ebaySkuLocked: Boolean(product.ebayListingId || product.ebayOfferId),
+        } as any,
+      });
+      if (oldSku !== newSku) {
+        await prisma.skuAuditLog.create({
+          data: {
+            productId: product.id,
+            oldSku,
+            newSku,
+            reason: product.ebayListingId || product.ebayOfferId ? "Phase 27B historical SKU migration. eBay-linked product retained marketplace inventory SKU and requires eBay SKU repair review." : "Phase 27B historical SKU migration to strict CBUK sequence.",
+            changedBy: "system",
+            ebayUpdateStatus: product.ebayListingId || product.ebayOfferId ? "REVIEW_REQUIRED" : "NOT_REQUIRED",
+          },
+        }).catch(() => null);
+        changed.push({ id: product.id, oldSku, newSku, ebayLinked: Boolean(product.ebayListingId || product.ebayOfferId) });
+      }
+    }
+    return { total: products.length, changedCount: changed.length, changed, nextSku: await nextSku() };
+  });
+}
+
+export async function hardDeleteProductInRepository(id: string) {
+  return withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
+    const product = await prisma.product.findFirst({ where: { OR: [{ id }, { sku: id }, { slug: id }] } });
+    if (!product) throw new Error("Product not found.");
+    const [orderItems, invoiceLines, movements, ebayLogs] = await Promise.all([
+      prisma.orderItem.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }] } }).catch(() => 0),
+      prisma.invoiceLine.count({ where: { sku: product.sku } }).catch(() => 0),
+      prisma.inventoryMovement.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }] } }).catch(() => 0),
+      prisma.ebaySyncLog.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }, { ebayListingId: product.ebayListingId || "__none__" }, { ebayOfferId: product.ebayOfferId || "__none__" }] } }).catch(() => 0),
+    ]);
+    const blockers = { orderItems, invoiceLines, movements, ebayLogs, ebayListingId: Boolean(product.ebayListingId), ebayOfferId: Boolean(product.ebayOfferId) };
+    const blocked = orderItems || invoiceLines || movements || ebayLogs || product.ebayListingId || product.ebayOfferId;
+    if (blocked) {
+      await prisma.product.update({ where: { id: product.id }, data: { status: "ARCHIVED", deleteRequestedAt: new Date(), deleteStatus: "DELETE_BLOCKED", deletedAt: new Date() } as any }).catch(() => null);
+      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has business/eBay/accounting history, so it was archived and marked delete-blocked instead of being destroyed." };
+    }
+    await prisma.product.delete({ where: { id: product.id } });
+    return { deleted: true, archived: false, blocked: false, blockers };
   });
 }
 

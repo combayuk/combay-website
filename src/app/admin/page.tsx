@@ -32,10 +32,10 @@ async function loadDashboardData() {
     await ensureOperationalTables();
     const [orders, returnsCount, quoteRequests, supportTickets, notifications] = await Promise.all([
       prisma.order.findMany({
-        where: { paymentStatus: "PAID" },
-        select: { id: true, orderNumber: true, total: true, salesChannel: true, createdAt: true, customerName: true, customerEmail: true },
+        where: { paymentStatus: { in: ["PAID", "REFUNDED", "PARTIAL"] as any } },
+        select: { id: true, orderNumber: true, total: true, salesChannel: true, status: true, paymentStatus: true, createdAt: true, customerName: true, customerEmail: true, returns: { select: { status: true } } },
         orderBy: { createdAt: "desc" },
-        take: 250,
+        take: 500,
       }),
       prisma.return.count().catch(() => 0),
       prisma.quoteRequest.count({ where: { status: { in: ["NEW", "IN_REVIEW"] as any } } }).catch(() => 0),
@@ -44,13 +44,23 @@ async function loadDashboardData() {
     ]);
     const channels = ["WEBSITE", "EBAY", "INVOICE", "MANUAL"];
     const byChannel = Object.fromEntries(channels.map((channel) => [channel, { count: 0, value: 0 }])) as Record<string, { count: number; value: number }>;
+    let deductions = 0;
     orders.forEach((order: any) => {
       const channel = byChannel[order.salesChannel || "WEBSITE"] ? order.salesChannel || "WEBSITE" : "MANUAL";
+      const returned = (order.returns || []).some((item: any) => ["REFUND_APPROVED", "REFUNDED", "RECEIVED"].includes(String(item.status || "")));
+      const cancelledOrRefunded = ["CANCELLED", "REFUNDED"].includes(String(order.status || "")) || String(order.paymentStatus || "") === "REFUNDED" || returned;
+      const value = Number(order.total || 0);
+      if (cancelledOrRefunded) {
+        deductions += value;
+        return;
+      }
       byChannel[channel].count += 1;
-      byChannel[channel].value += Number(order.total || 0);
+      byChannel[channel].value += value;
     });
-    const totalValue = orders.reduce((sum: number, order: any) => sum + Number(order.total || 0), 0);
-    return { orders, returnsCount, quoteRequests, supportTickets, notifications, byChannel, totalValue };
+    const grossValue = orders.reduce((sum: number, order: any) => sum + Number(order.total || 0), 0);
+    const totalValue = Math.max(0, grossValue - deductions);
+    const netOrders = orders.filter((order: any) => !["CANCELLED", "REFUNDED"].includes(String(order.status || "")) && String(order.paymentStatus || "") !== "REFUNDED" && !(order.returns || []).some((item: any) => ["REFUND_APPROVED", "REFUNDED", "RECEIVED"].includes(String(item.status || ""))));
+    return { orders: netOrders, grossOrderCount: orders.length, deductions, returnsCount, quoteRequests, supportTickets, notifications, byChannel, totalValue, grossValue };
   });
   if (result.ok) return result.data;
   return { orders: [], returnsCount: 0, quoteRequests: 0, supportTickets: 0, notifications: [], byChannel: { WEBSITE: { count: 0, value: 0 }, EBAY: { count: 0, value: 0 }, INVOICE: { count: 0, value: 0 }, MANUAL: { count: 0, value: 0 } }, totalValue: 0 };
@@ -96,7 +106,7 @@ export default async function AdminDashboard() {
       </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-900 uppercase text-slate-400">Sales value</p><p className="mt-1 font-display text-2xl font-900 text-navy-950">{money(data.totalValue)}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-900 uppercase text-slate-400">Sales value</p><p className="mt-1 font-display text-2xl font-900 text-navy-950">{money(data.totalValue)}</p><p className="text-[11px] text-slate-500">Net of cancelled/refunded/returned orders</p></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-900 uppercase text-slate-400">Paid orders</p><p className="mt-1 font-display text-2xl font-900 text-navy-950">{paidOrderCount}</p></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-900 uppercase text-slate-400">Returns / rate</p><p className="mt-1 font-display text-2xl font-900 text-navy-950">{data.returnsCount} · {returnRate}</p></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-900 uppercase text-slate-400">Open activity</p><p className="mt-1 font-display text-2xl font-900 text-navy-950">{data.quoteRequests + data.supportTickets}</p><p className="text-xs text-slate-500">Quotes {data.quoteRequests} · Support {data.supportTickets}</p></div>

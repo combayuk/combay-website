@@ -201,6 +201,13 @@ model Product {
   ebaySpecificsJson Json?
   ebayValidationErrorsJson Json?
   ebaySkuLocked    Boolean       @default(false)
+  ebayShowOnUsCanada Boolean     @default(false)
+
+  // deletion / lifecycle controls
+  deletedAt        DateTime?
+  deleteRequestedAt DateTime?
+  deletePurgeAfter DateTime?
+  deleteStatus     String?
 
   // Shipping policy assignment and product-specific shipping controls
   shippingPolicyId String?
@@ -250,7 +257,10 @@ model Product {
   @@index([ebayCategoryId])
   @@index([ebayExcludedFromSync])
   @@index([ebayInventoryItemSku])
+  @@index([deletedAt])
+  @@index([deleteStatus])
 }
+
 
 model ProductImage {
   id        String  @id @default(cuid())

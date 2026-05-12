@@ -1,4 +1,4 @@
-import { archiveProductInRepository, getProductByIdFromRepository, saveProductToRepository } from "@/lib/productRepository";
+import { archiveProductInRepository, getProductByIdFromRepository, hardDeleteProductInRepository, saveProductToRepository } from "@/lib/productRepository";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const result = await getProductByIdFromRepository(params.id);
@@ -16,9 +16,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return Response.json({ ok: true, source: "database", product: dbResult.data });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const dbResult = await archiveProductInRepository(params.id);
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const { searchParams } = new URL(req.url);
+  const mode = searchParams.get("mode");
+  const dbResult = mode === "hard" ? await hardDeleteProductInRepository(params.id) : await archiveProductInRepository(params.id);
 
   if (!dbResult.ok) return Response.json({ ok: false, mode: "preview", reason: dbResult.reason }, { status: 202 });
-  return Response.json({ ok: true, source: "database", archived: true });
+  return Response.json({ ok: true, source: "database", archived: mode !== "hard", result: dbResult.data });
 }

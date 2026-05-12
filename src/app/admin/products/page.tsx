@@ -80,6 +80,32 @@ export default function AdminProducts() {
     await loadProducts();
   }
 
+  async function hardDeleteProduct(product: AdminProduct) {
+    if (!confirm(`Fully delete ${product.sku}? This is only allowed when the product has no orders, invoices, eBay history or stock movements. If blocked, the system will archive and mark it delete-blocked instead.`)) return;
+    const response = await fetch(`/api/products/${encodeURIComponent(product.id)}?mode=hard`, { method: "DELETE" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      setMessage(result.error || result.reason || `Could not delete ${product.sku}.`);
+      return;
+    }
+    if (result.result?.blocked) setMessage(`${product.sku} could not be hard-deleted because it has business/eBay history. It has been archived and marked delete-blocked.`);
+    else setMessage(`${product.sku} fully deleted from Combay.`);
+    await loadProducts();
+  }
+
+  async function migrateSkus() {
+    if (!confirm("Run historical SKU migration now? This will re-sequence existing products from CBUK00001 upwards by creation date and log every change. eBay-linked products will be flagged for SKU repair review rather than silently broken.")) return;
+    setMessage("Running SKU migration…");
+    const response = await fetch("/api/admin/products/sku-migration", { method: "POST" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      setMessage(result.error || "SKU migration failed.");
+      return;
+    }
+    setMessage(`SKU migration complete: ${result.changedCount || 0} products changed. Next SKU: ${result.nextSku || "calculated on next product"}. eBay-linked products were logged for review.`);
+    await loadProducts();
+  }
+
   async function duplicateProduct(product: AdminProduct) {
     const payload = {
       ...product,
@@ -149,6 +175,7 @@ export default function AdminProducts() {
         <div className="flex gap-2 flex-wrap">
           <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => handleCsvUpload(event.target.files?.[0] ?? null)} />
           <Link href="/admin/products/new" className="btn-primary text-xs py-1.5 px-3"><Plus size={13} /> Add product</Link>
+          <button type="button" onClick={migrateSkus} className="btn-secondary text-xs py-1.5 px-3">Fix SKUs</button>
           <Link href="/admin/products/ai" className="btn-secondary text-xs py-1.5 px-3"><Sparkles size={13} /> AI</Link>
           <button type="button" onClick={() => csvInputRef.current?.click()} className="btn-secondary text-xs py-1.5 px-3"><Upload size={13} /> Upload CSV</button>
           <a href="/stock-list-template.csv" download className="btn-secondary text-xs py-1.5 px-3"><Download size={13} /> Template</a>
@@ -235,8 +262,9 @@ export default function AdminProducts() {
                         )}
                         <Link href={`/admin/products/${product.id}`} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Edit"><Edit size={12} /></Link>
                         <button onClick={() => duplicateProduct(product)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Duplicate"><Copy size={12} /></button>
-                        <button onClick={() => endEbayListing(product)} disabled={!product.ebayOfferId} className="rounded-md border border-orange-200 px-2 py-1 text-[10px] font-900 text-orange-700 hover:bg-orange-50 disabled:opacity-35" title="End eBay listing only"><Trash2 size={12} /> eBay</button>
+                        <button onClick={() => endEbayListing(product)} disabled={!product.ebayOfferId || String(product.ebayPublishStatus || "").toUpperCase() === "ENDED"} className="rounded-md border border-orange-200 px-2 py-1 text-[10px] font-900 text-orange-700 hover:bg-orange-50 disabled:opacity-35" title={String(product.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Already ended on eBay — open product editor to relist" : "End eBay listing only"}><Trash2 size={12} /> {String(product.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Ended" : "eBay"}</button>
                         <button onClick={() => archiveProduct(product)} className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-900 text-red-700 hover:bg-red-50" title="Archive Combay product"><Trash2 size={12} /></button>
+                        <button onClick={() => hardDeleteProduct(product)} className="rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[10px] font-900 text-red-800 hover:bg-red-100" title="Hard delete when safe">Delete</button>
                       </div>
                     </td>
                   </tr>

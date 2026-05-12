@@ -140,6 +140,14 @@ export default function ProductEditor({ mode, productId }: Props) {
       setTagText(tagsToText(blank.tags));
       setVariantRows(normaliseVariants((blank as any).variants));
       setImageRows(normaliseImages(blank));
+      fetch("/api/admin/products/next-sku", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.ok && result.sku) {
+            setProduct((current) => ({ ...current, sku: result.sku, id: `prod-${String(result.sku).toLowerCase()}`, slug: String(result.sku).toLowerCase() }));
+          }
+        })
+        .catch(() => null);
       return;
     }
 

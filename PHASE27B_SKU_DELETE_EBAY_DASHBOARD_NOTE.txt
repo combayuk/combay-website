@@ -1,0 +1,12 @@
+Phase 27B — SKU sequencing, product deletion, eBay state awareness and dashboard net sales refinement
+
+This cumulative archive addresses the urgent post-27A feedback:
+- New products no longer reuse browser-side CBUK0009/old blank-product SKU values.
+- Server create logic never updates an existing product simply because a duplicated SKU was submitted.
+- Added Products -> Fix SKUs migration action to re-sequence existing products from CBUK00001 upward with audit logs.
+- Added hard-delete action in the products table. Safe products are deleted; products with orders/invoices/eBay/history are archived and marked delete-blocked instead.
+- Added eBay US/Canada visibility checkbox in the product eBay tab for EBAY_GB listings. It is implemented as international-shipping visibility via fulfilment policy, because Inventory API does not support the legacy CrossBorderTrade switch directly.
+- Dashboard sales value is now net of cancelled/refunded/returned orders instead of blindly counting all paid totals.
+- eBay tab refresh checks the current offer state and marks ended/unpublished offers as ENDED so admin sees relist instead of repeatedly trying to end an already-ended item.
+
+No Prisma db push is required; runtime bootstrap adds the new Product columns.
