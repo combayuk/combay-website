@@ -120,8 +120,8 @@ export async function POST(req: Request) {
     });
 
     const body = await req.json().catch(() => ({})) as any;
-    const ids = Array.isArray(body?.ids)
-      ? Array.from(new Set(body.ids.map((id: unknown) => String(id || "").trim()).filter(Boolean))).slice(0, 200)
+    const ids: string[] = Array.isArray(body?.ids)
+      ? Array.from(new Set<string>(body.ids.map((id: unknown) => String(id || "").trim()).filter(Boolean))).slice(0, 200)
       : [];
     const action = normaliseAction(body?.action);
 

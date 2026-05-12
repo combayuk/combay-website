@@ -1,0 +1,5 @@
+Phase 27D.2 build fix
+
+Fixed TypeScript inference in src/app/api/products/bulk/route.ts where selected IDs were inferred as unknown[]. The bulk route now explicitly types selected product IDs as string[] so restore/archive/delete calls compile on Vercel.
+
+No Prisma command required.
