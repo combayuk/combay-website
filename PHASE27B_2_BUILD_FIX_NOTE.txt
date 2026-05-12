@@ -1,0 +1,11 @@
+Phase 27B.2 — Build fix
+
+Fixes the Vercel TypeScript compile error in src/lib/ebayPublishing.ts where the refreshed product returned from refreshEbayOfferLifecycleState() was still treated as possibly null after reassignment.
+
+Change:
+- Introduced a non-null activeProduct variable after the refresh guard.
+- Uses activeProduct for logs, jobs, validation, selected inventory location and returned state.
+
+This preserves all Phase 27B functionality: SKU sequencing/migration, hard-delete workflow, eBay ended-state awareness, US/Canada visibility option, dashboard net-sales handling, and product/eBay actions.
+
+No Prisma/database command is required.

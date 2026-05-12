@@ -1203,9 +1203,9 @@ export async function getEbayProductPublishingState(productId: string) {
     const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
     const refreshedProduct = await refreshEbayOfferLifecycleState(product, marketplaceId);
     if (!refreshedProduct) throw new Error("Product not found.");
-    product = refreshedProduct;
-    const logs = await prisma.ebaySyncLog.findMany({ where: { productId: product.id }, orderBy: { startedAt: "desc" }, take: 8 });
-    const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: product.id }, orderBy: { queuedAt: "desc" }, take: 5 });
+    const activeProduct: EbayProductRecord = refreshedProduct;
+    const logs = await prisma.ebaySyncLog.findMany({ where: { productId: activeProduct.id }, orderBy: { startedAt: "desc" }, take: 8 });
+    const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: activeProduct.id }, orderBy: { queuedAt: "desc" }, take: 5 });
     const templates = await prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] });
     const locations = await prisma.ebayInventoryLocation.findMany({ where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] });
     const localOptions = await getLocalPolicyOptions(marketplaceId);
@@ -1217,8 +1217,8 @@ export async function getEbayProductPublishingState(productId: string) {
       fulfillmentPolicies: localOptions.fulfillmentPolicies || [],
       inventoryLocations: locations.map((item: any) => ({ id: item.key, name: `${item.name} (${item.key})`, isDefault: item.isDefault, raw: item })),
     };
-    const validation = validateEbayProductRecord(product);
-    const selectedLocationKey = safeMerchantLocationKey(product.ebayInventoryLocationKey || config?.defaultInventoryLocationKey || "COMBAY-UK-MAIN");
+    const validation = validateEbayProductRecord(activeProduct);
+    const selectedLocationKey = safeMerchantLocationKey(activeProduct.ebayInventoryLocationKey || config?.defaultInventoryLocationKey || "COMBAY-UK-MAIN");
     const selectedLocation = locations.find((item: any) => item.key === selectedLocationKey);
     if (selectedLocation) {
       const locationCheck = validateLocalInventoryLocationForEbay(selectedLocation, selectedLocationKey);
@@ -1227,7 +1227,7 @@ export async function getEbayProductPublishingState(productId: string) {
       });
       validation.valid = validation.errors.length === 0;
     }
-    return { product, logs, jobs, config, templates, locations, options, validation };
+    return { product: activeProduct, logs, jobs, config, templates, locations, options, validation };
   });
 }
 
