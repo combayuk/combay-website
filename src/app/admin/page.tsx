@@ -30,37 +30,32 @@ function money(value: unknown) {
 async function loadDashboardData() {
   const result = await withDatabase(async () => {
     await ensureOperationalTables();
-    const [orders, returnsCount, quoteRequests, supportTickets, notifications] = await Promise.all([
+    const activeOrderWhere: any = {
+      paymentStatus: { in: ["PAID", "PARTIAL"] as any },
+      status: { notIn: ["CANCELLED", "REFUNDED"] as any },
+    };
+    const [ordersForStats, returnsCount, quoteRequests, supportTickets, notifications] = await Promise.all([
       prisma.order.findMany({
-        where: { paymentStatus: { in: ["PAID", "REFUNDED", "PARTIAL"] as any } },
-        select: { id: true, orderNumber: true, total: true, salesChannel: true, status: true, paymentStatus: true, createdAt: true, customerName: true, customerEmail: true, returns: { select: { status: true } } },
+        where: activeOrderWhere,
+        select: { id: true, total: true, salesChannel: true, status: true, paymentStatus: true },
         orderBy: { createdAt: "desc" },
-        take: 500,
+        take: 250,
       }),
-      prisma.return.count().catch(() => 0),
+      prisma.return.count({ where: { status: { notIn: ["CANCELLED", "REJECTED"] as any } } }).catch(() => 0),
       prisma.quoteRequest.count({ where: { status: { in: ["NEW", "IN_REVIEW"] as any } } }).catch(() => 0),
       prisma.supportTicket.count({ where: { status: { notIn: ["RESOLVED", "CLOSED"] as any } } }).catch(() => 0),
-      prisma.adminNotification.findMany({ where: { isRead: false }, orderBy: { createdAt: "desc" }, take: 8 }).catch(() => []),
+      prisma.adminNotification.findMany({ where: { isRead: false }, orderBy: { createdAt: "desc" }, take: 6 }).catch(() => []),
     ]);
+
     const channels = ["WEBSITE", "EBAY", "INVOICE", "MANUAL"];
     const byChannel = Object.fromEntries(channels.map((channel) => [channel, { count: 0, value: 0 }])) as Record<string, { count: number; value: number }>;
-    let deductions = 0;
-    orders.forEach((order: any) => {
+    for (const order of ordersForStats as any[]) {
       const channel = byChannel[order.salesChannel || "WEBSITE"] ? order.salesChannel || "WEBSITE" : "MANUAL";
-      const returned = (order.returns || []).some((item: any) => ["REFUND_APPROVED", "REFUNDED", "RECEIVED"].includes(String(item.status || "")));
-      const cancelledOrRefunded = ["CANCELLED", "REFUNDED"].includes(String(order.status || "")) || String(order.paymentStatus || "") === "REFUNDED" || returned;
-      const value = Number(order.total || 0);
-      if (cancelledOrRefunded) {
-        deductions += value;
-        return;
-      }
       byChannel[channel].count += 1;
-      byChannel[channel].value += value;
-    });
-    const grossValue = orders.reduce((sum: number, order: any) => sum + Number(order.total || 0), 0);
-    const totalValue = Math.max(0, grossValue - deductions);
-    const netOrders = orders.filter((order: any) => !["CANCELLED", "REFUNDED"].includes(String(order.status || "")) && String(order.paymentStatus || "") !== "REFUNDED" && !(order.returns || []).some((item: any) => ["REFUND_APPROVED", "REFUNDED", "RECEIVED"].includes(String(item.status || ""))));
-    return { orders: netOrders, grossOrderCount: orders.length, deductions, returnsCount, quoteRequests, supportTickets, notifications, byChannel, totalValue, grossValue };
+      byChannel[channel].value += Number(order.total || 0);
+    }
+    const totalValue = Object.values(byChannel).reduce((sum, stats) => sum + stats.value, 0);
+    return { orders: ordersForStats, returnsCount, quoteRequests, supportTickets, notifications, byChannel, totalValue, grossValue: totalValue };
   });
   if (result.ok) return result.data;
   return { orders: [], returnsCount: 0, quoteRequests: 0, supportTickets: 0, notifications: [], byChannel: { WEBSITE: { count: 0, value: 0 }, EBAY: { count: 0, value: 0 }, INVOICE: { count: 0, value: 0 }, MANUAL: { count: 0, value: 0 } }, totalValue: 0 };

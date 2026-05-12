@@ -150,7 +150,7 @@ export default function AdminProducts() {
   }
 
   async function endEbayListing(product: AdminProduct) {
-    if (!product.ebayOfferId && !product.ebayListingId) return;
+    if (!product.ebayOfferId && !product.ebayListingId && !product.ebayItemId) return;
     if (!confirm(`End the eBay listing for ${product.sku}? This affects eBay only. The Combay product will remain in the catalogue and the action will be logged.`)) return;
     const response = await fetch(`/api/admin/ebay/publishing/product/${encodeURIComponent(product.id)}`, {
       method: "POST",
@@ -169,7 +169,7 @@ export default function AdminProducts() {
   async function bulkAction(action: "archive" | "delete" | "restore" | "end-ebay") {
     if (!selectedIds.length) return;
     if (action === "end-ebay") {
-      const targets = selectedProducts.filter((product) => product.ebayOfferId || product.ebayListingId);
+      const targets = selectedProducts.filter((product) => product.ebayOfferId || product.ebayListingId || product.ebayItemId);
       if (!targets.length) {
         setMessage("No selected products have an eBay offer/listing to end.");
         return;
@@ -335,7 +335,7 @@ export default function AdminProducts() {
                         )}
                         <Link href={`/admin/products/${product.id}`} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Edit"><Edit size={12} /></Link>
                         <button onClick={() => duplicateProduct(product)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-900 text-slate-600 hover:bg-slate-50" title="Duplicate"><Copy size={12} /></button>
-                        <button onClick={() => endEbayListing(product)} disabled={!product.ebayOfferId || String(product.ebayPublishStatus || "").toUpperCase() === "ENDED"} className="rounded-md border border-orange-200 px-2 py-1 text-[10px] font-900 text-orange-700 hover:bg-orange-50 disabled:opacity-35" title={String(product.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Already ended on eBay — open product editor to relist" : "End eBay listing only"}><Trash2 size={12} /> {String(product.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Ended" : "eBay"}</button>
+                        <button onClick={() => endEbayListing(product)} disabled={!(product.ebayOfferId || product.ebayListingId || product.ebayItemId)} className="rounded-md border border-orange-200 px-2 py-1 text-[10px] font-900 text-orange-700 hover:bg-orange-50 disabled:opacity-35" title={String(product.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Already marked ended on Combay — click to refresh/confirm or relist from product editor" : product.ebayOfferId ? "End eBay listing by Inventory API offer" : "End/confirm imported eBay listing state"}><Trash2 size={12} /> {String(product.ebayPublishStatus || "").toUpperCase() === "ENDED" ? "Ended" : "eBay"}</button>
                         <button onClick={() => archiveProduct(product)} className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-900 text-red-700 hover:bg-red-50" title="Archive Combay product"><Trash2 size={12} /></button>
                         <button onClick={() => hardDeleteProduct(product)} className="rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[10px] font-900 text-red-800 hover:bg-red-100" title="Hard delete when safe">Delete</button>
                       </div>

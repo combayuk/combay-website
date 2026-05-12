@@ -189,6 +189,55 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
   };
 }
 
+function mapPublicListProduct(product: any): CatalogProduct & Record<string, unknown> {
+  const price = product.price === null || product.price === undefined ? null : Number(product.price);
+  const canonical = canonicalCategoryForText({
+    title: product.title,
+    category: product.category?.name,
+    categorySlug: product.category?.slug,
+    brand: product.brand,
+    manufacturer: product.manufacturer,
+    model: product.model,
+    mpn: product.mpn,
+  });
+  const primaryImage = product.images?.[0]?.url ?? null;
+  const hasVariants = Boolean(product.variants?.length);
+  return {
+    id: product.id,
+    slug: product.slug,
+    sku: product.sku,
+    title: product.title,
+    brand: product.brand ?? product.manufacturer ?? "",
+    manufacturer: product.manufacturer ?? product.brand ?? "",
+    model: product.model ?? "",
+    mpn: product.mpn ?? "",
+    category: canonical.groupLabel,
+    categorySlug: canonical.groupSlug,
+    subcategory: canonical.subcategoryLabel ?? "",
+    subcategorySlug: canonical.subcategorySlug ?? "",
+    condition: product.condition as ConditionCode,
+    price,
+    priceOnRequest: product.priceOnRequest,
+    stockQty: product.stockQty,
+    stockStatus: stockStatus(product.stockQty, product.priceOnRequest),
+    leadTime: product.leadTime ?? "UK dispatch normally within 1–2 working days after cleared payment.",
+    warranty: product.warranty ?? "30-day return-to-base warranty unless otherwise stated.",
+    dispatchNote: product.dispatchNote ?? "Packed for courier dispatch with serial number recorded before shipment.",
+    image: primaryImage,
+    images: primaryImage ? [{ url: primaryImage, alt: product.title, isPrimary: true, sortOrder: 0 }] : [],
+    variants: hasVariants ? [{ id: product.variants[0].id, sku: product.variants[0].sku, label: product.variants[0].label || "Option", optionName: product.variants[0].optionName, optionValue: product.variants[0].optionValue, price: product.variants[0].price === null || product.variants[0].price === undefined ? null : Number(product.variants[0].price), stockQty: product.variants[0].stockQty, sortOrder: product.variants[0].sortOrder ?? 0 }] : [],
+    description: product.description ?? "",
+    productOverview: product.productOverview ?? product.description ?? "",
+    specs: [],
+    documents: [],
+    tags: [product.sku, product.brand, product.manufacturer, product.model, product.mpn].filter(Boolean) as string[],
+    status: product.status,
+    source: product.source ?? "database",
+    createdAt: product.createdAt?.toISOString?.() ?? "",
+    updatedAt: product.updatedAt?.toISOString?.() ?? "",
+  };
+}
+
 async function getCategoryId(input?: { category?: string; categorySlug?: string; title?: string; brand?: string; manufacturer?: string; model?: string; mpn?: string }) {
   const canonical = canonicalCategoryForText({
     title: input?.title,
@@ -312,43 +361,41 @@ export async function getProductsFromRepository(params: {
     if (params.status) where.status = params.status;
     else if (!params.includeArchived) where.status = "PUBLISHED";
 
-    // Public category filtering is applied after products are mapped into Combay's canonical taxonomy.
-    // This hides noisy marketplace/eBay categories without requiring destructive DB cleanup.
     if (params.condition) where.condition = params.condition;
     if (params.priceMin !== null && params.priceMin !== undefined) where.price = { ...(where.price ?? {}), gte: params.priceMin };
     if (params.priceMax !== null && params.priceMax !== undefined) where.price = { ...(where.price ?? {}), lte: params.priceMax };
 
-    if (params.query) {
+    const query = String(params.query || "").trim();
+    if (query) {
       where.OR = [
-        { sku: { contains: params.query, mode: "insensitive" } },
-        { title: { contains: params.query, mode: "insensitive" } },
-        { brand: { contains: params.query, mode: "insensitive" } },
-        { manufacturer: { contains: params.query, mode: "insensitive" } },
-        { model: { contains: params.query, mode: "insensitive" } },
-        { mpn: { contains: params.query, mode: "insensitive" } },
-        { description: { contains: params.query, mode: "insensitive" } },
-        { specs: { some: { OR: [{ label: { contains: params.query, mode: "insensitive" } }, { value: { contains: params.query, mode: "insensitive" } }] } } },
+        { sku: { contains: query, mode: "insensitive" } },
+        { title: { contains: query, mode: "insensitive" } },
+        { brand: { contains: query, mode: "insensitive" } },
+        { manufacturer: { contains: query, mode: "insensitive" } },
+        { model: { contains: query, mode: "insensitive" } },
+        { mpn: { contains: query, mode: "insensitive" } },
       ];
     }
 
-    const products = await prisma.product.findMany({
+    // Phase 27H speed fix: public shop list uses a lightweight product-card query.
+    // Full specs/documents/all images/shipping rates are loaded only on the product detail page.
+    const rawProducts = await prisma.product.findMany({
       where,
-      include: {
-        category: true,
-        images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] },
-        documents: true,
-        specs: { orderBy: { sortOrder: "asc" } },
-        variants: { orderBy: { sortOrder: "asc" } },
-        tags: true,
-        shippingPolicy: { include: { rates: { include: { zone: true } } } },
-        shippingOverrides: true,
+      select: {
+        id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, model: true, mpn: true,
+        condition: true, price: true, priceOnRequest: true, stockQty: true, status: true, source: true,
+        description: true, productOverview: true, dispatchNote: true, leadTime: true, warranty: true,
+        createdAt: true, updatedAt: true,
+        category: { select: { name: true, slug: true } },
+        images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { url: true } },
+        variants: { orderBy: { sortOrder: "asc" }, take: 1, select: { id: true, sku: true, label: true, optionName: true, optionValue: true, price: true, stockQty: true, sortOrder: true } },
       },
-      orderBy: { sku: "asc" },
-      take: 5000,
+      orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
+      take: params.category ? 240 : 96,
     });
 
-    const mappedProducts = products.map(mapDbProduct);
-    const filteredProducts = params.category ? mappedProducts.filter((product) => isPublicCategoryMatch(product, params.category)) : mappedProducts;
+    const mappedProducts = rawProducts.map(mapPublicListProduct);
+    const filteredProducts = params.category ? mappedProducts.filter((product: CatalogProduct & Record<string, unknown>) => isPublicCategoryMatch(product, params.category)).slice(0, 96) : mappedProducts;
 
     return { products: filteredProducts, categories: PUBLIC_CATEGORY_LIST };
   });
@@ -356,7 +403,7 @@ export async function getProductsFromRepository(params: {
   if (dbResult.ok) {
     return {
       source: "database",
-      message: "Products served from PostgreSQL/Prisma.",
+      message: "Products served from a lightweight PostgreSQL public catalogue query.",
       products: dbResult.data.products,
       total: dbResult.data.products.length,
       categories: dbResult.data.categories,
@@ -383,7 +430,8 @@ export async function getProductsFromRepository(params: {
       });
       return { ...product, category: canonical.groupLabel, categorySlug: canonical.groupSlug, subcategory: canonical.subcategoryLabel ?? "", subcategorySlug: canonical.subcategorySlug ?? "" };
     })
-    .filter((product) => isPublicCategoryMatch(product, params.category));
+    .filter((product) => isPublicCategoryMatch(product, params.category))
+    .slice(0, 96);
 
   return {
     source: "catalog-fallback",
@@ -702,13 +750,15 @@ export async function hardDeleteProductInRepository(id: string) {
       prisma.ebaySyncLog.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }, { ebayListingId: product.ebayListingId || product.ebayItemId || "__none__" }, { ebayOfferId: product.ebayOfferId || "__none__" }] } }).catch(() => 0),
     ]);
     const blockers = { orderItems, invoiceLines, movements, ebayLogs, ebayListingId: Boolean(product.ebayListingId || product.ebayItemId), ebayOfferId: Boolean(product.ebayOfferId) };
-    const blocked = orderItems || invoiceLines || movements || ebayLogs || product.ebayListingId || product.ebayItemId || product.ebayOfferId;
+    // Phase 27H: eBay history alone must not block deletion from the Combay website/admin catalogue.
+    // Only business/accounting/stock records block destructive deletion. Marketplace ending remains a separate action.
+    const blocked = Boolean(orderItems || invoiceLines || movements);
     if (blocked) {
       await prisma.product.update({ where: { id: product.id }, data: { status: "ARCHIVED", deleteRequestedAt: new Date(), deleteStatus: "DELETE_BLOCKED", deletedAt: new Date() } as any }).catch(() => null);
-      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has business/eBay/audit history, so it was removed from active Combay views and marked delete-blocked instead of destroying traceable records." };
+      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has order, invoice, or stock movement history, so it was removed from active Combay views and marked delete-blocked instead of destroying accounting/stock evidence." };
     }
     await prisma.product.delete({ where: { id: product.id } });
-    return { deleted: true, archived: false, blocked: false, blockers, message: "Product permanently deleted from Combay." };
+    return { deleted: true, archived: false, blocked: false, blockers, message: ebayLogs || product.ebayListingId || product.ebayItemId || product.ebayOfferId ? "Product permanently deleted from Combay. eBay history/logs were retained separately for audit; this did not end the eBay listing." : "Product permanently deleted from Combay." };
   });
 }
 

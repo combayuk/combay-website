@@ -80,7 +80,8 @@ async function hardDeleteOrArchiveProduct(productId: string) {
   ]);
 
   const hasMarketplaceHistory = Boolean(product.ebayListingId || product.ebayItemId || product.ebayOfferId || ebayLogs);
-  const hasBusinessHistory = Boolean(orderItems || invoiceLines || movements || hasMarketplaceHistory);
+  // eBay history alone does not block deleting a product from Combay. Only business/accounting/stock evidence blocks hard delete.
+  const hasBusinessHistory = Boolean(orderItems || invoiceLines || movements);
 
   if (hasBusinessHistory) {
     await prisma.product.update({
@@ -97,7 +98,6 @@ async function hardDeleteOrArchiveProduct(productId: string) {
       orderItems ? `${orderItems} order item(s)` : null,
       invoiceLines ? `${invoiceLines} invoice line(s)` : null,
       movements ? `${movements} stock movement(s)` : null,
-      hasMarketplaceHistory ? "eBay/listing history" : null,
     ].filter(Boolean).join(", ");
 
     return {
@@ -105,7 +105,7 @@ async function hardDeleteOrArchiveProduct(productId: string) {
       product,
       archived: true,
       blocked: true,
-      reason: blockers || "Product has protected business history.",
+      reason: blockers || "Product has protected order, invoice, or stock history.",
     };
   }
 

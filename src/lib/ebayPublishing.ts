@@ -1583,6 +1583,65 @@ async function ebayInventoryApiRequest(path: string, method: string, body?: any,
 }
 
 
+function ebayTradingSiteId(marketplaceId?: string | null) {
+  const marketplace = String(marketplaceId || MARKETPLACE).toUpperCase();
+  const siteMap: Record<string, string> = { EBAY_US: "0", EBAY_CA: "2", EBAY_GB: "3", EBAY_AU: "15", EBAY_DE: "77", EBAY_FR: "71", EBAY_IT: "101", EBAY_ES: "186", EBAY_IE: "205" };
+  return siteMap[marketplace] || "3";
+}
+
+function ebayTradingApiUrl(environment?: string | null) {
+  return environment === "sandbox" ? "https://api.sandbox.ebay.com/ws/api.dll" : "https://api.ebay.com/ws/api.dll";
+}
+
+function escapeXml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function simpleXmlText(xml: string, tag: string) {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([\s\S]*?)</${tag}>`, "i"));
+  return match?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim() || "";
+}
+
+async function ebayTradingApiRequest(callName: string, body: string, marketplaceId?: string | null) {
+  const { token, config } = await getEbayAccessToken();
+  const response = await fetch(ebayTradingApiUrl(config.environment), {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/xml",
+      "X-EBAY-API-COMPATIBILITY-LEVEL": "1231",
+      "X-EBAY-API-CALL-NAME": callName,
+      "X-EBAY-API-SITEID": ebayTradingSiteId(marketplaceId || config.marketplaceId),
+      "X-EBAY-API-IAF-TOKEN": token,
+    },
+    body,
+    cache: "no-store",
+  });
+  const text = await response.text();
+  const ack = simpleXmlText(text, "Ack");
+  if (!response.ok || (ack && !["Success", "Warning"].includes(ack))) {
+    const message = simpleXmlText(text, "LongMessage") || simpleXmlText(text, "ShortMessage") || `eBay Trading API ${callName} failed (${response.status})`;
+    throw new Error(message);
+  }
+  return { ack: ack || "Success", raw: text };
+}
+
+async function endEbayTradingItemByListingId(listingId: string, marketplaceId?: string | null) {
+  const itemId = escapeXml(listingId);
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<EndItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${itemId}</ItemID>
+  <EndingReason>NotAvailable</EndingReason>
+  <ErrorLanguage>${ebayRequestLanguage(marketplaceId || MARKETPLACE).replace("-", "_")}</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+</EndItemRequest>`;
+  return ebayTradingApiRequest("EndItem", body, marketplaceId);
+}
+
 function safeMerchantLocationKey(value?: string | null) {
   const clean = String(value || "")
     .trim()
@@ -2094,13 +2153,15 @@ export async function endEbayListingForProduct(productId: string, input: { confi
     const product = await getProductForEbay(productId);
     if (!product) throw new Error("Product not found.");
     const offerId = String(product.ebayOfferId || "").trim();
-    const listingId = String(product.ebayListingId || "").trim();
+    const listingId = String(product.ebayListingId || product.ebayItemId || "").trim();
     const marketplaceId = product.ebayMarketplaceId || MARKETPLACE;
-    if (!offerId) throw new Error("This product does not have an eBay offer ID. End-listing cannot be safely called from Combay.");
+    if (!offerId && !listingId) throw new Error("This product does not have an eBay offer ID or listing/item ID to end.");
 
-    await logEbayPublishEvent(product, "LIVE_EBAY_END_STARTED", "RUNNING", "Started controlled eBay listing end/withdraw action.", { offerId, listingId, marketplaceId, triggeredBy: input.triggeredBy || "admin" }, null, offerId, listingId || null);
+    await logEbayPublishEvent(product, "LIVE_EBAY_END_STARTED", "RUNNING", "Started controlled eBay listing end/withdraw action.", { offerId, listingId, marketplaceId, triggeredBy: input.triggeredBy || "admin", endMethod: offerId ? "inventory-withdraw-offer" : "trading-end-item" }, null, offerId || null, listingId || null);
     try {
-      const response = await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/withdraw`, "POST", undefined, marketplaceId);
+      const response = offerId
+        ? await ebayInventoryApiRequest(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/withdraw`, "POST", undefined, marketplaceId)
+        : await endEbayTradingItemByListingId(listingId, marketplaceId);
       const previousJson = { ebayListingId: product.ebayListingId, ebayOfferId: product.ebayOfferId, ebayPublishStatus: product.ebayPublishStatus };
       const updated = await prisma.product.update({
         where: { id: product.id },
@@ -2116,17 +2177,17 @@ export async function endEbayListingForProduct(productId: string, input: { confi
           sku: product.sku,
           action: "END_EBAY_LISTING",
           previousJson,
-          nextJson: { ebayListingId: listingId, ebayOfferId: offerId, marketplaceId, withdrawResponse: response },
+          nextJson: { ebayListingId: listingId, ebayOfferId: offerId || null, marketplaceId, endResponse: response, endMethod: offerId ? "inventory-withdraw-offer" : "trading-end-item" },
           reason: "Admin ended/withdrew the eBay listing from Combay. Product remains in Combay catalogue.",
           createdBy: input.triggeredBy || "admin",
         },
       }).catch(() => null);
-      await logEbayPublishEvent(updated, "LIVE_EBAY_END_COMPLETE", "SUCCESS", "eBay listing ended/withdrawn successfully. The Combay product remains available for audit and possible relisting.", { offerId, listingId, withdrawResponse: response }, null, offerId, listingId || null);
-      return { product: updated, offerId, listingId, response };
+      await logEbayPublishEvent(updated, "LIVE_EBAY_END_COMPLETE", "SUCCESS", "eBay listing ended/withdrawn successfully. The Combay product remains available for audit and possible relisting.", { offerId: offerId || null, listingId, endResponse: response, endMethod: offerId ? "inventory-withdraw-offer" : "trading-end-item" }, null, offerId || null, listingId || null);
+      return { product: updated, offerId: offerId || null, listingId, response };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "eBay listing end failed.";
       await prisma.product.update({ where: { id: product.id }, data: { ebayPublishStatus: "SYNC_FAILED", ebayLastError: errorMessage } }).catch(() => null);
-      await logEbayPublishEvent(product, "LIVE_EBAY_END_FAILED", "FAILED", "eBay listing end/withdraw action failed.", { offerId, listingId, error: errorMessage }, errorMessage, offerId, listingId || null);
+      await logEbayPublishEvent(product, "LIVE_EBAY_END_FAILED", "FAILED", "eBay listing end/withdraw action failed.", { offerId: offerId || null, listingId, error: errorMessage }, errorMessage, offerId || null, listingId || null);
       throw error;
     }
   });

@@ -1,0 +1,17 @@
+Phase 27H — Speed, hard-delete semantics, and eBay end-listing usability
+
+Changes:
+- Admin sidebar links now disable Next prefetch to stop hovering/visible admin nav links from preloading heavy admin pages and causing dashboard/navigation sluggishness.
+- Dashboard data loading is reduced to lightweight order/status/channel fields and smaller notification sets.
+- Public shop/catalogue list uses a lightweight product-card query instead of loading full specs, documents, all images, shipping policy/rates and every variant for every product.
+- Product table eBay end button is enabled for products with eBay offer ID, listing ID or imported eBay item ID.
+- eBay end-listing backend supports Inventory API withdrawOffer when offer ID exists, and Trading API EndItem fallback when only an imported eBay listing/item ID exists.
+- Hard-delete no longer treats eBay history alone as a blocker to deleting the product from Combay. Business/accounting/stock records still block destructive deletion and archive/delete-block instead.
+
+Hard-delete meaning:
+- Hard-delete removes the product from the Combay website/admin catalogue/database when it has no order/invoice/stock movement history.
+- It does not automatically end the eBay listing; that remains the separate End eBay listing action.
+- If the product has order, invoice or stock movement history, it is archived/delete-blocked to protect business records.
+- eBay logs/history may remain as separate audit records and no longer prevent deleting the Combay product record.
+
+No Prisma db push is required. Runtime schema bootstrap is retained.

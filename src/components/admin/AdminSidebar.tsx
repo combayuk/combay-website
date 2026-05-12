@@ -44,7 +44,7 @@ export default function AdminSidebar() {
         {NAV.map(n => {
           const active = n.href==="/admin" ? path==="/admin" : path.startsWith(n.href);
           return (
-            <Link key={n.href} href={n.href}
+            <Link key={n.href} href={n.href} prefetch={false}
               className={`flex min-w-0 items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-display font-700 transition-all ${
                 active ? "bg-white/10 text-white border-l-2 border-accent pl-2.5" : "text-white/50 border-l-2 border-transparent hover:bg-white/5 hover:text-white"}`}>
               <span className={active?"text-accent shrink-0":"shrink-0"}>{n.icon}</span><span className="truncate">{n.label}</span>
@@ -53,7 +53,7 @@ export default function AdminSidebar() {
         })}
       </nav>
       <div className="px-2 py-3 border-t border-white/8 space-y-0.5">
-        <Link href="/" target="_blank" className="flex items-center gap-2.5 px-3 py-2 text-white/40 hover:text-white text-sm font-display font-600 transition-colors">
+        <Link href="/" target="_blank" prefetch={false} className="flex items-center gap-2.5 px-3 py-2 text-white/40 hover:text-white text-sm font-display font-600 transition-colors">
           ↗ View Site
         </Link>
         <button onClick={()=>signOut({callbackUrl:"/"})}
