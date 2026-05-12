@@ -1,0 +1,5 @@
+Phase 27B.1 — Build Fix
+
+Fixes a TypeScript narrowing error in src/lib/ebayPublishing.ts where the product variable was reassigned after refreshing eBay offer state and TypeScript treated it as possibly null.
+
+No Prisma/database changes are required.

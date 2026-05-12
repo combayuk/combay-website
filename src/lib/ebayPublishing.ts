@@ -1201,7 +1201,9 @@ export async function getEbayProductPublishingState(productId: string) {
     if (!product) throw new Error("Product not found.");
     const config = await prisma.ebaySyncConfig.findFirst({ orderBy: { updatedAt: "desc" } });
     const marketplaceId = product.ebayMarketplaceId || config?.marketplaceId || MARKETPLACE;
-    product = await refreshEbayOfferLifecycleState(product, marketplaceId);
+    const refreshedProduct = await refreshEbayOfferLifecycleState(product, marketplaceId);
+    if (!refreshedProduct) throw new Error("Product not found.");
+    product = refreshedProduct;
     const logs = await prisma.ebaySyncLog.findMany({ where: { productId: product.id }, orderBy: { startedAt: "desc" }, take: 8 });
     const jobs = await prisma.ebayPublishJob.findMany({ where: { productId: product.id }, orderBy: { queuedAt: "desc" }, take: 5 });
     const templates = await prisma.ebayDescriptionTemplate.findMany({ orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] });
