@@ -27,7 +27,48 @@ export function ensureOperationalTables() {
         await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "deleteRequestedAt" TIMESTAMP(3)`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "deletePurgeAfter" TIMESTAMP(3)`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "deleteStatus" TEXT`);
+        // Keep production DB aligned with Prisma Product scalar fields before any Prisma Product query runs.
+        // Prisma selects all scalar fields on findFirst/findUnique unless a narrow select is used, so one missing
+        // optional column can make product open/delete routes fail with misleading "Product not found" UI states.
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "rawEbayDescription" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "titleLocked" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "priceLocked" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "imagesLocked" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "specsLocked" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "descriptionLocked" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "manufacturerUrl" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "videoUrl" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "seoTitle" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "seoDescription" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "seoKeywords" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayListingId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayOfferId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayInventoryItemSku" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayMarketplaceId" TEXT DEFAULT 'EBAY_GB'`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayCategoryId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayCategoryName" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayPublishStatus" TEXT DEFAULT 'NOT_LISTED'`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayLastPushedAt" TIMESTAMP(3)`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayLastPulledAt" TIMESTAMP(3)`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayLastError" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayExcludedFromSync" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebaySourceOfTruth" TEXT DEFAULT 'COMBAY'`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayConditionId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayConditionEnum" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayFulfillmentPolicyId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayPaymentPolicyId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayReturnPolicyId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayInventoryLocationKey" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayDescriptionHtml" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayDescriptionTemplateId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebaySpecificsJson" JSONB`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayValidationErrorsJson" JSONB`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebaySkuLocked" BOOLEAN NOT NULL DEFAULT false`);
         await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayShowOnUsCanada" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ebayBestOfferEnabled" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "addonSupport" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "addonWarranty" BOOLEAN NOT NULL DEFAULT false`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "addonInstall" BOOLEAN NOT NULL DEFAULT false`);
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_deletedAt_idx" ON "Product"("deletedAt")`);
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_deleteStatus_idx" ON "Product"("deleteStatus")`);
         await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "InventoryMovement" (

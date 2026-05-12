@@ -39,6 +39,7 @@ export default function AdminProducts() {
   const [totalPages, setTotalPages] = useState(1);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [message, setMessage] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   async function loadProducts() {
@@ -50,6 +51,7 @@ export default function AdminProducts() {
     const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
     const result = await response.json();
     setProducts(result.products ?? []);
+    setSelectedIds((current) => current.filter((id) => (result.products ?? []).some((product: AdminProduct) => product.id === id)));
     setTotal(Number(result.total ?? result.products?.length ?? 0));
     setTotalPages(Number(result.totalPages ?? 1));
     setCounts(result.counts ?? {});
@@ -69,6 +71,18 @@ export default function AdminProducts() {
   useEffect(() => { setPage(1); }, [search, category, status]);
 
   const filtered = useMemo(() => products, [products]);
+  const selectedProducts = useMemo(() => products.filter((product) => selectedIds.includes(product.id)), [products, selectedIds]);
+  const allVisibleSelected = filtered.length > 0 && filtered.every((product) => selectedIds.includes(product.id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((current) => allVisibleSelected
+      ? current.filter((id) => !filtered.some((product) => product.id === id))
+      : Array.from(new Set([...current, ...filtered.map((product) => product.id)])));
+  }
 
   async function archiveProduct(product: AdminProduct) {
     if (!confirm(`Archive ${product.sku}? It will be hidden from the active shop but kept in the database.`)) return;
@@ -152,6 +166,49 @@ export default function AdminProducts() {
     await loadProducts();
   }
 
+  async function bulkAction(action: "archive" | "delete" | "restore" | "end-ebay") {
+    if (!selectedIds.length) return;
+    if (action === "end-ebay") {
+      const targets = selectedProducts.filter((product) => product.ebayOfferId || product.ebayListingId);
+      if (!targets.length) {
+        setMessage("No selected products have an eBay offer/listing to end.");
+        return;
+      }
+      if (!confirm(`End eBay listings for ${targets.length} selected products? This affects eBay only and keeps Combay products.`)) return;
+      let success = 0;
+      let failed = 0;
+      for (const product of targets) {
+        const response = await fetch(`/api/admin/ebay/publishing/product/${encodeURIComponent(product.id)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "end-listing", confirmEndListing: true }),
+        });
+        if (response.ok) success += 1;
+        else failed += 1;
+      }
+      setMessage(`Bulk eBay end complete: ${success} ended/requested, ${failed} failed.`);
+      setSelectedIds([]);
+      await loadProducts();
+      return;
+    }
+
+    const label = action === "delete" ? "delete" : action === "restore" ? "restore" : "archive";
+    if (!confirm(`You are about to ${label} ${selectedIds.length} products. Products with business records may be archived/protected instead of permanently deleted.`)) return;
+    const response = await fetch("/api/products/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: selectedIds, action }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      setMessage(result.error || result.reason || `Bulk ${label} failed.`);
+      return;
+    }
+    setMessage(`Bulk ${label} complete: ${result.deleted || 0} deleted, ${result.archived || 0} archived, ${result.restored || 0} restored, ${result.skipped || 0} skipped, ${result.failed || 0} failed.${result.errors?.length ? ` ${result.errors.length} protected/error item(s).` : ""}`);
+    setSelectedIds([]);
+    await loadProducts();
+  }
+
   async function handleCsvUpload(file: File | null) {
     if (!file) return;
     const csv = await file.text();
@@ -186,6 +243,18 @@ export default function AdminProducts() {
 
       {message && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-sm">{message}</div>}
 
+      {selectedIds.length > 0 && (
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-navy-100 bg-navy-950 px-4 py-2 text-xs text-white shadow-sm">
+          <span className="font-900">{selectedIds.length} product{selectedIds.length === 1 ? "" : "s"} selected</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {status === "ARCHIVED" ? <button type="button" onClick={() => bulkAction("restore")} className="rounded-md bg-green-500 px-3 py-1.5 font-900 text-white hover:bg-green-600">Restore</button> : <button type="button" onClick={() => bulkAction("archive")} className="rounded-md bg-white/10 px-3 py-1.5 font-900 hover:bg-white/20">Archive</button>}
+            <button type="button" onClick={() => bulkAction("delete")} className="rounded-md bg-red-500 px-3 py-1.5 font-900 text-white hover:bg-red-600">Delete</button>
+            <button type="button" onClick={() => bulkAction("end-ebay")} className="rounded-md bg-orange-400 px-3 py-1.5 font-900 text-navy-950 hover:bg-orange-300">End eBay listings</button>
+            <button type="button" onClick={() => setSelectedIds([])} className="rounded-md border border-white/20 px-3 py-1.5 font-900 hover:bg-white/10">Clear selection</button>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">{total.toLocaleString("en-GB")} total</span>
@@ -218,18 +287,20 @@ export default function AdminProducts() {
           <table className="w-full table-fixed text-xs">
             <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="w-[36%] px-3 py-2">Product</th>
-                <th className="w-[17%] px-3 py-2">Category / Condition</th>
-                <th className="w-[13%] px-3 py-2">Price / Stock</th>
+                <th className="w-[4%] px-3 py-2"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible products" /></th>
+                <th className="w-[32%] px-3 py-2">Product</th>
+                <th className="w-[16%] px-3 py-2">Category / Condition</th>
+                <th className="w-[12%] px-3 py-2">Price / Stock</th>
                 <th className="w-[14%] px-3 py-2">Status / Source</th>
-                <th className="w-[20%] px-3 py-2 text-right">Actions</th>
+                <th className="w-[22%] px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((product) => {
                 const condition = CONDITION_LABELS[product.condition];
                 return (
-                  <tr key={product.id} className="hover:bg-slate-50/70">
+                  <tr key={product.id} className={`hover:bg-slate-50/70 ${selectedIds.includes(product.id) ? "bg-blue-50/40" : ""}`}>
+                    <td className="px-3 py-3 align-top"><input type="checkbox" checked={selectedIds.includes(product.id)} onChange={() => toggleSelected(product.id)} aria-label={`Select ${product.sku}`} /></td>
                     <td className="px-3 py-3 align-top">
                       <div className="flex min-w-0 items-start gap-2">
                         <div className="h-10 w-10 shrink-0 rounded-lg bg-surface border border-gray-200 flex items-center justify-center text-gray-300 overflow-hidden">

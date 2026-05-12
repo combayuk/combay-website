@@ -306,6 +306,7 @@ export async function getProductsFromRepository(params: {
   priceMax?: number | null;
 }) {
   const dbResult = await withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
     const where: any = { deletedAt: null };
 
     if (params.status) where.status = params.status;
@@ -403,6 +404,7 @@ export async function getAdminProductsListFromRepository(params: {
   const page = Math.max(1, Number(params.page || 1));
   const pageSize = Math.min(100, Math.max(10, Number(params.pageSize || 50)));
   const dbResult = await withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
     const where: any = { deletedAt: null };
     if (params.status) where.status = params.status;
     if (params.category) {
@@ -488,6 +490,7 @@ export async function getAdminProductsListFromRepository(params: {
 
 export async function getProductByIdFromRepository(id: string) {
   const dbResult = await withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
     const product = await prisma.product.findFirst({
       where: { OR: [{ id }, { sku: id }, { slug: id }] },
       include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true, shippingPolicy: { include: { rates: { include: { zone: true } } } }, shippingOverrides: true },
@@ -495,11 +498,13 @@ export async function getProductByIdFromRepository(id: string) {
     return product ? mapDbProduct(product) : null;
   });
 
-  if (dbResult.ok) return { source: "database", product: dbResult.data };
+  if (dbResult.ok) return { source: "database", product: dbResult.data, error: null };
 
+  const fallback = PRODUCTS.find((product) => product.id === id || product.sku === id || product.slug === id) ?? null;
   return {
     source: "catalog-fallback",
-    product: PRODUCTS.find((product) => product.id === id || product.sku === id || product.slug === id) ?? null,
+    product: fallback,
+    error: fallback ? null : dbResult.reason,
   };
 }
 
@@ -697,23 +702,74 @@ export async function hardDeleteProductInRepository(id: string) {
       prisma.ebaySyncLog.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }, { ebayListingId: product.ebayListingId || product.ebayItemId || "__none__" }, { ebayOfferId: product.ebayOfferId || "__none__" }] } }).catch(() => 0),
     ]);
     const blockers = { orderItems, invoiceLines, movements, ebayLogs, ebayListingId: Boolean(product.ebayListingId || product.ebayItemId), ebayOfferId: Boolean(product.ebayOfferId) };
-    // eBay history alone must not block removing a product from the Combay website/admin catalogue.
-    // It remains traceable through eBay logs/revisions, and eBay ending is handled by the separate End eBay listing action.
-    // Business/accounting/stock history still blocks physical DB destruction because orders/invoices/stock ledgers must remain intact.
-    const blocked = orderItems || invoiceLines || movements;
+    const blocked = orderItems || invoiceLines || movements || ebayLogs || product.ebayListingId || product.ebayItemId || product.ebayOfferId;
     if (blocked) {
       await prisma.product.update({ where: { id: product.id }, data: { status: "ARCHIVED", deleteRequestedAt: new Date(), deleteStatus: "DELETE_BLOCKED", deletedAt: new Date() } as any }).catch(() => null);
-      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has order/invoice/stock history, so it was removed from active Combay views and marked delete-blocked instead of destroying accounting evidence." };
+      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has business/eBay/audit history, so it was removed from active Combay views and marked delete-blocked instead of destroying traceable records." };
     }
     await prisma.product.delete({ where: { id: product.id } });
-    return { deleted: true, archived: false, blocked: false, blockers, message: ebayLogs || product.ebayListingId || product.ebayItemId || product.ebayOfferId ? "Product deleted from Combay. eBay history was not treated as a deletion blocker; use/end eBay listing separately where needed." : "Product deleted from Combay." };
+    return { deleted: true, archived: false, blocked: false, blockers, message: "Product permanently deleted from Combay." };
   });
 }
 
 export async function archiveProductInRepository(id: string) {
   return withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
     const existing = await prisma.product.findFirst({ where: { OR: [{ id }, { sku: id }, { slug: id }] } });
     if (!existing) throw new Error("Product not found.");
     return prisma.product.update({ where: { id: existing.id }, data: { status: "ARCHIVED" } });
+  });
+}
+
+
+export async function restoreProductInRepository(id: string) {
+  return withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
+    const existing = await prisma.product.findFirst({ where: { OR: [{ id }, { sku: id }, { slug: id }] } });
+    if (!existing) throw new Error("Product not found.");
+    return prisma.product.update({ where: { id: existing.id }, data: { status: "DRAFT", deletedAt: null, deleteRequestedAt: null, deletePurgeAfter: null, deleteStatus: null } as any });
+  });
+}
+
+export async function bulkDeleteOrArchiveProductsInRepository(ids: string[], mode: "archive" | "hard" | "restore" = "archive") {
+  return withDatabase(async () => {
+    await ensureOperationalTables().catch(() => null);
+    const uniqueIds = Array.from(new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))).slice(0, 200);
+    const result: { success: true; deleted: number; archived: number; restored: number; skipped: number; failed: number; errors: Array<{ productId: string; sku?: string; reason: string }> } = {
+      success: true,
+      deleted: 0,
+      archived: 0,
+      restored: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [],
+    };
+
+    for (const productId of uniqueIds) {
+      try {
+        const action = mode === "hard" ? await hardDeleteProductInRepository(productId) : mode === "restore" ? await restoreProductInRepository(productId) : await archiveProductInRepository(productId);
+        if (!action.ok) {
+          result.failed += 1;
+          result.errors.push({ productId, reason: action.reason || "Action failed." });
+          continue;
+        }
+        const data: any = action.data;
+        if (mode === "hard") {
+          if (data?.deleted) result.deleted += 1;
+          else if (data?.archived) result.archived += 1;
+          else result.skipped += 1;
+          if (data?.blocked) result.errors.push({ productId, reason: data.message || "Protected product was archived instead of hard-deleted." });
+        } else if (mode === "restore") {
+          result.restored += 1;
+        } else {
+          result.archived += 1;
+        }
+      } catch (error) {
+        result.failed += 1;
+        result.errors.push({ productId, reason: error instanceof Error ? error.message : "Unknown product action error." });
+      }
+    }
+
+    return result;
   });
 }

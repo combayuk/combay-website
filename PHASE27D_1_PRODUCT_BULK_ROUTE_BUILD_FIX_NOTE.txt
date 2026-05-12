@@ -1,0 +1,3 @@
+Phase 27D.1 — Product bulk route build fix
+
+This cumulative build fix removes the missing named import from /api/products/bulk and makes the bulk route self-contained. It keeps bulk archive, restore, hard-delete-with-protection, schema bootstrap, and structured result responses intact. No Prisma command required.
