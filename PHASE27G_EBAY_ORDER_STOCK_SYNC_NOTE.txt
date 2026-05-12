@@ -1,0 +1,22 @@
+Phase 27G — eBay order ingestion, dashboard sales accuracy and stock decrement
+
+Purpose:
+- Fix P0 issue where products sold on eBay remained in stock on Combay and dashboard did not reflect eBay sales.
+
+Changes:
+- Added eBay Fulfillment API order sync support with a dedicated safe token refresh path.
+- Added /api/ebay/orders/sync admin endpoint for manual eBay order import/stock sync.
+- Added /api/cron/ebay-order-sync for scheduled eBay order sync.
+- Added Admin -> eBay Sync button: Sync eBay orders & stock.
+- eBay orders are imported as Combay Orders with salesChannel=EBAY and externalOrderId set to eBay order ID.
+- Order items are created from eBay line items.
+- Products are matched by variation SKU/eBay SKU, Combay SKU, eBay inventory item SKU, eBay item ID/listing ID and variation aspects where available.
+- Stock is decremented using the central InventoryMovement engine.
+- Duplicate stock decrements are prevented by InventoryMovement.externalReference.
+- Variation stock is decremented where the eBay line item maps to a variant.
+- Dashboard will reflect eBay sales after orders are synced because imported orders are now real Combay orders with salesChannel=EBAY.
+- Cancelled/refunded eBay orders are imported as cancelled/refunded and excluded from dashboard net sales; if a previously imported order later becomes cancelled, stock restock movement is created once.
+- Added Vercel cron entry for /api/cron/ebay-order-sync every 15 minutes.
+
+Operational note:
+- If eBay order sync says Fulfillment API permission is missing, reconnect eBay OAuth from Admin -> eBay so the refresh token includes sell.fulfillment/sell.fulfillment.readonly scopes.

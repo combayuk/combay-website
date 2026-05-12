@@ -31,7 +31,7 @@ type Run = {
 };
 
 type SyncMode = "test10" | "first50" | "all";
-type SyncingState = SyncMode | "repair" | "refresh" | "remapCategories" | "backgrounds" | "queueImages" | "backupImages" | null;
+type SyncingState = SyncMode | "orders" | "repair" | "refresh" | "remapCategories" | "backgrounds" | "queueImages" | "backupImages" | null;
 type Panel = "sync" | "maintenance" | "connection" | "compliance" | "runs";
 
 const panels: Array<{ id: Panel; label: string }> = [
@@ -58,20 +58,24 @@ export default function EbayAdminPage() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState<SyncingState>(null);
   const [syncProgress, setSyncProgress] = useState<any>(null);
+  const [orderSync, setOrderSync] = useState<any>(null);
   const [activePanel, setActivePanel] = useState<Panel>("sync");
 
   async function load() {
-    const [configRes, runsRes, progressRes] = await Promise.all([
+    const [configRes, runsRes, progressRes, orderSyncRes] = await Promise.all([
       fetch("/api/ebay/config", { cache: "no-store" }),
       fetch("/api/ebay/runs", { cache: "no-store" }),
       fetch("/api/ebay/sync", { cache: "no-store" }).catch(() => null),
+      fetch("/api/ebay/orders/sync", { cache: "no-store" }).catch(() => null),
     ]);
     const configJson = await configRes.json();
     const runsJson = await runsRes.json();
     const progressJson = progressRes ? await progressRes.json().catch(() => null) : null;
+    const orderSyncJson = orderSyncRes ? await orderSyncRes.json().catch(() => null) : null;
     if (configJson.config) setConfig(configJson.config);
     setRuns(runsJson.runs ?? []);
     if (progressJson?.ok) setSyncProgress(progressJson);
+    if (orderSyncJson?.ok) setOrderSync(orderSyncJson);
   }
 
   useEffect(() => {
@@ -146,6 +150,26 @@ export default function EbayAdminPage() {
       setMessage(`Sync complete: ${totalImported} imported, ${totalUpdated} updated, ${totalSkipped} skipped, ${totalRecords} records processed.${mode === "all" ? ` Full sync ran in safe 50-listing batches${startingPage > 1 ? ` from saved page ${startingPage}` : ""}.` : ""}`);
     } catch (error: any) {
       setMessage(error.message || "eBay sync failed.");
+    } finally {
+      setSyncing(null);
+      await load();
+    }
+  }
+
+  async function syncOrdersAndStock() {
+    setSyncing("orders");
+    setMessage("Importing recent eBay orders and updating Combay stock. This may take a few moments.");
+    try {
+      const response = await fetch("/api/ebay/orders/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 30, limit: 50 }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.errors?.join(" | ") || result.error || result.message || "eBay order sync failed.");
+      setMessage(result.message || `eBay order sync complete: ${result.imported || 0} imported, ${result.updated || 0} updated, stock decremented ${result.decremented || 0}.`);
+    } catch (error: any) {
+      setMessage(error.message || "Could not import eBay orders.");
     } finally {
       setSyncing(null);
       await load();
@@ -323,8 +347,9 @@ export default function EbayAdminPage() {
 
       {message ? <div className={`rounded-xl border px-4 py-3 text-sm ${message.toLowerCase().includes("fail") || message.toLowerCase().includes("could not") ? "border-red-200 bg-red-50 text-red-700" : "border-green-200 bg-green-50 text-green-800"}`}>{message}</div> : null}
 
-      <section className="grid gap-3 md:grid-cols-4">
-        <Metric label="Last sync" value={config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"} />
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <Metric label="Last inventory sync" value={config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : "Never"} />
+        <Metric label="Last order sync" value={orderSync?.latest?.startedAt ? new Date(orderSync.latest.startedAt).toLocaleString() : "Never"} />
         <Metric label="Full-sync cursor" value={fullSyncLabel} />
         <Metric label="Latest run" value={latestRun ? `${latestRun.status} · ${latestRun.mode || "sync"}` : "No runs yet"} />
         <Metric label="Pass/fail" value={`10: ${passFail("test10")} · 50: ${passFail("first50")} · All: ${passFail("all")}`} />
@@ -347,11 +372,19 @@ export default function EbayAdminPage() {
         {activePanel === "sync" && (
           <div className="grid gap-4 p-4 lg:grid-cols-[1fr_330px]">
             <div className="space-y-3">
-              <div className="grid gap-2 md:grid-cols-3">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <ActionButton title="Test 10" description="Quick check before larger imports." busy={syncing === "test10"} disabled={running || !connected} onClick={() => sync("test10")} />
                 <ActionButton title="First 50" description="Review mapping, details and images." busy={syncing === "first50"} disabled={running || !connected} onClick={() => sync("first50")} />
-                <ActionButton title="Sync all" description="Resumable 50-listing batches." primary busy={syncing === "all"} disabled={running || !connected} onClick={() => sync("all")} />
+                <ActionButton title="Sync all" description="Resumable 50-listing batches." busy={syncing === "all"} disabled={running || !connected} onClick={() => sync("all")} />
+                <ActionButton title="Sync eBay orders & stock" description="Import recent eBay sales and decrement Combay stock." primary busy={syncing === "orders"} disabled={running || !connected} onClick={syncOrdersAndStock} />
               </div>
+
+              {orderSync?.latest ? (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
+                  <strong>Recent eBay order sync:</strong> {orderSync.latest.status} · {orderSync.latest.message || "No message"}
+                  {orderSync.pendingStockJobs ? <span className="ml-2 font-900">Queued stock jobs: {orderSync.pendingStockJobs}</span> : null}
+                </div>
+              ) : null}
 
               {syncProgress ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

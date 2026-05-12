@@ -166,7 +166,7 @@ export async function sendTrackingEmailIfNeeded(order: any, options: { force?: b
 async function findVariantForItem(item: any) {
   const variationSku = String(item.variationSku || "").trim();
   if (!variationSku) return null;
-  return prisma.productVariant.findFirst({ where: { productId: item.productId || undefined, sku: variationSku } }).catch(() => null);
+  return prisma.productVariant.findFirst({ where: { productId: item.productId || undefined, OR: [{ sku: variationSku }, { ebaySku: variationSku }, { ebayVariationSku: variationSku }] } }).catch(() => null);
 }
 
 export async function queueEbayStockUpdate(product: any, quantity: number, source: string, sourceId: string) {
@@ -241,7 +241,9 @@ export async function decrementStockForPaidOrder(orderId: string, source: "SALE_
         createdBy,
       },
     });
-    await queueEbayStockUpdate({ ...product, stockQty: nextProductQty }, nextProductQty, source, order.id);
+    if (source !== "SALE_EBAY") {
+      await queueEbayStockUpdate({ ...product, stockQty: nextProductQty }, nextProductQty, source, order.id);
+    }
     decremented += 1;
   }
 

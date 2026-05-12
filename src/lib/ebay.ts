@@ -84,7 +84,10 @@ const EBAY_BASE_SCOPE = "https://api.ebay.com/oauth/api_scope";
 const INVENTORY_READONLY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory.readonly";
 const INVENTORY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory";
 const ACCOUNT_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.account";
-const EBAY_SCOPES = `${EBAY_BASE_SCOPE} ${INVENTORY_READONLY_SCOPE} ${INVENTORY_SCOPE} ${ACCOUNT_SCOPE}`;
+const FULFILLMENT_READONLY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly";
+const FULFILLMENT_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.fulfillment";
+const LEGACY_EBAY_SCOPES = `${EBAY_BASE_SCOPE} ${INVENTORY_READONLY_SCOPE} ${INVENTORY_SCOPE} ${ACCOUNT_SCOPE}`;
+const EBAY_SCOPES = `${LEGACY_EBAY_SCOPES} ${FULFILLMENT_READONLY_SCOPE} ${FULFILLMENT_SCOPE}`;
 
 function apiRoot(environment?: string) {
   return environment === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
@@ -268,18 +271,31 @@ export async function exchangeEbayCode(code: string) {
   return data;
 }
 
+async function refreshEbayAccessTokenWithScopes(config: EbayConfig, scope: string) {
+  if (!config.refreshToken) throw new Error("No eBay refresh token saved. Connect eBay first or paste a refresh token.");
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: config.refreshToken,
+    scope,
+  });
+  return tokenRequest(config, body);
+}
+
 export async function getEbayAccessToken() {
   const config = await getEbayConfig();
   if (config.accessToken && config.accessTokenExpiresAt && config.accessTokenExpiresAt.getTime() > Date.now() + 120000) {
     return { token: config.accessToken, config };
   }
-  if (!config.refreshToken) throw new Error("No eBay refresh token saved. Connect eBay first or paste a refresh token.");
-  const body = new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: config.refreshToken,
-    scope: EBAY_SCOPES,
-  });
-  const data = await tokenRequest(config, body);
+  let data: any;
+  try {
+    data = await refreshEbayAccessTokenWithScopes(config, EBAY_SCOPES);
+  } catch (error: any) {
+    // Existing installations may have a refresh token granted before Fulfillment API was added.
+    // Keep inventory publishing working with the legacy scopes, but order sync will ask for reconnect.
+    const message = String(error?.message || error || "");
+    if (!/scope|consent|permission|invalid/i.test(message)) throw error;
+    data = await refreshEbayAccessTokenWithScopes(config, LEGACY_EBAY_SCOPES);
+  }
   const updated = await prisma.ebaySyncConfig.update({
     where: { id: config.id },
     data: {
@@ -288,6 +304,28 @@ export async function getEbayAccessToken() {
     },
   });
   return { token: data.access_token as string, config: updated };
+}
+
+export async function getEbayFulfillmentAccessToken() {
+  const config = await getEbayConfig();
+  if (!config.refreshToken) throw new Error("No eBay refresh token saved. Connect eBay first.");
+  try {
+    const data = await refreshEbayAccessTokenWithScopes(config, `${EBAY_BASE_SCOPE} ${FULFILLMENT_READONLY_SCOPE} ${FULFILLMENT_SCOPE}`);
+    const updated = await prisma.ebaySyncConfig.update({
+      where: { id: config.id },
+      data: {
+        accessToken: data.access_token,
+        accessTokenExpiresAt: data.expires_in ? new Date(Date.now() + Number(data.expires_in) * 1000) : null,
+      },
+    });
+    return { token: data.access_token as string, config: updated };
+  } catch (error: any) {
+    const message = String(error?.message || error || "");
+    if (/scope|consent|permission|invalid/i.test(message)) {
+      throw new Error("eBay order sync needs Fulfillment API permission. Reconnect eBay from Admin → eBay so Combay can import eBay orders and reduce stock automatically.");
+    }
+    throw error;
+  }
 }
 
 function aspect(aspects: Record<string, string[] | string> | undefined, keys: string[]) {
