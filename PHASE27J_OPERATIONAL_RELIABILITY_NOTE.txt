@@ -1,0 +1,32 @@
+Phase 27J — Operational reliability, stock/eBay reconciliation and launch diagnostics
+
+Added a new Admin → Operations console focused on operational confidence before launch.
+
+Implemented:
+1. System health and deployment diagnostics
+   - Shows current deployed phase/archive marker from src/lib/buildInfo.ts.
+   - Checks DATABASE_URL connectivity, runtime schema/bootstrap status, catalogue/resource counts, eBay token status and Resend email environment presence.
+   - Added refreshable /api/operations/reliability endpoint.
+
+2. eBay order and stock reconciliation
+   - Shows imported eBay orders for the last 30 days.
+   - Displays item match counts, unmatched line items, stock movement logs and cancelled/restock signals.
+   - Adds a manual “Recheck last 30 days eBay orders” button using the existing eBay Fulfillment order sync engine.
+   - Keeps duplicate stock deduction protection through the existing InventoryMovement externalReference uniqueness.
+
+3. Inventory mismatch audit
+   - Highlights eBay-linked products that are locally out of stock but may still be active on eBay.
+   - Highlights products in stock locally but marked ended/withdrawn on eBay.
+   - Highlights variant stock mismatches where eBay quantity differs from Combay variation stock.
+   - Shows failed or queued eBay stock update jobs.
+
+4. Category classification audit
+   - Scans products against the approved Combay taxonomy.
+   - Flags obvious wrong categories, including military/RAF/uniform products not under Military & Surplus.
+   - Adds “Apply suggestion” action to move product to the recommended Combay category/subcategory, creating the taxonomy category if missing.
+
+5. Admin navigation
+   - Added Operations tab to the admin sidebar.
+   - Added Operations card to the main admin dashboard.
+
+No public UI redesign was made in this phase.

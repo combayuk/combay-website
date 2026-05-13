@@ -1,5 +1,5 @@
-export const COMBAY_BUILD_PHASE = "27I.2";
+export const COMBAY_BUILD_PHASE = "27J";
 export const COMBAY_BUILD_LABEL =
-  "Phase 27I.2 — compact first-viewport mega menu and public shop speed fix without public runtime schema bootstrap";
+  "Phase 27J — operational reliability dashboard, eBay order/stock reconciliation, system health checks and category repair";
 export const COMBAY_BUILD_ARCHIVE =
-  "combay-27i-2-shop-speed-mega-menu-viewport-cumulative-full-project.tar.gz";
+  "combay-27j-operational-reliability-stock-ebay-diagnostics-cumulative-full-project.tar.gz";
