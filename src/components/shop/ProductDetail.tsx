@@ -20,8 +20,7 @@ import {
 import { CONDITION_LABELS, type CatalogProduct, type ProductVariantOption } from "@/lib/catalog";
 import { addCartItem } from "@/lib/cart";
 
-type Tab = "description" | "overview" | "specs" | "documents" | "resources";
-type RelatedResource = { id: string; title: string; slug: string; excerpt?: string; type?: string; coverImageUrl?: string; videoUrl?: string; tags?: string[] };
+type Tab = "description" | "overview" | "specs" | "documents";
 type EnquiryType = "quote" | "question" | null;
 
 export default function ProductDetail({ slug, initialProduct = null }: { slug: string; initialProduct?: CatalogProduct | null }) {
@@ -54,7 +53,6 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [relatedResources, setRelatedResources] = useState<RelatedResource[]>([]);
   const variants = product.variants ?? [];
   const [selectedVariantId, setSelectedVariantId] = useState<string>(variants[0]?.id ?? "");
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
@@ -70,11 +68,6 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
   useEffect(() => {
     setSelectedVariantId((product.variants ?? [])[0]?.id ?? "");
     setQty(1);
-    setRelatedResources([]);
-    fetch(`/api/resources/related?productId=${encodeURIComponent(product.id)}&take=4`, { cache: "no-store" })
-      .then((response) => response.json())
-      .then((result) => setRelatedResources(Array.isArray(result.resources) ? result.resources : []))
-      .catch(() => setRelatedResources([]));
   }, [product.id]);
 
   async function sendForm(type: "quote" | "question", form: { name: string; email: string; phone?: string; country?: string; message: string; quantity?: number }) {
@@ -136,17 +129,11 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
   const canBuy = !product.priceOnRequest && activePrice !== null && availableQty > 0 && qty <= availableQty;
   const stockLabel = availableQty > 0 ? `In stock (${availableQty})` : "Out of stock";
   const tabs: [Tab, string, ReactNode][] = [
-    ...(hasMeaningfulProductText(product.description) ? [["description" as Tab, "Description", <AlignLeft key="description" size={13} />] as [Tab, string, ReactNode]] : []),
-    ...(hasMeaningfulProductText(product.productOverview) ? [["overview" as Tab, "Overview", <BookOpen key="overview" size={13} />] as [Tab, string, ReactNode]] : []),
-    ...(product.specs?.length ? [["specs" as Tab, "Specifications", <HelpCircle key="specs" size={13} />] as [Tab, string, ReactNode]] : []),
-    ...(product.documents?.length ? [["documents" as Tab, "Documents", <FileText key="documents" size={13} />] as [Tab, string, ReactNode]] : []),
-    ...(relatedResources.length ? [["resources" as Tab, "Guides & videos", <BookOpen key="resources" size={13} />] as [Tab, string, ReactNode]] : []),
+    ["description", "Description", <AlignLeft key="description" size={13} />],
+    ["overview", "Overview", <BookOpen key="overview" size={13} />],
+    ["specs", "Specifications", <HelpCircle key="specs" size={13} />],
+    ["documents", "Documents", <FileText key="documents" size={13} />],
   ];
-  const visibleTabs = tabs.length ? tabs : [["overview", "Overview", <BookOpen key="overview" size={13} />] as [Tab, string, ReactNode]];
-
-  useEffect(() => {
-    if (!visibleTabs.some(([value]) => value === tab)) setTab(visibleTabs[0][0]);
-  }, [product.id, relatedResources.length, tab]);
 
   return (
     <div className="bg-white">
@@ -255,7 +242,7 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
         <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0">
             <div className="mb-4 flex gap-1 overflow-x-auto border-b border-gray-200">
-              {visibleTabs.map(([value, label, icon]) => (
+              {tabs.map(([value, label, icon]) => (
                 <button key={value} onClick={() => setTab(value)} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-display font-900 transition-colors ${tab === value ? "border-accent text-navy-950" : "border-transparent text-gray-400 hover:text-navy-950"}`}>
                   {icon}{label}
                 </button>
@@ -263,10 +250,9 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               {tab === "description" ? <TextBlock text={product.description} /> : null}
-              {tab === "overview" ? <TextBlock text={product.productOverview || launchReadyFallbackOverview(product)} /> : null}
+              {tab === "overview" ? <TextBlock text={product.productOverview} /> : null}
               {tab === "specs" ? <SpecsTable product={product} /> : null}
               {tab === "documents" ? <Documents product={product} /> : null}
-              {tab === "resources" ? <RelatedResources resources={relatedResources} /> : null}
             </div>
           </section>
 
@@ -279,7 +265,6 @@ function ProductDetailView({ product }: { product: CatalogProduct }) {
               <p><span className="font-900 text-navy-950">Warranty:</span> {product.warranty}</p>
             </div>
             <button onClick={() => setModal("quote")} className="btn-primary w-full py-2 text-xs">Request quote for {product.sku}</button>
-            {relatedResources.length ? <div className="mt-4 border-t border-slate-200 pt-4"><p className="mb-2 font-display text-sm font-900 text-navy-950">Related guides</p><div className="space-y-2">{relatedResources.slice(0, 3).map((resource) => <Link key={resource.id} href={`/resources/${resource.slug}`} className="block rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:border-accent"><span className="font-900 text-navy-950 line-clamp-1">{resource.title}</span><span className="mt-0.5 block text-[10px] uppercase tracking-wide text-accent">{String(resource.type || "resource").replace(/-/g, " ")}</span></Link>)}</div></div> : null}
           </aside>
         </div>
       </main>
@@ -391,27 +376,6 @@ function Documents({ product }: { product: CatalogProduct }) {
   );
 }
 
-
-function RelatedResources({ resources }: { resources: RelatedResource[] }) {
-  if (!resources.length) return <div className="rounded-xl border border-gray-200 p-4 text-sm text-gray-500">No related guides or videos have been linked to this product yet.</div>;
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {resources.map((resource) => (
-        <Link key={resource.id} href={`/resources/${resource.slug}`} className="flex gap-3 rounded-xl border border-gray-200 p-3 transition-colors hover:border-accent hover:bg-accent/5">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50">
-            {resource.coverImageUrl ? <img src={resource.coverImageUrl} alt="" className="h-full w-full object-cover" /> : <BookOpen size={18} className="text-slate-300" />}
-          </div>
-          <div className="min-w-0">
-            <p className="font-display text-sm font-900 text-navy-950 line-clamp-2">{resource.title}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-wide text-accent">{String(resource.type || "resource").replace(/-/g, " ")}</p>
-            {resource.excerpt ? <p className="mt-1 line-clamp-2 text-xs text-gray-500">{resource.excerpt}</p> : null}
-          </div>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
 function EnquiryDrawer({
   product,
   type,
@@ -494,17 +458,6 @@ function ProductNotFound() {
       <Link href="/shop" className="btn-primary">Back to inventory</Link>
     </div>
   );
-}
-
-function hasMeaningfulProductText(value: string | undefined) {
-  const clean = String(value || "").replace(/\s+/g, " ").trim();
-  if (!clean || clean.length < 40) return false;
-  if (/^(imported from active ebay listing|no description|description pending|tbc|n\/a|na)$/i.test(clean)) return false;
-  return true;
-}
-
-function launchReadyFallbackOverview(product: CatalogProduct) {
-  return `${product.title} (${product.sku}) is listed by Combay for industrial, technical and procurement-led buyers. Please check the condition, stock, shipping notes and specifications before ordering. Request a quote if you need compatibility confirmation, export paperwork or a formal proforma invoice.`;
 }
 
 function shortText(value: string | undefined, max = 42) {

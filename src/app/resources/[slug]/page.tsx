@@ -6,7 +6,7 @@ import TopBar from "@/components/layout/TopBar";
 import Navigation from "@/components/layout/Navigation";
 import Footer from "@/components/layout/Footer";
 import { getSiteContent } from "@/lib/siteContent";
-import { getResourceBySlug, listRelatedProductsForResource } from "@/lib/resources";
+import { getResourceBySlug } from "@/lib/resources";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +25,6 @@ export default async function ResourceDetailPage({ params }: { params: { slug: s
   const [content, result] = await Promise.all([getSiteContent(), getResourceBySlug(params.slug, true)]);
   const item = result.ok ? result.data : null;
   if (!item) notFound();
-  const relatedProductsResult = await listRelatedProductsForResource(item, 6);
-  const relatedProducts = relatedProductsResult.ok ? relatedProductsResult.data : [];
   const paragraphs = String(item.content || item.excerpt || "").split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
 
   return (
@@ -57,26 +55,6 @@ export default async function ResourceDetailPage({ params }: { params: { slug: s
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <p className="mb-3 flex items-center gap-2 font-display text-sm font-900 text-[#1C334F]"><PlayCircle size={16} className="text-[#C9872F]" /> Video</p>
                   <a href={item.videoUrl} target="_blank" rel="noopener noreferrer" className="btn-primary w-full justify-center py-2 text-xs">Open video</a>
-                </div>
-              ) : null}
-
-              {relatedProducts.length ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="mb-3 font-display text-sm font-900 text-[#1C334F]">Related products</p>
-                  <div className="space-y-2">
-                    {relatedProducts.map((product) => (
-                      <Link key={product.id} href={`/shop/${product.slug}`} className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50 p-2 hover:border-[#C9872F]">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
-                          {product.image ? <img src={product.image} alt="" className="h-full w-full object-cover" /> : <BookOpen size={16} className="text-slate-300" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-mono text-[10px] font-900 text-[#C9872F]">{product.sku}</p>
-                          <p className="truncate text-xs font-900 text-[#1C334F]">{product.title}</p>
-                          <p className="truncate text-[10px] text-slate-400">{product.brand || "Combay stock"}</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
                 </div>
               ) : null}
               {item.tags?.length ? (

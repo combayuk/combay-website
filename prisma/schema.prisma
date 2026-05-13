@@ -1330,19 +1330,6 @@ enum EmailAutomationTrigger {
   BOXING_DAY
 }
 
-
-model ProductQualityReview {
-  id         String   @id
-  productId  String   @unique
-  status     String   @default("REVIEWED")
-  note       String?  @db.Text
-  reviewedAt DateTime @default(now())
-  reviewedBy String?
-
-  @@index([status])
-  @@index([reviewedAt])
-}
-
 model ResourceArticle {
   id                String   @id @default(cuid())
   title             String
