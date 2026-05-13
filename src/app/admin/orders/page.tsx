@@ -73,6 +73,25 @@ type Order = {
   items?: { title: string; sku: string; quantity: number; unitPrice?: number; lineTotal?: number }[];
 };
 
+
+type CommercialInvoiceDraft = {
+  email: string;
+  hsCode: string;
+  countryOfOrigin: string;
+};
+
+function addressCountry(address: unknown) {
+  if (!address || typeof address !== "object") return "";
+  const obj = address as Record<string, unknown>;
+  return String(obj.country || obj.countryCode || obj.countryName || "").trim();
+}
+
+function defaultCommercialOrigin(order: Order) {
+  const country = addressCountry(order.shippingAddress).toUpperCase();
+  if (country === "GB" || country === "UK" || country === "UNITED KINGDOM") return "United Kingdom";
+  return "United Kingdom";
+}
+
 function formatMoney(value: number | string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Number(value));
 }
@@ -132,6 +151,7 @@ export default function AdminOrders() {
   const [message, setMessage] = useState("");
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [sendingTrackingEmail, setSendingTrackingEmail] = useState(false);
+  const [commercialInvoiceDraft, setCommercialInvoiceDraft] = useState<CommercialInvoiceDraft | null>(null);
 
   function loadOrders() {
     setLoading(true);
@@ -157,17 +177,18 @@ export default function AdminOrders() {
     });
   }, [filter, orders, search]);
 
-  async function createInvoiceFromOrder(type: "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "PACKING_LIST") {
+  function openCommercialInvoicePrompt() {
     if (!selected) return;
+    setMessage("");
+    setCommercialInvoiceDraft({
+      email: selected.customerEmail || "",
+      hsCode: "",
+      countryOfOrigin: defaultCommercialOrigin(selected),
+    });
+  }
 
-    let hsCode = "";
-    if (type === "COMMERCIAL_INVOICE") {
-      hsCode = window.prompt("Enter HS code for this commercial invoice. This is mandatory.", "")?.trim() ?? "";
-      if (!hsCode) {
-        setMessage("HS code is mandatory before creating a commercial invoice.");
-        return;
-      }
-    }
+  async function createInvoiceFromOrder(type: "COMMERCIAL_INVOICE" | "PAID_INVOICE" | "PACKING_LIST", extra: Record<string, string> = {}) {
+    if (!selected) return;
 
     setCreatingInvoice(true);
     setMessage("");
@@ -175,7 +196,7 @@ export default function AdminOrders() {
     const response = await fetch("/api/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId: selected.id, type, hsCode }),
+      body: JSON.stringify({ orderId: selected.id, type, ...extra }),
     });
     const data = await response.json().catch(() => ({}));
     setCreatingInvoice(false);
@@ -185,9 +206,31 @@ export default function AdminOrders() {
       return;
     }
 
+    setCommercialInvoiceDraft(null);
     setMessage(`${data.document.documentNumber} created.`);
     window.open(`/api/invoices/${data.document.id}/html`, "_blank", "noopener,noreferrer");
   }
+
+  async function submitCommercialInvoicePrompt() {
+    if (!commercialInvoiceDraft) return;
+    const email = commercialInvoiceDraft.email.trim();
+    const hsCode = commercialInvoiceDraft.hsCode.trim();
+    const countryOfOrigin = commercialInvoiceDraft.countryOfOrigin.trim();
+    if (!email || !email.includes("@")) {
+      setMessage("Customer email address is required before creating a commercial invoice.");
+      return;
+    }
+    if (!hsCode) {
+      setMessage("HS code is mandatory before creating a commercial invoice.");
+      return;
+    }
+    if (!countryOfOrigin) {
+      setMessage("Country of origin is mandatory before creating a commercial invoice.");
+      return;
+    }
+    await createInvoiceFromOrder("COMMERCIAL_INVOICE", { customerEmail: email, hsCode, countryOfOrigin });
+  }
+
 
   async function saveOrderUpdate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -355,7 +398,7 @@ export default function AdminOrders() {
 
             <form onSubmit={saveOrderUpdate} className="p-5 space-y-4">
               <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                <div><p className="text-xs text-gray-400">Customer</p><p className="font-display font-700 text-navy-950">{selected.customerName}</p><p className="text-gray-500 text-xs">{selected.customerEmail}</p></div>
+                <div><p className="text-xs text-gray-400">Customer</p><p className="font-display font-700 text-navy-950">{selected.customerName}</p><p className="text-gray-500 text-xs">{selected.customerEmail}</p>{selected.customerPhone ? <p className="text-gray-500 text-xs">Tel: {selected.customerPhone}</p> : null}</div>
                 <div><p className="text-xs text-gray-400">Total</p><p className="font-display font-700 text-navy-950">{formatMoney(selected.total)}</p><p className="text-gray-500 text-xs">Payment: {label(selected.paymentStatus)}</p></div>
               </div>
 
@@ -434,11 +477,41 @@ export default function AdminOrders() {
                 <h3 className="font-display font-700 text-sm text-navy-950 mb-2">Order documents</h3>
                 <p className="text-xs text-gray-500 mb-3">Create a commercial/export invoice for customs, a paid invoice/receipt for accounts, or a packing list for dispatch/export paperwork.</p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("COMMERCIAL_INVOICE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> {creatingInvoice ? "Creating..." : "Create commercial invoice"}</button>
+                  <button type="button" disabled={creatingInvoice} onClick={openCommercialInvoicePrompt} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> {creatingInvoice ? "Creating..." : "Create commercial invoice"}</button>
                   <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("PAID_INVOICE")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> Create paid invoice</button>
                   <button type="button" disabled={creatingInvoice} onClick={() => createInvoiceFromOrder("PACKING_LIST")} className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5"><FileText size={13}/> Create packing list</button>
                 </div>
               </div>
+
+              {commercialInvoiceDraft && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-display text-sm font-900 text-navy-950">Commercial invoice details</h3>
+                      <p className="mt-1 text-xs text-slate-600">These details are required for customs/export paperwork. Combay exporter details remain locked.</p>
+                    </div>
+                    <button type="button" onClick={() => setCommercialInvoiceDraft(null)} className="rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-900 text-slate-600 hover:text-navy-950">Cancel</button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="sm:col-span-3">
+                      <label className="label">Customer email for document</label>
+                      <input value={commercialInvoiceDraft.email} onChange={(event) => setCommercialInvoiceDraft((current) => current ? { ...current, email: event.target.value } : current)} className="input py-2 text-sm" placeholder="customer@example.com" />
+                    </div>
+                    <div>
+                      <label className="label">HS code</label>
+                      <input value={commercialInvoiceDraft.hsCode} onChange={(event) => setCommercialInvoiceDraft((current) => current ? { ...current, hsCode: event.target.value } : current)} className="input py-2 text-sm" placeholder="e.g. 9027.50.80" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="label">Country of origin</label>
+                      <input value={commercialInvoiceDraft.countryOfOrigin} onChange={(event) => setCommercialInvoiceDraft((current) => current ? { ...current, countryOfOrigin: event.target.value } : current)} className="input py-2 text-sm" placeholder="e.g. United Kingdom" />
+                    </div>
+                    <div className="sm:col-span-3 flex justify-end gap-2">
+                      <button type="button" onClick={() => setCommercialInvoiceDraft(null)} className="btn-secondary px-3 py-2 text-xs">Cancel</button>
+                      <button type="button" onClick={submitCommercialInvoicePrompt} disabled={creatingInvoice} className="btn-primary px-3 py-2 text-xs">{creatingInvoice ? "Creating..." : "Create commercial invoice"}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {message && <p className={`text-sm ${message.includes("not sent") || message.includes("Could not") || message.includes("failed") || message.includes("unknown") ? "text-red-600" : "text-green-700"}`}>{message}</p>}
 

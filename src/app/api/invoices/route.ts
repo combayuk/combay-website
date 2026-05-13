@@ -38,6 +38,49 @@ function money(value: unknown) {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
 
+function text(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function addressCountry(address: unknown) {
+  if (!address || typeof address !== "object") return "";
+  const obj = address as Record<string, unknown>;
+  return text(obj.country || obj.countryCode || obj.countryName).toUpperCase();
+}
+
+const CALLING_CODES: Record<string, string> = {
+  GB: "+44",
+  UK: "+44",
+  "UNITED KINGDOM": "+44",
+  US: "+1",
+  USA: "+1",
+  "UNITED STATES": "+1",
+  CA: "+1",
+  CANADA: "+1",
+};
+
+function normalisePhoneWithCountry(phone: unknown, country: unknown) {
+  const raw = text(phone);
+  if (!raw) return null;
+  if (raw.startsWith("+")) return raw.replace(/\s+/g, " ");
+  const code = CALLING_CODES[text(country).toUpperCase()];
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!code || !digits) return raw;
+  if (code === "+44") return `+44 ${digits.replace(/^0+/, "")}`.trim();
+  if (code === "+1") return `+1 ${digits.replace(/^1/, "")}`.trim();
+  return `${code} ${digits}`.trim();
+}
+
+function commercialNotes(args: { orderNumber: string; countryOfOrigin: string; reasonForExport?: string; incoterms?: string; shipmentNotes?: string; adminNotes?: string }) {
+  return [
+    `Country of Origin: ${args.countryOfOrigin || "United Kingdom"}`,
+    `Reason for export: ${args.reasonForExport || "E-commerce sale"}`,
+    `Incoterms: ${args.incoterms || "DAP — delivered door to door. Buyer/consignee is responsible for import duty, taxes and customs clearance charges."}`,
+    `Shipment notes: ${args.shipmentNotes || "No loose batteries"}`,
+    `Admin/customer notes: ${args.adminNotes || `Commercial invoice generated from order ${args.orderNumber}. No loose batteries.`}`,
+  ].join("\n");
+}
+
 function makeDocumentNumber(type: InvoiceType) {
   const now = new Date();
   const compact = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
@@ -205,14 +248,14 @@ export async function POST(request: NextRequest) {
         orderBy: { createdAt: "asc" },
       });
       const sourceItems = order.items.length
-        ? order.items.map((item) => ({
+        ? order.items.map((item: any) => ({
             title: item.title,
             sku: item.sku,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             lineTotal: item.lineTotal,
           }))
-        : (sourceInvoice?.lines ?? []).map((line, index) => ({
+        : (sourceInvoice?.lines ?? []).map((line: any, index: number) => ({
             title: line.description || line.sku || `Invoice line ${index + 1}`,
             sku: line.sku || `DOC-${sourceInvoice?.documentNumber || order.orderNumber}-${index + 1}`,
             quantity: Number(line.quantity || 1),
@@ -224,17 +267,22 @@ export async function POST(request: NextRequest) {
         type === "PAID_INVOICE" ? "PAID_INVOICE" :
         type === "PACKING_LIST" ? "PACKING_LIST" :
         "COMMERCIAL_INVOICE";
-      const mandatoryHsCode = String(body.hsCode ?? "").trim();
+      const mandatoryHsCode = text(body.hsCode);
+      const countryOfOrigin = text(body.countryOfOrigin ?? body.origin) || "United Kingdom";
       if (orderDocType === "COMMERCIAL_INVOICE" && !mandatoryHsCode) throw new Error("HS code is mandatory before creating a commercial invoice");
+      if (orderDocType === "COMMERCIAL_INVOICE" && !countryOfOrigin) throw new Error("Country of origin is mandatory before creating a commercial invoice");
       const isPackingList = orderDocType === "PACKING_LIST";
-      const subtotal = isPackingList ? 0 : money(body.subtotalOverride ?? order.subtotal);
-      const tax = isPackingList ? 0 : money(body.taxOverride ?? order.tax);
+      const isCommercialInvoice = orderDocType === "COMMERCIAL_INVOICE";
+      const isEbayOrder = text(order.salesChannel).toUpperCase() === "EBAY" || text(order.externalMarketplace).toUpperCase().includes("EBAY");
+      const sourceSubtotal = money(sourceItems.reduce((sum: number, item: any) => sum + money(item.lineTotal), 0));
       const shippingCost = isPackingList ? 0 : money(body.shippingCost ?? order.shipping ?? 0);
+      const subtotal = isPackingList ? 0 : money(body.subtotalOverride ?? (isEbayOrder ? (sourceSubtotal || Math.max(money(order.total) - shippingCost, 0)) : order.subtotal));
+      const tax = isPackingList || isCommercialInvoice || isEbayOrder ? 0 : money(body.taxOverride ?? order.tax);
       const total = isPackingList ? 0 : money(body.totalOverride ?? (subtotal + tax + shippingCost));
-      const isPaidDoc = ["COMMERCIAL_INVOICE", "PAID_INVOICE"].includes(orderDocType) && order.paymentStatus === "PAID";
+      const isPaidDoc = orderDocType === "PAID_INVOICE" && order.paymentStatus === "PAID";
       const paid = isPaidDoc ? total : money(body.amountPaid ?? 0);
-      const balanceDue = Math.max(money(total - paid), 0);
-      const status = isPackingList ? "DRAFT" : isPaidDoc && balanceDue === 0 ? "PAID" : "AWAITING_PAYMENT";
+      const balanceDue = isCommercialInvoice || isPackingList ? 0 : Math.max(money(total - paid), 0);
+      const status = isPackingList || isCommercialInvoice ? "DRAFT" : isPaidDoc && balanceDue === 0 ? "PAID" : "AWAITING_PAYMENT";
       if (!sourceItems.length) throw new Error("Cannot create this document because the paid order/proforma has no line items to snapshot.");
 
       let invoice = await prisma.invoice.create({
@@ -244,28 +292,29 @@ export async function POST(request: NextRequest) {
           status,
           orderId: order.id,
           customerName: order.customerName,
-          customerEmail: order.customerEmail,
-          customerPhone: order.customerPhone,
+          customerEmail: text(body.customerEmail) || order.customerEmail,
+          customerPhone: normalisePhoneWithCountry(order.customerPhone, addressCountry(order.shippingAddress)),
           company: order.company,
           billingAddress: order.shippingAddress ? JSON.stringify(order.shippingAddress, null, 2) : null,
           currency: order.currency ?? "GBP",
           subtotal,
           tax,
-          shippingCountry: String(body.shippingCountry ?? (typeof order.shippingAddress === "object" && order.shippingAddress && "country" in order.shippingAddress ? (order.shippingAddress as any).country : "")).trim() || null,
+          shippingCountry: text(body.shippingCountry ?? addressCountry(order.shippingAddress)) || null,
           shippingCost,
           total,
           amountPaid: paid,
           balanceDue,
           paymentLink: String(body.paymentLink ?? "").trim() || null,
           bankDetails: String(body.bankDetails ?? "").trim() || defaultBankDetails(),
-          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? `Commercial invoice generated from order ${order.orderNumber}. No loose batteries.` : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : orderDocType === "PACKING_LIST" ? `Packing list generated from order ${order.orderNumber}. No loose batteries.` : `Document generated from order ${order.orderNumber}.`),
+          notes: body.notes ?? (orderDocType === "COMMERCIAL_INVOICE" ? commercialNotes({ orderNumber: order.orderNumber, countryOfOrigin, reasonForExport: text(body.reasonForExport), incoterms: text(body.incoterms), shipmentNotes: text(body.shipmentNotes), adminNotes: text(body.adminNotes) }) : orderDocType === "PAID_INVOICE" ? `Paid invoice generated from paid order ${order.orderNumber}.` : orderDocType === "PACKING_LIST" ? `Packing list generated from order ${order.orderNumber}. No loose batteries.` : `Document generated from order ${order.orderNumber}.`),
           paymentTerms: body.paymentTerms ?? defaultTerms(orderDocType),
           lines: {
-            create: sourceItems.map((item, index) => {
+            create: sourceItems.map((item: any, index: number) => {
               const itemTitle = String(item.title || item.sku || `Order item ${index + 1}`).trim();
               const description = orderDocType === "COMMERCIAL_INVOICE"
                 ? `${itemTitle}
 HS Code: ${mandatoryHsCode}
+Origin: ${countryOfOrigin}
 No loose batteries`
                 : orderDocType === "PACKING_LIST"
                   ? `${itemTitle}

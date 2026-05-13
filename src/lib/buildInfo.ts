@@ -1,5 +1,5 @@
-export const COMBAY_BUILD_PHASE = "27L-DOCS.1";
+export const COMBAY_BUILD_PHASE = "27L-DOCS.2";
 export const COMBAY_BUILD_LABEL =
-  "Phase 27L-DOCS.1 — user-friendly commercial invoice consignee address fields and editable incoterms text";
+  "Phase 27L-DOCS.2 — order commercial invoice prompts, no paid stamp, eBay order value cleanup and phone country code display";
 export const COMBAY_BUILD_ARCHIVE =
-  "combay-27l-docs-1-commercial-invoice-address-incoterms-fix-cumulative-full-project.tar.gz";
+  "combay-27l-docs-2-order-commercial-invoice-prompts-ebay-phone-fix-cumulative-full-project.tar.gz";

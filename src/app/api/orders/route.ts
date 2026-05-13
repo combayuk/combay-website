@@ -17,6 +17,36 @@ function formatCurrency(value: unknown) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(money(value));
 }
 
+function addressCountryCode(address: unknown) {
+  if (!address || typeof address !== "object") return "";
+  const obj = address as Record<string, unknown>;
+  return String(obj.country || obj.countryCode || obj.countryName || "").trim().toUpperCase();
+}
+
+const CALLING_CODES: Record<string, string> = {
+  GB: "+44",
+  UK: "+44",
+  "UNITED KINGDOM": "+44",
+  US: "+1",
+  USA: "+1",
+  "UNITED STATES": "+1",
+  CA: "+1",
+  CANADA: "+1",
+};
+
+function normalisePhoneWithCountry(phone: unknown, country: unknown) {
+  const raw = String(phone ?? "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("+")) return raw.replace(/\s+/g, " ");
+  const countryKey = String(country ?? "").trim().toUpperCase();
+  const code = CALLING_CODES[countryKey];
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!code || !digits) return raw;
+  if (code === "+44") return `+44 ${digits.replace(/^0+/, "")}`.trim();
+  if (code === "+1") return `+1 ${digits.replace(/^1/, "")}`.trim();
+  return `${code} ${digits}`.trim();
+}
+
 function normalizeAdminOrder(order: any) {
   return {
     id: order.id,
@@ -24,7 +54,7 @@ function normalizeAdminOrder(order: any) {
     createdAt: order.createdAt,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
-    customerPhone: order.customerPhone ?? null,
+    customerPhone: normalisePhoneWithCountry(order.customerPhone, addressCountryCode(order.shippingAddress)) ?? null,
     company: order.company ?? null,
     subtotal: money(order.subtotal),
     shipping: money(order.shipping),

@@ -64,7 +64,7 @@ function isPaid(type: string) { return type === "PAID_INVOICE" || type === "INVO
 function isPacking(type: string) { return type === "PACKING_LIST"; }
 function isPayable(type: string, balance: number) { return type === "PROFORMA_INVOICE" && balance > 0; }
 function shouldShowPaidStamp(doc: any, balance: number) {
-  if (isPacking(doc.type) || doc.type === "QUOTE") return false;
+  if (isPacking(doc.type) || isCommercial(doc.type) || doc.type === "QUOTE") return false;
   const amountPaid = money(doc.amountPaid);
   const status = String(doc.status || "").toUpperCase();
   const paidStatus = status === "PAID" || status === "RECEIVED";
@@ -103,6 +103,39 @@ function formatAddress(raw: unknown) {
   return esc(text).replace(/\n/g, "<br/>");
 }
 
+const CALLING_CODES: Record<string, string> = {
+  GB: "+44",
+  UK: "+44",
+  "UNITED KINGDOM": "+44",
+  US: "+1",
+  USA: "+1",
+  "UNITED STATES": "+1",
+  CA: "+1",
+  CANADA: "+1",
+};
+function countryFromAddress(raw: unknown) {
+  if (!raw) return "";
+  if (typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    return String(obj.country || obj.countryCode || obj.countryName || "").trim().toUpperCase();
+  }
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (parsed && typeof parsed === "object") return countryFromAddress(parsed);
+  } catch {}
+  return "";
+}
+function normalisePhoneWithCountry(phone: unknown, country: unknown) {
+  const raw = String(phone ?? "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("+")) return raw.replace(/\s+/g, " ");
+  const code = CALLING_CODES[String(country ?? "").trim().toUpperCase()];
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!code || !digits) return raw;
+  if (code === "+44") return `+44 ${digits.replace(/^0+/, "")}`.trim();
+  if (code === "+1") return `+1 ${digits.replace(/^1/, "")}`.trim();
+  return `${code} ${digits}`.trim();
+}
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const hasValidToken = validInvoiceHtmlAccessToken(params.id, request.nextUrl.searchParams.get("token"));
@@ -125,13 +158,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const logo = `/images/combay-doc-logo.png`;
   const companyInfo = `<strong>Combay Limited</strong><br/>CRN. 16638170<br/>2B Erick Avenue, Chelmsford, Essex, England, United Kingdom, CM1 7BX<br/>Cell / WhatsApp +44 7340 383334<br/>sales@combay.co.uk<br/>www.combay.co.uk/`;
   const customerAddress = doc.billingAddress || doc.order?.shippingAddress;
-  const customerInfo = `<strong>${esc(doc.customerName)}</strong>${doc.company ? `<br/>${esc(doc.company)}` : ""}${customerAddress ? `<br/>${formatAddress(customerAddress)}` : ""}<br/>Email: ${esc(doc.customerEmail)}${doc.customerPhone ? `<br/>Tel: ${esc(doc.customerPhone)}` : ""}`;
+  const customerCountry = countryFromAddress(customerAddress) || doc.shippingCountry;
+  const customerPhone = normalisePhoneWithCountry(doc.customerPhone, customerCountry);
+  const customerInfo = `<strong>${esc(doc.customerName)}</strong>${doc.company ? `<br/>${esc(doc.company)}` : ""}${customerAddress ? `<br/>${formatAddress(customerAddress)}` : ""}<br/>Email: ${esc(doc.customerEmail)}${customerPhone ? `<br/>Tel: ${esc(customerPhone)}` : ""}`;
   const exportCountry = noteField(doc.notes, "Country of Origin", "United Kingdom");
   const exportReason = noteField(doc.notes, "Reason for export", "E-commerce sale");
   const incotermText = noteField(doc.notes, "Incoterms", `DAP ${doc.shippingCountry || "unless stated otherwise"}`);
   const shipmentNote = noteField(doc.notes, "Shipment notes", "No loose batteries");
   const visibleNotes = cleanedNotes(doc.notes);
-  const exportBlocks = `<section class="boxgrid commercial"><div class="box"><h2>Exporter / Sender</h2><em>COMBAY LIMITED</em><br/>2B Erick Avenue,<br/>Chelmsford, England, CM1 7BX<br/>Tel # +44 7340 383334<br/>mail: sales@combay.co.uk<br/>EORI. GB045614819000<br/>Company # (CRN): 16638170</div><div class="box"><h2>Consignee / Receiver</h2>${customerInfo}</div><div class="box"><strong>Country of Origin:</strong> ${esc(exportCountry)}<br/><strong>Reason for export:</strong> ${esc(exportReason)}<br/><strong>Incoterms:</strong><br/>${esc(incotermText).replace(/\n/g, "<br/>")}<br/>(Incoterms® 2020)<br/><br/><strong>${esc(shipmentNote)}</strong><br/><strong>Status:</strong> ${esc(label(doc.status))}${packing ? `<br/><strong>Values:</strong> Not applicable - packing list only` : `<br/><strong>Balance due:</strong> ${fmt(balance)}`}</div></section>`;
+  const exportValueLine = packing ? `<br/><strong>Values:</strong> Not applicable - packing list only` : isCommercial(doc.type) ? `<br/><strong>Total value:</strong> ${fmt(doc.total)}` : `<br/><strong>Balance due:</strong> ${fmt(balance)}`;
+  const exportBlocks = `<section class="boxgrid commercial"><div class="box"><h2>Exporter / Sender</h2><em>COMBAY LIMITED</em><br/>2B Erick Avenue,<br/>Chelmsford, England, CM1 7BX<br/>Tel # +44 7340 383334<br/>mail: sales@combay.co.uk<br/>EORI. GB045614819000<br/>Company # (CRN): 16638170</div><div class="box"><h2>Consignee / Receiver</h2>${customerInfo}</div><div class="box"><strong>Country of Origin:</strong> ${esc(exportCountry)}<br/><strong>Reason for export:</strong> ${esc(exportReason)}<br/><strong>Incoterms:</strong><br/>${esc(incotermText).replace(/\n/g, "<br/>")}<br/>(Incoterms® 2020)<br/><br/><strong>${esc(shipmentNote)}</strong><br/><strong>Status:</strong> ${esc(label(doc.status))}${exportValueLine}</div></section>`;
   const normalBlocks = `<section class="boxgrid simple"><div class="box"><h2>Company information</h2>${companyInfo}</div><div class="box"><h2>Customer information</h2>${customerInfo}</div><div class="box"><h2>Document details</h2><strong>Reference:</strong> ${esc(doc.documentNumber)}<br/><strong>Date:</strong> ${new Date(doc.createdAt).toLocaleDateString("en-GB")}<br/><strong>Status:</strong> ${esc(label(doc.status))}<br/><strong>Currency:</strong> GBP${doc.shippingCountry ? `<br/><strong>Shipping to:</strong> ${esc(doc.shippingCountry)}` : ""}</div></section>`;
 
   const sourceLines = (doc.lines && doc.lines.length ? doc.lines : (packing && doc.order?.items ? doc.order.items.map((item: any, index: number) => ({
@@ -157,7 +193,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       ? `<table class="items commercial-items"><colgroup><col class="cqty"/><col class="cdesc"/><col class="chs"/><col class="corigin"/><col class="cnum"/><col class="cnum"/></colgroup><thead><tr><th>QTY</th><th>Description</th><th>HS Code</th><th>Origin</th><th>Unit</th><th>Value</th></tr></thead><tbody>${itemRows}</tbody></table>`
     : `<table class="items"><colgroup><col class="cqty"/><col class="cdesc"/><col class="chs"/><col class="cnum"/><col class="cnum"/></colgroup><thead><tr><th>QTY</th><th>Description</th><th>HS Code</th><th>Unit</th><th>Value</th></tr></thead><tbody>${itemRows}</tbody></table>`;
 
-  const totals = packing ? "" : `<section class="totals"><div class="row"><div></div><div>Subtotal</div><div>${fmt(doc.subtotal)}</div></div>${money(doc.amountPaid) > 0 ? `<div class="row paidrow"><div></div><div>Paid / Credit</div><div>- ${fmt(doc.amountPaid)}</div></div>` : ""}${money(doc.tax) > 0 ? `<div class="row"><div></div><div>VAT / Tax</div><div>${fmt(doc.tax)}</div></div>` : ""}${money(doc.shippingCost) > 0 ? `<div class="row"><div></div><div>Shipping</div><div>${fmt(doc.shippingCost)}</div></div>` : ""}<div class="row grand"><div></div><div>Total</div><div>${fmt(doc.total)}</div></div><div class="row"><div></div><div>Balance Due</div><div>${fmt(balance)}</div></div></section>`;
+  const commercialDoc = isCommercial(doc.type);
+  const totals = packing ? "" : `<section class="totals"><div class="row"><div></div><div>${commercialDoc ? "Price" : "Subtotal"}</div><div>${fmt(doc.subtotal)}</div></div>${!commercialDoc && money(doc.amountPaid) > 0 ? `<div class="row paidrow"><div></div><div>Paid / Credit</div><div>- ${fmt(doc.amountPaid)}</div></div>` : ""}${!commercialDoc && money(doc.tax) > 0 ? `<div class="row"><div></div><div>VAT / Tax</div><div>${fmt(doc.tax)}</div></div>` : ""}${money(doc.shippingCost) > 0 ? `<div class="row"><div></div><div>Shipping</div><div>${fmt(doc.shippingCost)}</div></div>` : ""}<div class="row grand"><div></div><div>Total</div><div>${fmt(doc.total)}</div></div>${!commercialDoc ? `<div class="row"><div></div><div>Balance Due</div><div>${fmt(balance)}</div></div>` : ""}</section>`;
 
   const paymentCards = payable ? `<section class="payment"><div class="paybox"><h3>Pay by card</h3>${doc.paymentLink ? `<a class="paylink" href="${esc(doc.paymentLink)}">Pay securely by card</a>` : "Payment link not generated yet."}</div><div class="paybox"><h3>Pay by bank transfer</h3>${esc(bank).replace(/\n/g,"<br/>")}<br/><strong>Payment reference:</strong> ${esc(doc.documentNumber)}</div></section>` : "";
 
