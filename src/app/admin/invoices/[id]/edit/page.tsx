@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 
-type LineItem = { id?: string; description: string; sku?: string | null; quantity: number; unitPrice: number; lineTotal?: number };
+type LineItem = { id?: string; description: string; sku?: string | null; hsCode?: string; origin?: string; quantity: number; unitPrice: number; lineTotal?: number };
 type DiscountMode = "NONE" | "LINE_ITEMS" | "TOTAL_VALUE";
 type DiscountType = "PERCENTAGE" | "FIXED";
 type Doc = {
@@ -46,7 +46,31 @@ function discountFor(value: number, discountType: DiscountType, discountValue: n
   return money(Math.min(value, raw));
 }
 
-const blankLine = (): LineItem => ({ description: "", sku: "", quantity: 1, unitPrice: 0 });
+const blankLine = (): LineItem => ({ description: "", sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: 0 });
+
+function extractLineMeta(description: string, label: string) {
+  const match = new RegExp(`${label}:\\s*([^\\n]+)`, "i").exec(description);
+  return match?.[1]?.trim() || "";
+}
+
+function cleanLineDescription(description: string) {
+  return description
+    .replace(/HS Code:\s*[^\n]+/gi, "")
+    .replace(/Origin:\s*[^\n]+/gi, "")
+    .trim();
+}
+
+function lineFromDocumentLine(line: LineItem): LineItem {
+  const rawDescription = line.description || "";
+  return {
+    description: cleanLineDescription(rawDescription),
+    sku: line.sku || "",
+    hsCode: line.hsCode || extractLineMeta(rawDescription, "HS Code"),
+    origin: line.origin || extractLineMeta(rawDescription, "Origin"),
+    quantity: Number(line.quantity || 1),
+    unitPrice: Number(line.unitPrice || 0),
+  };
+}
 
 export default function EditDocumentPage({ params }: { params: { id: string } }) {
   const [doc, setDoc] = useState<Doc | null>(null);
@@ -66,12 +90,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
       .then((data) => {
         if (data.document) {
           setDoc(data.document);
-          setLines((data.document.lines?.length ? data.document.lines : [blankLine()]).map((line: LineItem) => ({
-            description: line.description || "",
-            sku: line.sku || "",
-            quantity: Number(line.quantity || 1),
-            unitPrice: Number(line.unitPrice || 0),
-          })));
+          setLines((data.document.lines?.length ? data.document.lines : [blankLine()]).map(lineFromDocumentLine));
           setChargeVat(Number(data.document.tax || 0) > 0);
         }
       })
@@ -79,6 +98,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
   }, [params.id]);
 
   const isPackingList = doc?.type === "PACKING_LIST";
+  const isCommercialInvoice = doc?.type === "COMMERCIAL_INVOICE";
   const isProforma = doc?.type === "PROFORMA_INVOICE";
   const discountAllowed = doc?.type === "QUOTE" || doc?.type === "PROFORMA_INVOICE";
   const grossSubtotal = useMemo(() => isPackingList ? 0 : lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0), [lines, isPackingList]);
@@ -111,7 +131,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
       });
     }
     const label = discountType === "PERCENTAGE" ? `${discountValue}% total invoice discount` : `£${discountValue} total invoice discount`;
-    return [...lines, { description: `Discount - ${label}`, sku: "", quantity: 1, unitPrice: -discount }];
+    return [...lines, { description: `Discount - ${label}`, sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: -discount }];
   }
 
   async function save() {
@@ -148,7 +168,7 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
       return;
     }
     setDoc(data.document);
-    setLines(data.document.lines || lines);
+    setLines((data.document.lines?.length ? data.document.lines : lines).map(lineFromDocumentLine));
     setRegeneratePaymentLink(false);
     setMessage(`${data.document.documentNumber} updated.${data.document.paymentLink ? " Payment link available." : ""}`);
   }
@@ -162,13 +182,13 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
         <Link href="/admin/invoices" className="text-gray-400 hover:text-navy-950 transition-colors p-1"><ArrowLeft size={18}/></Link>
         <div>
           <h1 className="font-display font-900 text-navy-950 text-2xl">Edit {doc.documentNumber}</h1>
-          <p className="text-xs text-gray-500 mt-0.5">{label(doc.type)} · Edit customer details, line items, terms, notes and payment details.</p>
+          <p className="text-xs text-gray-500 mt-0.5">{label(doc.type)} · Edit customer/consignee details, line items, HS/origin, values, terms and notes. Combay company/exporter details are locked.</p>
         </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">Edit customer, line items, terms and totals in a compact document workflow.</span>
+          <span className="rounded-full bg-slate-50 px-3 py-1.5 font-900 text-navy-950">Edit customer, customs fields, line items, terms and totals in a compact document workflow.</span>
           <span className="rounded-full bg-amber-50 px-3 py-1.5 font-900 text-amber-700">Totals update live</span>
           <span className="rounded-full bg-green-50 px-3 py-1.5 font-900 text-green-700">Use View / Print after save</span>
         </div>
@@ -178,6 +198,10 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
         <div className="space-y-4">
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <h2 className="font-display font-700 text-navy-950 mb-3">Customer details</h2>
+            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <strong className="block text-navy-950">Locked Combay details</strong>
+              Generated documents always use Combay Limited as the company/exporter. Edit the consignee/customer, shipment notes, customs line data and values below.
+            </div>
             <div className="grid sm:grid-cols-2 gap-2.5">
               <div><label className="label text-xs">Customer Name</label><input className="input text-xs py-2" value={doc.customerName} onChange={(e) => setField("customerName", e.target.value)}/></div>
               <div><label className="label text-xs">Company</label><input className="input text-xs py-2" value={doc.company || ""} onChange={(e) => setField("company", e.target.value)}/></div>
@@ -189,14 +213,16 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
 
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <h2 className="font-display font-700 text-navy-950 mb-3">Line Items</h2>
-            <div className="space-y-2 overflow-hidden mb-3">
-              <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_86px_58px_78px_78px_24px] gap-1.5 px-1">
-                {["Description", "SKU", "Qty", isPackingList ? "Unit" : "Unit (£)", "Total", ""].map((heading) => <p key={heading} className="font-display font-700 text-[10px] text-gray-400 uppercase tracking-wider">{heading}</p>)}
+            <div className="space-y-2 overflow-x-auto mb-3">
+              <div className="hidden min-w-[920px] sm:grid grid-cols-[minmax(240px,1fr)_74px_82px_82px_56px_78px_76px_24px] gap-1.5 px-1">
+                {["Description", "SKU", "HS Code", "Origin", "Qty", isPackingList ? "Unit" : "Unit (£)", "Total", ""].map((heading) => <p key={heading} className="font-display font-700 text-[10px] text-gray-400 uppercase tracking-wider">{heading}</p>)}
               </div>
               {lines.map((line, index) => (
-                <div key={index} className="grid grid-cols-[minmax(0,1fr)_86px_58px_78px_78px_24px] gap-1.5 items-center">
+                <div key={index} className="grid min-w-[920px] grid-cols-[minmax(240px,1fr)_74px_82px_82px_56px_78px_76px_24px] gap-1.5 items-center">
                   <textarea className="textarea text-xs py-2 min-h-[40px]" value={line.description} onChange={(e) => setLine(index, "description", e.target.value)} placeholder="Item description..." />
                   <input className="input text-xs py-2" value={line.sku || ""} onChange={(e) => setLine(index, "sku", e.target.value)} placeholder="SKU" />
+                  <input className="input text-xs py-2" value={line.hsCode || ""} onChange={(e) => setLine(index, "hsCode", e.target.value)} placeholder="9027.30.00" />
+                  <input className="input text-xs py-2" value={line.origin || ""} onChange={(e) => setLine(index, "origin", e.target.value)} placeholder="UK" />
                   <input type="number" className="input text-xs py-2 text-center" value={line.quantity} min="0" step="1" onChange={(e) => setLine(index, "quantity", Number(e.target.value))}/>
                   <input type="number" className="input text-xs py-2" value={isPackingList ? "" : line.unitPrice || ""} disabled={isPackingList} step="0.01" min="0" onChange={(e) => setLine(index, "unitPrice", Number(e.target.value))} placeholder={isPackingList ? "N/A" : "0.00"}/>
                   <div className="font-display font-800 text-navy-950 text-xs text-right whitespace-nowrap">{isPackingList ? "—" : fmt(Number(line.quantity || 0) * Number(line.unitPrice || 0))}</div>
@@ -230,8 +256,9 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
             </div>
             <label className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
               <input type="checkbox" checked={chargeVat} onChange={(e) => setChargeVat(e.target.checked)} className="mt-1" />
-              <span><strong className="block text-navy-950">Charge VAT</strong>Ticked = add 20% VAT. Unticked = no VAT charged on this Quote/Proforma.</span>
+              <span><strong className="block text-navy-950">Charge VAT</strong>Ticked = add 20% VAT. Unticked = no VAT charged. Commercial invoices can use no VAT while still showing customs values.</span>
             </label>
+            {isCommercialInvoice && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">For commercial invoices, edit Country of Origin, Reason for export, Incoterms and Shipment notes in the Notes field using the same labels. Combay exporter details stay locked.</p>}
             {isProforma && <label className="flex items-start gap-2 text-sm text-gray-600 mt-4"><input type="checkbox" checked={regeneratePaymentLink} onChange={(e) => setRegeneratePaymentLink(e.target.checked)} className="mt-1"/> Regenerate Stripe payment link for updated balance due</label>}
             {isProforma && <div className="mt-3"><label className="label text-xs">Bank transfer details</label><textarea className="textarea text-sm py-2" rows={7} value={doc.bankDetails || ""} onChange={(e) => setField("bankDetails", e.target.value)} /></div>}
           </div>}

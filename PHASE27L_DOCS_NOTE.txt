@@ -1,0 +1,21 @@
+Phase 27L-DOCS — Docs Producer + Custom Commercial Invoice
+
+Baseline:
+- Built from stable Phase 27L archive.
+- Does not include skipped 27L.1 shop/navigation changes.
+
+Changes:
+1. Renamed admin navigation and dashboard label from Invoices & Quotes to Docs Producer.
+2. Docs Producer list now includes custom Commercial Invoices alongside Quotes, Proformas and Packing Lists.
+3. New document generator now supports Commercial Invoice as a manual/custom document type.
+4. Admin can edit customer/consignee details, shipping country/cost, line descriptions, SKU, HS code, line origin, quantities, unit values, VAT toggle, terms and notes.
+5. Combay Limited company/exporter details remain locked in generated document output.
+6. Commercial invoice export details added for Country of Origin, Reason for export, Incoterms and Shipment notes.
+7. Commercial invoice HTML output now reads those export details and shows them in the customs/export block.
+8. Commercial invoice item table now includes an Origin column and per-line HS code/origin handling.
+9. Existing document editor now exposes HS code and Origin fields for edits and preserves them in saved output.
+10. Version marker updated to 27L-DOCS.
+
+Deployment note:
+- Deploy as the final pre-launch docs fix on top of stable 27L.
+- Do not deploy 27L.1.

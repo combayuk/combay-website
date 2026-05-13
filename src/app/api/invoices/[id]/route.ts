@@ -52,7 +52,10 @@ function normalizeInvoice(invoice: any) {
 function normaliseLines(input: any[]) {
   return (input || [])
     .map((line, index) => {
-      const description = String(line.description ?? line.desc ?? "").trim();
+      const bits = [String(line.description ?? line.desc ?? "").trim()];
+      if (line.hsCode) bits.push(`HS Code: ${String(line.hsCode).trim()}`);
+      if (line.origin) bits.push(`Origin: ${String(line.origin).trim()}`);
+      const description = bits.filter(Boolean).join("\n");
       if (!description) return null;
       const quantity = Math.max(money(line.quantity ?? line.qty ?? 1), 0);
       const unitPrice = money(line.unitPrice ?? line.unit ?? 0);

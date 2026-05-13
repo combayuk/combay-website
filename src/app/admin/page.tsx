@@ -11,7 +11,7 @@ const primaryActions = [
   { label: "Operations", description: "Stock/eBay reconciliation, system health checks, inventory risks and category repair.", href: "/admin/operations", icon: Activity },
   { label: "Catalogue Quality", description: "Launch-readiness checks, data quality flags, bulk product repair and public catalogue cleanup.", href: "/admin/catalogue-quality", icon: ShieldCheck },
   { label: "Orders", description: "Paid orders, dispatch, tracking, stock movements and fulfilment.", href: "/admin/orders", icon: ShoppingCart },
-  { label: "Invoices & Quotes", description: "Quotes, proformas, paid invoices, commercial invoices and packing lists.", href: "/admin/invoices", icon: Receipt },
+  { label: "Docs Producer", description: "Quotes, proformas, custom commercial invoices, paid invoices and packing lists.", href: "/admin/invoices", icon: Receipt },
   { label: "Users", description: "Customers, admin accounts, access controls and account support.", href: "/admin/users", icon: UsersRound },
   { label: "Email automation", description: "Templates, broadcast email, scheduled campaigns and consent preferences.", href: "/admin/marketing", icon: Mail },
 ];

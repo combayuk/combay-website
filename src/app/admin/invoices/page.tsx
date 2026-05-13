@@ -64,7 +64,7 @@ const STATUS_COLOUR: Record<string, string> = {
   VOID: "text-red-700 bg-red-50 border-red-200",
 };
 
-const VISIBLE_TYPES: DocType[] = ["QUOTE", "PROFORMA_INVOICE", "PACKING_LIST"];
+const VISIBLE_TYPES: DocType[] = ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "PACKING_LIST"];
 const VAT_TOGGLE_TYPES: DocType[] = ["QUOTE", "PROFORMA_INVOICE"];
 
 function canToggleVat(doc: Doc) {
@@ -210,19 +210,20 @@ export default function InvoicesPage() {
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="font-display font-900 text-navy-950 text-2xl">
-            Quotes / Proformas / Packing Lists
+            Docs Producer
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
             Source: {source || "database"}
-            {loading ? " · loading…" : ""}. Paid commercial invoices are managed
-            from Orders. Packing lists can be created here or from an order.
+            {loading ? " · loading…" : ""}. Create and manage quotes,
+            proformas, custom commercial invoices and packing lists. Combay
+            company/exporter details remain locked on generated documents.
           </p>
         </div>
         <Link
           href="/admin/invoices/new"
           className="btn-primary text-xs py-2 flex items-center gap-1.5"
         >
-          <Plus size={14} /> Create Quote / Proforma / Packing List
+          <Plus size={14} /> Create Document
         </Link>
       </div>
 
@@ -236,7 +237,7 @@ export default function InvoicesPage() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search quote, proforma, packing list, customer, email..."
+              placeholder="Search document, customer, email, company or order..."
               className="h-9 w-80 rounded-lg border border-slate-200 pl-9 pr-3 text-xs outline-none focus:border-accent"
             />
           </div>
@@ -319,7 +320,7 @@ export default function InvoicesPage() {
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="text-center text-sm text-gray-400 py-8">
-                    No quotes, proformas or packing lists found.
+                    No documents found.
                   </td>
                 </tr>
               )}

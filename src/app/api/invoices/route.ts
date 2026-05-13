@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
   const dbResult = await withDatabase(async () => {
     const where: any = {};
     if (type && ALLOWED_TYPES.includes(type as InvoiceType)) where.type = type;
-    if (area === "quotes") where.type = { in: ["QUOTE", "PROFORMA_INVOICE", "PACKING_LIST"] };
+    if (area === "quotes") where.type = { in: ["QUOTE", "PROFORMA_INVOICE", "COMMERCIAL_INVOICE", "PACKING_LIST"] };
     if (area === "orders") where.type = { in: [...ORDER_DOCUMENT_TYPES] };
     if (status) where.status = status;
     return prisma.invoice.findMany({
