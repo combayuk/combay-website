@@ -11,6 +11,23 @@ type DiscountType = "PERCENTAGE" | "FIXED";
 const newLine = () => ({ description: "", sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: 0 });
 type LineItem = ReturnType<typeof newLine>;
 
+type AddressFields = {
+  line1: string;
+  line2: string;
+  city: string;
+  county: string;
+  postcode: string;
+  country: string;
+};
+
+const blankAddress = (): AddressFields => ({ line1: "", line2: "", city: "", county: "", postcode: "", country: "" });
+
+function composeAddress(address: AddressFields) {
+  const cityLine = [address.city, address.county, address.postcode].map((v) => v.trim()).filter(Boolean).join(", ");
+  return [address.line1, address.line2, cityLine, address.country].map((v) => v.trim()).filter(Boolean).join("\n");
+}
+
+
 const DEFAULT_BANK_DETAILS = `Combay Limited
 Acc. # 37213788
 Sort-code 60-84-64
@@ -71,6 +88,7 @@ export default function InvoiceGenerator() {
     billingAddress: "",
   });
   const [lines, setLines] = useState<LineItem[]>(() => [newLine()]);
+  const [address, setAddress] = useState<AddressFields>(() => blankAddress());
   const [shippingCountry, setShippingCountry] = useState("");
   const [shippingCost, setShippingCost] = useState(0);
   const [notes, setNotes] = useState("");
@@ -134,7 +152,7 @@ export default function InvoiceGenerator() {
     const exportDetails = [
       `Country of Origin: ${exportCountryOfOrigin || "United Kingdom"}`,
       `Reason for export: ${exportReason || "E-commerce sale"}`,
-      `Incoterms: ${incoterms || "DAP"}${shippingCountry ? ` ${shippingCountry}` : ""}`,
+      `Incoterms: ${incoterms || "DAP"}`,
       `Shipment notes: ${shipmentNotes || "No loose batteries"}`,
     ].join("\n");
     return [exportDetails, notes ? `Admin/customer notes:\n${notes}` : ""].filter(Boolean).join("\n\n");
@@ -151,6 +169,7 @@ export default function InvoiceGenerator() {
       body: JSON.stringify({
         type,
         ...customer,
+        billingAddress: composeAddress(address),
         lines: linesForSave(),
         notes: notesForSave(),
         paymentTerms,
@@ -213,7 +232,20 @@ export default function InvoiceGenerator() {
               <div><label className="label text-xs">Company</label><input className="input text-xs py-2" value={customer.company} onChange={(e) => setCustomer((c) => ({ ...c, company: e.target.value }))}/></div>
               <div><label className="label text-xs">Email *</label><input type="email" className="input text-xs py-2" value={customer.customerEmail} onChange={(e) => setCustomer((c) => ({ ...c, customerEmail: e.target.value }))} placeholder="customer@company.com"/></div>
               <div><label className="label text-xs">Phone</label><input className="input text-xs py-2" value={customer.customerPhone} onChange={(e) => setCustomer((c) => ({ ...c, customerPhone: e.target.value }))}/></div>
-              <div className="sm:col-span-2"><label className="label text-xs">Customer / delivery address</label><textarea className="textarea text-sm py-2" rows={2} value={customer.billingAddress} onChange={(e) => setCustomer((c) => ({ ...c, billingAddress: e.target.value }))}/></div>
+              <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="label text-xs mb-0">Customer / delivery address</label>
+                  <span className="text-[11px] text-slate-500">Shown as normal address lines on the document, not JSON/code.</span>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <input className="input text-xs py-2 sm:col-span-2" value={address.line1} onChange={(e) => setAddress((a) => ({ ...a, line1: e.target.value }))} placeholder="Address line 1" />
+                  <input className="input text-xs py-2 sm:col-span-2" value={address.line2} onChange={(e) => setAddress((a) => ({ ...a, line2: e.target.value }))} placeholder="Address line 2" />
+                  <input className="input text-xs py-2" value={address.city} onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))} placeholder="Town / City" />
+                  <input className="input text-xs py-2" value={address.county} onChange={(e) => setAddress((a) => ({ ...a, county: e.target.value }))} placeholder="County / State" />
+                  <input className="input text-xs py-2" value={address.postcode} onChange={(e) => setAddress((a) => ({ ...a, postcode: e.target.value }))} placeholder="Postcode / ZIP" />
+                  <input className="input text-xs py-2" value={address.country} onChange={(e) => setAddress((a) => ({ ...a, country: e.target.value }))} placeholder="Country" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -246,7 +278,7 @@ export default function InvoiceGenerator() {
             <div className="grid sm:grid-cols-2 gap-2.5">
               <div><label className="label text-xs">Country of origin shown on document</label><input className="input text-xs py-2" value={exportCountryOfOrigin} onChange={(e) => setExportCountryOfOrigin(e.target.value)} placeholder="United Kingdom" /></div>
               <div><label className="label text-xs">Reason for export</label><input className="input text-xs py-2" value={exportReason} onChange={(e) => setExportReason(e.target.value)} placeholder="E-commerce sale / return / warranty replacement" /></div>
-              <div><label className="label text-xs">Incoterms</label><input className="input text-xs py-2" value={incoterms} onChange={(e) => setIncoterms(e.target.value)} placeholder="DAP" /></div>
+              <div className="sm:col-span-2"><label className="label text-xs">Incoterms / delivery responsibility text</label><textarea className="textarea text-xs py-2" rows={2} value={incoterms} onChange={(e) => setIncoterms(e.target.value)} placeholder="DAP — delivered door to door. Buyer/consignee is responsible for import duty, taxes and customs clearance charges." /></div>
               <div><label className="label text-xs">Shipment notes</label><input className="input text-xs py-2" value={shipmentNotes} onChange={(e) => setShipmentNotes(e.target.value)} placeholder="No loose batteries" /></div>
             </div>
           </div>}

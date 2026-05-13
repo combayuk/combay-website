@@ -48,6 +48,119 @@ function discountFor(value: number, discountType: DiscountType, discountValue: n
 
 const blankLine = (): LineItem => ({ description: "", sku: "", hsCode: "", origin: "", quantity: 1, unitPrice: 0 });
 
+type AddressFields = {
+  line1: string;
+  line2: string;
+  city: string;
+  county: string;
+  postcode: string;
+  country: string;
+};
+
+type CommercialExportFields = {
+  countryOfOrigin: string;
+  reasonForExport: string;
+  incoterms: string;
+  shipmentNotes: string;
+  adminNotes: string;
+};
+
+const blankAddress = (): AddressFields => ({ line1: "", line2: "", city: "", county: "", postcode: "", country: "" });
+const blankExportFields = (): CommercialExportFields => ({
+  countryOfOrigin: "United Kingdom",
+  reasonForExport: "E-commerce sale",
+  incoterms: "DAP",
+  shipmentNotes: "No loose batteries",
+  adminNotes: "",
+});
+
+function valueFromObject(obj: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function parseAddress(raw: unknown): AddressFields {
+  if (!raw) return blankAddress();
+  const text = typeof raw === "string" ? raw.trim() : raw;
+  if (typeof text === "string" && text.startsWith("{")) {
+    try {
+      return parseAddress(JSON.parse(text));
+    } catch {}
+  }
+  if (text && typeof text === "object") {
+    const obj = text as Record<string, unknown>;
+    return {
+      line1: valueFromObject(obj, ["line1", "addressLine1", "address1", "street", "street1", "address"]),
+      line2: valueFromObject(obj, ["line2", "addressLine2", "address2", "street2"]),
+      city: valueFromObject(obj, ["city", "town", "townCity", "locality"]),
+      county: valueFromObject(obj, ["county", "state", "province", "region"]),
+      postcode: valueFromObject(obj, ["postcode", "postalCode", "zip", "zipCode"]),
+      country: valueFromObject(obj, ["country", "countryName"]),
+    };
+  }
+  const lines = String(text).split(/\n|,/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return blankAddress();
+  return {
+    line1: lines[0] || "",
+    line2: lines[1] || "",
+    city: lines[2] || "",
+    county: lines[3] || "",
+    postcode: lines[4] || "",
+    country: lines[5] || "",
+  };
+}
+
+function composeAddress(address: AddressFields) {
+  const cityLine = [address.city, address.county, address.postcode].map((v) => v.trim()).filter(Boolean).join(", ");
+  return [address.line1, address.line2, cityLine, address.country].map((v) => v.trim()).filter(Boolean).join("\n");
+}
+
+const EXPORT_NOTE_LABELS = ["Country of Origin", "Reason for export", "Incoterms", "Shipment notes", "Admin/customer notes"];
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function exportNoteBoundary() {
+  return `\\n(?:${EXPORT_NOTE_LABELS.map(escapeRegex).join("|")}):|$`;
+}
+function noteField(notes: unknown, label: string, fallback = "") {
+  const text = String(notes ?? "");
+  const escaped = escapeRegex(label);
+  const match = new RegExp(`${escaped}:\\s*([\\s\\S]*?)(?=${exportNoteBoundary()})`, "i").exec(text);
+  return match?.[1]?.trim() || fallback;
+}
+
+function cleanCommercialNotes(notes: unknown) {
+  let text = String(notes ?? "");
+  for (const label of EXPORT_NOTE_LABELS.filter((item) => item !== "Admin/customer notes")) {
+    text = text.replace(new RegExp(`(?:^|\\n)${escapeRegex(label)}:\\s*[\\s\\S]*?(?=${exportNoteBoundary()})`, "gi"), "");
+  }
+  return text.replace(/^Admin\/customer notes:\s*/gim, "").trim();
+}
+
+function parseCommercialExportFields(notes: unknown): CommercialExportFields {
+  return {
+    countryOfOrigin: noteField(notes, "Country of Origin", "United Kingdom"),
+    reasonForExport: noteField(notes, "Reason for export", "E-commerce sale"),
+    incoterms: noteField(notes, "Incoterms", "DAP"),
+    shipmentNotes: noteField(notes, "Shipment notes", "No loose batteries"),
+    adminNotes: cleanCommercialNotes(notes),
+  };
+}
+
+function composeCommercialNotes(fields: CommercialExportFields) {
+  const exportDetails = [
+    `Country of Origin: ${fields.countryOfOrigin || "United Kingdom"}`,
+    `Reason for export: ${fields.reasonForExport || "E-commerce sale"}`,
+    `Incoterms: ${fields.incoterms || "DAP"}`,
+    `Shipment notes: ${fields.shipmentNotes || "No loose batteries"}`,
+  ].join("\n");
+  return [exportDetails, fields.adminNotes ? `Admin/customer notes:\n${fields.adminNotes}` : ""].filter(Boolean).join("\n\n");
+}
+
+
 function extractLineMeta(description: string, label: string) {
   const match = new RegExp(`${label}:\\s*([^\\n]+)`, "i").exec(description);
   return match?.[1]?.trim() || "";
@@ -83,13 +196,18 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
   const [discountType, setDiscountType] = useState<DiscountType>("PERCENTAGE");
   const [discountValue, setDiscountValue] = useState(0);
   const [chargeVat, setChargeVat] = useState(true);
+  const [address, setAddress] = useState<AddressFields>(() => blankAddress());
+  const [exportFields, setExportFields] = useState<CommercialExportFields>(() => blankExportFields());
 
   useEffect(() => {
     fetch(`/api/invoices/${params.id}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (data.document) {
-          setDoc(data.document);
+          const parsedExportFields = parseCommercialExportFields(data.document.notes);
+          setDoc(data.document.type === "COMMERCIAL_INVOICE" ? { ...data.document, notes: parsedExportFields.adminNotes } : data.document);
+          setAddress(parseAddress(data.document.billingAddress));
+          setExportFields(parsedExportFields);
           setLines((data.document.lines?.length ? data.document.lines : [blankLine()]).map(lineFromDocumentLine));
           setChargeVat(Number(data.document.tax || 0) > 0);
         }
@@ -146,14 +264,14 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
         customerEmail: doc.customerEmail,
         customerPhone: doc.customerPhone,
         company: doc.company,
-        billingAddress: doc.billingAddress,
+        billingAddress: composeAddress(address),
         shippingCountry: doc.shippingCountry,
         shippingCost: shippingCost,
         amountPaid: amountPaid,
         paymentLink: doc.paymentLink,
         bankDetails: doc.bankDetails,
         paymentTerms: doc.paymentTerms,
-        notes: doc.notes,
+        notes: isCommercialInvoice ? composeCommercialNotes(exportFields) : doc.notes,
         lines: linesForSave(),
         regeneratePaymentLink,
         taxRate: chargeVat ? 0.2 : 0,
@@ -167,7 +285,10 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
       setMessage(data.error || data.reason || "Could not update document.");
       return;
     }
-    setDoc(data.document);
+    const parsedExportFields = parseCommercialExportFields(data.document.notes);
+    setDoc(data.document.type === "COMMERCIAL_INVOICE" ? { ...data.document, notes: parsedExportFields.adminNotes } : data.document);
+    setAddress(parseAddress(data.document.billingAddress));
+    setExportFields(parsedExportFields);
     setLines((data.document.lines?.length ? data.document.lines : lines).map(lineFromDocumentLine));
     setRegeneratePaymentLink(false);
     setMessage(`${data.document.documentNumber} updated.${data.document.paymentLink ? " Payment link available." : ""}`);
@@ -207,7 +328,20 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
               <div><label className="label text-xs">Company</label><input className="input text-xs py-2" value={doc.company || ""} onChange={(e) => setField("company", e.target.value)}/></div>
               <div><label className="label text-xs">Email</label><input type="email" className="input text-xs py-2" value={doc.customerEmail} onChange={(e) => setField("customerEmail", e.target.value)}/></div>
               <div><label className="label text-xs">Phone</label><input className="input text-xs py-2" value={doc.customerPhone || ""} onChange={(e) => setField("customerPhone", e.target.value)}/></div>
-              <div className="sm:col-span-2"><label className="label text-xs">Customer / delivery address</label><textarea className="textarea text-sm py-2" rows={2} value={doc.billingAddress || ""} onChange={(e) => setField("billingAddress", e.target.value)}/></div>
+              <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="label text-xs mb-0">Customer / delivery address</label>
+                  <span className="text-[11px] text-slate-500">Editable address fields. Saved documents will not show JSON/code.</span>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <input className="input text-xs py-2 sm:col-span-2" value={address.line1} onChange={(e) => setAddress((a) => ({ ...a, line1: e.target.value }))} placeholder="Address line 1" />
+                  <input className="input text-xs py-2 sm:col-span-2" value={address.line2} onChange={(e) => setAddress((a) => ({ ...a, line2: e.target.value }))} placeholder="Address line 2" />
+                  <input className="input text-xs py-2" value={address.city} onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))} placeholder="Town / City" />
+                  <input className="input text-xs py-2" value={address.county} onChange={(e) => setAddress((a) => ({ ...a, county: e.target.value }))} placeholder="County / State" />
+                  <input className="input text-xs py-2" value={address.postcode} onChange={(e) => setAddress((a) => ({ ...a, postcode: e.target.value }))} placeholder="Postcode / ZIP" />
+                  <input className="input text-xs py-2" value={address.country} onChange={(e) => setAddress((a) => ({ ...a, country: e.target.value }))} placeholder="Country" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -233,7 +367,16 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
             <button onClick={() => setLines((current) => [...current, blankLine()])} className="inline-flex items-center gap-1.5 text-accent font-display font-800 text-xs hover:text-accent-dark"><Plus size={14}/> Add Line</button>
           </div>
 
-
+          {isCommercialInvoice && <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h2 className="font-display font-700 text-navy-950 mb-1">Commercial invoice export details</h2>
+            <p className="text-xs text-gray-500 mb-3">Change these fields directly. They are printed on the commercial invoice. Combay exporter details remain locked.</p>
+            <div className="grid sm:grid-cols-2 gap-2.5">
+              <div><label className="label text-xs">Country of origin shown on document</label><input className="input text-xs py-2" value={exportFields.countryOfOrigin} onChange={(e) => setExportFields((f) => ({ ...f, countryOfOrigin: e.target.value }))} placeholder="United Kingdom" /></div>
+              <div><label className="label text-xs">Reason for export</label><input className="input text-xs py-2" value={exportFields.reasonForExport} onChange={(e) => setExportFields((f) => ({ ...f, reasonForExport: e.target.value }))} placeholder="E-commerce sale / return / warranty replacement" /></div>
+              <div className="sm:col-span-2"><label className="label text-xs">Incoterms / delivery responsibility text</label><textarea className="textarea text-xs py-2" rows={2} value={exportFields.incoterms} onChange={(e) => setExportFields((f) => ({ ...f, incoterms: e.target.value }))} placeholder="DAP — delivered door to door. Buyer/consignee is responsible for import duty, taxes and customs clearance charges." /></div>
+              <div className="sm:col-span-2"><label className="label text-xs">Shipment notes</label><input className="input text-xs py-2" value={exportFields.shipmentNotes} onChange={(e) => setExportFields((f) => ({ ...f, shipmentNotes: e.target.value }))} placeholder="No loose batteries" /></div>
+            </div>
+          </div>}
 
           {discountAllowed && <div className="bg-white border border-gray-200 rounded-xl p-4">
             <h2 className="font-display font-700 text-navy-950 mb-1">Discount</h2>
@@ -258,14 +401,13 @@ export default function EditDocumentPage({ params }: { params: { id: string } })
               <input type="checkbox" checked={chargeVat} onChange={(e) => setChargeVat(e.target.checked)} className="mt-1" />
               <span><strong className="block text-navy-950">Charge VAT</strong>Ticked = add 20% VAT. Unticked = no VAT charged. Commercial invoices can use no VAT while still showing customs values.</span>
             </label>
-            {isCommercialInvoice && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">For commercial invoices, edit Country of Origin, Reason for export, Incoterms and Shipment notes in the Notes field using the same labels. Combay exporter details stay locked.</p>}
             {isProforma && <label className="flex items-start gap-2 text-sm text-gray-600 mt-4"><input type="checkbox" checked={regeneratePaymentLink} onChange={(e) => setRegeneratePaymentLink(e.target.checked)} className="mt-1"/> Regenerate Stripe payment link for updated balance due</label>}
             {isProforma && <div className="mt-3"><label className="label text-xs">Bank transfer details</label><textarea className="textarea text-sm py-2" rows={7} value={doc.bankDetails || ""} onChange={(e) => setField("bankDetails", e.target.value)} /></div>}
           </div>}
 
           <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
             <div><label className="label text-xs">Terms</label><textarea className="textarea text-sm py-2" rows={4} value={doc.paymentTerms || ""} onChange={(e) => setField("paymentTerms", e.target.value)}/></div>
-            <div><label className="label text-xs">Notes</label><textarea className="textarea text-sm py-2" rows={2} value={doc.notes || ""} onChange={(e) => setField("notes", e.target.value)}/></div>
+            <div><label className="label text-xs">{isCommercialInvoice ? "Additional notes" : "Notes"}</label><textarea className="textarea text-sm py-2" rows={2} value={isCommercialInvoice ? exportFields.adminNotes : doc.notes || ""} onChange={(e) => isCommercialInvoice ? setExportFields((f) => ({ ...f, adminNotes: e.target.value })) : setField("notes", e.target.value)}/></div>
           </div>
         </div>
 

@@ -38,21 +38,27 @@ function title(type: string) {
 function hs(desc: string) { return /HS Code:\s*([^\n]+)/i.exec(desc)?.[1]?.trim() ?? ""; }
 function origin(desc: string) { return /Origin:\s*([^\n]+)/i.exec(desc)?.[1]?.trim() ?? ""; }
 function clean(desc: string) { return desc.replace(/HS Code:\s*[^\n]+/gi, "").replace(/Origin:\s*[^\n]+/gi, "").trim(); }
+const EXPORT_NOTE_LABELS = ["Country of Origin", "Reason for export", "Incoterms", "Shipment notes", "Admin/customer notes"];
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function exportNoteBoundary() {
+  return `\\n(?:${EXPORT_NOTE_LABELS.map(escapeRegex).join("|")}):|$`;
+}
 function noteField(notes: unknown, label: string, fallback = "") {
   const text = String(notes ?? "");
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`${escaped}:\\s*([^\\n]+)`, "i").exec(text);
+  const escaped = escapeRegex(label);
+  const match = new RegExp(`${escaped}:\\s*([\\s\\S]*?)(?=${exportNoteBoundary()})`, "i").exec(text);
   return match?.[1]?.trim() || fallback;
 }
 function cleanedNotes(notes: unknown) {
-  return String(notes ?? "")
-    .replace(/^Country of Origin:\s*[^\n]+\n?/gim, "")
-    .replace(/^Reason for export:\s*[^\n]+\n?/gim, "")
-    .replace(/^Incoterms:\s*[^\n]+\n?/gim, "")
-    .replace(/^Shipment notes:\s*[^\n]+\n?/gim, "")
-    .replace(/^Admin\/customer notes:\s*/gim, "")
-    .trim();
+  let text = String(notes ?? "");
+  for (const label of EXPORT_NOTE_LABELS.filter((item) => item !== "Admin/customer notes")) {
+    text = text.replace(new RegExp(`(?:^|\\n)${escapeRegex(label)}:\\s*[\\s\\S]*?(?=${exportNoteBoundary()})`, "gi"), "");
+  }
+  return text.replace(/^Admin\/customer notes:\s*/gim, "").trim();
 }
+
 function isCommercial(type: string) { return type === "COMMERCIAL_INVOICE"; }
 function isPaid(type: string) { return type === "PAID_INVOICE" || type === "INVOICE"; }
 function isPacking(type: string) { return type === "PACKING_LIST"; }
@@ -65,16 +71,38 @@ function shouldShowPaidStamp(doc: any, balance: number) {
   const fullyPaid = balance === 0 && amountPaid > 0;
   return paidStatus || fullyPaid;
 }
+function addressValue(obj: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+function formatAddressObject(obj: Record<string, unknown>) {
+  const cityLine = [
+    addressValue(obj, ["city", "town", "townCity", "locality"]),
+    addressValue(obj, ["county", "state", "province", "region"]),
+    addressValue(obj, ["postcode", "postalCode", "zip", "zipCode"]),
+  ].filter(Boolean).join(", ");
+  const lines = [
+    addressValue(obj, ["addressLine1", "line1", "address1", "street", "street1", "address"]),
+    addressValue(obj, ["addressLine2", "line2", "address2", "street2"]),
+    cityLine,
+    addressValue(obj, ["country", "countryName"]),
+  ].filter(Boolean);
+  return lines.map(esc).join("<br/>");
+}
 function formatAddress(raw: unknown) {
   if (!raw) return "";
-  if (typeof raw === "object") return Object.values(raw as Record<string, unknown>).filter(Boolean).map(esc).join("<br/>");
-  const text = String(raw);
+  if (typeof raw === "object") return formatAddressObject(raw as Record<string, unknown>);
+  const text = String(raw).trim();
   try {
     const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === "object") return Object.values(parsed).filter(Boolean).map(esc).join("<br/>");
+    if (parsed && typeof parsed === "object") return formatAddressObject(parsed as Record<string, unknown>);
   } catch {}
   return esc(text).replace(/\n/g, "<br/>");
 }
+
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const hasValidToken = validInvoiceHtmlAccessToken(params.id, request.nextUrl.searchParams.get("token"));
@@ -103,7 +131,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const incotermText = noteField(doc.notes, "Incoterms", `DAP ${doc.shippingCountry || "unless stated otherwise"}`);
   const shipmentNote = noteField(doc.notes, "Shipment notes", "No loose batteries");
   const visibleNotes = cleanedNotes(doc.notes);
-  const exportBlocks = `<section class="boxgrid commercial"><div class="box"><h2>Exporter / Sender</h2><em>COMBAY LIMITED</em><br/>2B Erick Avenue,<br/>Chelmsford, England, CM1 7BX<br/>Tel # +44 7340 383334<br/>mail: sales@combay.co.uk<br/>EORI. GB045614819000<br/>Company # (CRN): 16638170</div><div class="box"><h2>Consignee / Receiver</h2>${customerInfo}</div><div class="box"><strong>Country of Origin:</strong> ${esc(exportCountry)}<br/><strong>Reason for export:</strong> ${esc(exportReason)}<br/><strong>Incoterms:</strong><br/>${esc(incotermText)}<br/>(Incoterms® 2020)<br/><br/><strong>${esc(shipmentNote)}</strong><br/><strong>Status:</strong> ${esc(label(doc.status))}${packing ? `<br/><strong>Values:</strong> Not applicable - packing list only` : `<br/><strong>Balance due:</strong> ${fmt(balance)}`}</div></section>`;
+  const exportBlocks = `<section class="boxgrid commercial"><div class="box"><h2>Exporter / Sender</h2><em>COMBAY LIMITED</em><br/>2B Erick Avenue,<br/>Chelmsford, England, CM1 7BX<br/>Tel # +44 7340 383334<br/>mail: sales@combay.co.uk<br/>EORI. GB045614819000<br/>Company # (CRN): 16638170</div><div class="box"><h2>Consignee / Receiver</h2>${customerInfo}</div><div class="box"><strong>Country of Origin:</strong> ${esc(exportCountry)}<br/><strong>Reason for export:</strong> ${esc(exportReason)}<br/><strong>Incoterms:</strong><br/>${esc(incotermText).replace(/\n/g, "<br/>")}<br/>(Incoterms® 2020)<br/><br/><strong>${esc(shipmentNote)}</strong><br/><strong>Status:</strong> ${esc(label(doc.status))}${packing ? `<br/><strong>Values:</strong> Not applicable - packing list only` : `<br/><strong>Balance due:</strong> ${fmt(balance)}`}</div></section>`;
   const normalBlocks = `<section class="boxgrid simple"><div class="box"><h2>Company information</h2>${companyInfo}</div><div class="box"><h2>Customer information</h2>${customerInfo}</div><div class="box"><h2>Document details</h2><strong>Reference:</strong> ${esc(doc.documentNumber)}<br/><strong>Date:</strong> ${new Date(doc.createdAt).toLocaleDateString("en-GB")}<br/><strong>Status:</strong> ${esc(label(doc.status))}<br/><strong>Currency:</strong> GBP${doc.shippingCountry ? `<br/><strong>Shipping to:</strong> ${esc(doc.shippingCountry)}` : ""}</div></section>`;
 
   const sourceLines = (doc.lines && doc.lines.length ? doc.lines : (packing && doc.order?.items ? doc.order.items.map((item: any, index: number) => ({
