@@ -1,5 +1,5 @@
-export const COMBAY_BUILD_PHASE = "27K";
+export const COMBAY_BUILD_PHASE = "27L";
 export const COMBAY_BUILD_LABEL =
-  "Phase 27K — catalogue launch readiness, product data quality repair centre, bulk catalogue fixes and resources/product linking";
+  "Phase 27L — instant navigation feedback, route loading shells and product-detail lazy loading across public/admin surfaces";
 export const COMBAY_BUILD_ARCHIVE =
-  "combay-27k-catalogue-launch-readiness-product-data-quality-cumulative-full-project.tar.gz";
+  "combay-27l-instant-navigation-lazy-loading-cumulative-full-project.tar.gz";

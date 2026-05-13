@@ -797,6 +797,7 @@ function ProductCard({ product }: { product: CatalogProduct }) {
     <article className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-md">
       <Link
         href={`/shop/${product.slug}`}
+        prefetch={false}
         className="relative flex aspect-[4/3] items-center justify-center overflow-hidden border-b border-gray-100 bg-gray-50"
       >
         {product.image ? (
@@ -838,6 +839,7 @@ function ProductCard({ product }: { product: CatalogProduct }) {
         </div>
         <Link
           href={`/shop/${product.slug}`}
+          prefetch={false}
           className="mb-2 block max-h-10 overflow-hidden font-display text-sm font-900 leading-5 text-navy-950 hover:text-accent"
         >
           {product.title}
@@ -879,6 +881,7 @@ function ProductCard({ product }: { product: CatalogProduct }) {
             ) : (
               <Link
                 href={`/shop/${product.slug}?quote=1`}
+                prefetch={false}
                 className="btn-primary py-2 px-2 text-center text-[11px]"
               >
                 Request quote
@@ -886,6 +889,7 @@ function ProductCard({ product }: { product: CatalogProduct }) {
             )}
             <Link
               href={`/shop/${product.slug}`}
+              prefetch={false}
               className="btn-secondary py-2 px-2 text-center text-[11px]"
             >
               View details
@@ -893,6 +897,7 @@ function ProductCard({ product }: { product: CatalogProduct }) {
             {hasVariants ? (
               <Link
                 href={`/shop/${product.slug}`}
+                prefetch={false}
                 className="col-span-2 rounded-md border border-slate-200 px-2 py-1.5 text-center text-[11px] font-900 text-[#2D4F7A] hover:bg-slate-50"
               >
                 Choose option

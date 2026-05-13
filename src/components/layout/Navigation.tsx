@@ -229,6 +229,7 @@ export default function Navigation() {
                       </button>
                       <Link
                         href="/shop"
+                        prefetch={false}
                         onClick={(event) => handleShopCategoryClick(event, "")}
                         className="btn-secondary whitespace-nowrap px-3 py-1.5 text-[11px]"
                       >
@@ -250,6 +251,7 @@ export default function Navigation() {
                       >
                         <Link
                           href={shopCategoryHref(cat.slug)}
+                          prefetch={false}
                           onClick={(event) =>
                             handleShopCategoryClick(event, cat.slug)
                           }
@@ -275,6 +277,7 @@ export default function Navigation() {
                             <li key={item.slug}>
                               <Link
                                 href={shopCategoryHref(item.slug)}
+                                prefetch={false}
                                 onClick={(event) =>
                                   handleShopCategoryClick(event, item.slug)
                                 }
@@ -305,6 +308,7 @@ export default function Navigation() {
           <div className="hidden items-center gap-2 lg:flex">
             <Link
               href="/cart"
+              prefetch={false}
               className="relative rounded-md border border-slate-200 p-2.5 text-slate-600 transition-colors hover:border-slate-400 hover:text-[#2D4F7A]"
               aria-label="Cart"
             >
@@ -325,6 +329,7 @@ export default function Navigation() {
             </a>
             <Link
               href="/repair"
+              prefetch={false}
               className="rounded-md bg-[#2D4F7A] px-3.5 py-2 text-sm font-900 text-white transition-colors hover:bg-[#355F8E]"
             >
               Request Repair
@@ -347,6 +352,7 @@ export default function Navigation() {
             <div className="grid gap-2">
               <Link
                 href="/shop"
+                prefetch={false}
                 onClick={(event) => handleShopCategoryClick(event, "")}
                 className="rounded-lg bg-slate-50 px-3 py-2.5 font-900 text-[#2D4F7A]"
               >

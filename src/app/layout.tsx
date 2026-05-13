@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SessionProvider from "@/components/SessionProvider";
 import PublicTextStyleApplier from "@/components/visual-cms/PublicTextStyleApplier";
+import RouteProgressIndicator from "@/components/navigation/RouteProgressIndicator";
 
 export const metadata: Metadata = {
   title: { default: "Combay — Industrial Equipment Specialists", template: "%s | Combay" },
@@ -23,6 +25,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body>
         <SessionProvider session={session}>
+          <Suspense fallback={null}>
+            <RouteProgressIndicator />
+          </Suspense>
           <PublicTextStyleApplier />
           {children}
         </SessionProvider>
