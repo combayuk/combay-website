@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound, MessageSquare, RefreshCw, Sparkles, Mail, ClipboardCheck, Truck, UploadCloud, BookOpen } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Wrench, RotateCcw, FileText, Tag, Receipt, LogOut, UsersRound, MessageSquare, RefreshCw, Sparkles, Mail, ClipboardCheck, Truck, UploadCloud, BookOpen, Activity, ShieldCheck } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 const NAV = [
@@ -9,6 +9,8 @@ const NAV = [
   { href:"/admin/products",   label:"Products",          icon:<Package size={15}/> },
   { href:"/admin/ebay",       label:"eBay Sync",         icon:<RefreshCw size={15}/> },
   { href:"/admin/ebay/publishing", label:"eBay Publish", icon:<UploadCloud size={15}/> },
+  { href:"/admin/operations", label:"Operations", icon:<Activity size={15}/> },
+  { href:"/admin/catalogue-quality", label:"Catalogue Quality", icon:<ShieldCheck size={15}/> },
   { href:"/admin/shipping",   label:"Shipping",          icon:<Truck size={15}/> },
   { href:"/admin/products/ai", label:"Product AI",        icon:<Sparkles size={15}/> },
   { href:"/admin/orders",     label:"Orders",            icon:<ShoppingCart size={15}/> },

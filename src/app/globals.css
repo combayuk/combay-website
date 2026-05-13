@@ -177,3 +177,13 @@ body {
 .vcms-style-heading-live { font-size: 2rem !important; font-weight: 900 !important; }
 .vcms-style-subheading-live { font-size: 1.35rem !important; font-weight: 800 !important; }
 .vcms-style-caption-live { font-size: .8rem !important; color: #64748b !important; }
+
+@keyframes combay-route-progress {
+  0% { transform: translateX(-72%); opacity: 0.75; }
+  45% { transform: translateX(-18%); opacity: 1; }
+  100% { transform: translateX(110%); opacity: 0.78; }
+}
+
+.animate-combay-route-progress {
+  animation: combay-route-progress 1.15s ease-in-out infinite;
+}

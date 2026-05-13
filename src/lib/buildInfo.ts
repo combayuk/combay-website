@@ -1,3 +1,5 @@
-export const COMBAY_BUILD_PHASE = "27I";
-export const COMBAY_BUILD_LABEL = "Phase 27I — shop pagination, category navigation, eBay reconnect diagnostics and resources";
-export const COMBAY_BUILD_ARCHIVE = "combay-27i-shop-performance-categories-ebay-resources-cumulative-full-project.tar.gz";
+export const COMBAY_BUILD_PHASE = "27L";
+export const COMBAY_BUILD_LABEL =
+  "Phase 27L — instant navigation feedback, route loading shells and product-detail lazy loading across public/admin surfaces";
+export const COMBAY_BUILD_ARCHIVE =
+  "combay-27l-instant-navigation-lazy-loading-cumulative-full-project.tar.gz";

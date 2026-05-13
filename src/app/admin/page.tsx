@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList, FileText, Mail, Package, Receipt, RefreshCw, Settings, ShieldCheck, ShoppingCart, Tag, UsersRound, Wrench } from "lucide-react";
+import { Activity, ClipboardList, FileText, Mail, Package, Receipt, RefreshCw, Settings, ShieldCheck, ShoppingCart, Tag, UsersRound, Wrench } from "lucide-react";
 import { prisma, withDatabase } from "@/lib/db";
 import { ensureOperationalTables } from "@/lib/operationalSchema";
 
@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 const primaryActions = [
   { label: "Products", description: "Catalogue, stock, images, pricing, shipping and eBay listing control.", href: "/admin/products", icon: Package },
   { label: "eBay Sync", description: "OAuth, imports, live publishing, category mapping and sync diagnostics.", href: "/admin/ebay", icon: RefreshCw },
+  { label: "Operations", description: "Stock/eBay reconciliation, system health checks, inventory risks and category repair.", href: "/admin/operations", icon: Activity },
+  { label: "Catalogue Quality", description: "Launch-readiness checks, data quality flags, bulk product repair and public catalogue cleanup.", href: "/admin/catalogue-quality", icon: ShieldCheck },
   { label: "Orders", description: "Paid orders, dispatch, tracking, stock movements and fulfilment.", href: "/admin/orders", icon: ShoppingCart },
   { label: "Invoices & Quotes", description: "Quotes, proformas, paid invoices, commercial invoices and packing lists.", href: "/admin/invoices", icon: Receipt },
   { label: "Users", description: "Customers, admin accounts, access controls and account support.", href: "/admin/users", icon: UsersRound },
