@@ -13,6 +13,8 @@ export async function GET(req: Request) {
   const priceMax = priceMaxRaw ? Number(priceMaxRaw) : null;
   const page = Number(searchParams.get("page") || 1);
   const pageSize = Number(searchParams.get("pageSize") || 50);
+  const includeCategories = searchParams.get("includeCategories") !== "0";
+  const startedAt = Date.now();
 
   if (admin) {
     const result = await getAdminProductsListFromRepository({ query: q, category, status, page, pageSize });
@@ -41,8 +43,10 @@ export async function GET(req: Request) {
     priceMax: Number.isFinite(priceMax) ? priceMax : null,
     page,
     pageSize,
+    includeCategories,
   });
 
+  const duration = Date.now() - startedAt;
   return Response.json({
     ok: true,
     source: result.source,
@@ -54,7 +58,8 @@ export async function GET(req: Request) {
     totalPages: result.totalPages,
     categories: result.categories,
     products: result.products,
-  });
+    timingMs: duration,
+  }, { headers: { "Server-Timing": `products;dur=${duration}` } });
 }
 
 export async function POST(req: Request) {

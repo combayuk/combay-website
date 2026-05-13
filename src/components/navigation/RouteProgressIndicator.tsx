@@ -49,11 +49,13 @@ export default function RouteProgressIndicator() {
   const activeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const labelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const instantUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function clearTimers() {
     if (activeTimer.current) clearTimeout(activeTimer.current);
     if (labelTimer.current) clearTimeout(labelTimer.current);
     if (clearTimer.current) clearTimeout(clearTimer.current);
+    if (instantUrlTimer.current) clearTimeout(instantUrlTimer.current);
   }
 
   function start(href: string) {
@@ -61,7 +63,24 @@ export default function RouteProgressIndicator() {
     setPendingHref(href);
     setActive(true);
     setShowLabel(false);
-    labelTimer.current = setTimeout(() => setShowLabel(true), 280);
+
+    // Phase 27L.1: acknowledge navigation immediately. Next.js App Router can
+    // otherwise leave the old URL visible until the target route's server work
+    // finishes. We update the address bar on the next tick, after Next's own
+    // Link click handler has started, so users know their click was accepted.
+    instantUrlTimer.current = setTimeout(() => {
+      try {
+        const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (href && href !== current) {
+          window.history.pushState({ combayInstantNavigation: true }, "", href);
+          window.dispatchEvent(new CustomEvent("combay-instant-url-change", { detail: { href } }));
+        }
+      } catch {
+        // Keep navigation normal if the browser blocks a manual history update.
+      }
+    }, 0);
+
+    labelTimer.current = setTimeout(() => setShowLabel(true), 220);
     activeTimer.current = setTimeout(() => {
       setActive(false);
       setShowLabel(false);
@@ -109,7 +128,7 @@ export default function RouteProgressIndicator() {
       setActive(false);
       setShowLabel(false);
       setPendingHref("");
-    }, 420);
+    }, 1200);
   }, [routeKey]);
 
   if (!active) return null;

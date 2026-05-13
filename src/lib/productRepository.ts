@@ -819,9 +819,11 @@ export async function getProductsFromRepository(params: {
   priceMax?: number | null;
   page?: number;
   pageSize?: number;
+  includeCategories?: boolean;
 }) {
   const page = Math.max(1, Number(params.page || 1));
   const pageSize = Math.min(48, Math.max(12, Number(params.pageSize || 24)));
+  const includeCategories = params.includeCategories !== false;
 
   const dbResult = await withDatabase(async () => {
     // Public shop reads must stay read-only and fast. Runtime schema bootstrap is
@@ -866,7 +868,9 @@ export async function getProductsFromRepository(params: {
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      getPublicCategoryGroupsFromRepository(),
+      includeCategories
+        ? getPublicCategoryGroupsFromRepository()
+        : Promise.resolve(PUBLIC_CATEGORY_LIST as PublicCategoryListItem[]),
     ]);
 
     const mappedProducts = rawProducts.map(mapPublicListProduct);
@@ -942,6 +946,7 @@ export async function getAdminProductsListFromRepository(params: {
   status?: string;
   page?: number;
   pageSize?: number;
+  includeCategories?: boolean;
 }) {
   const page = Math.max(1, Number(params.page || 1));
   const pageSize = Math.min(100, Math.max(10, Number(params.pageSize || 50)));

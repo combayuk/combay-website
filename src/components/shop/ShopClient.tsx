@@ -52,6 +52,7 @@ type ShopClientProps = {
   initialPageSize?: number;
   initialTotalPages?: number;
   promotions?: PromotionCardData[];
+  deferInitialLoad?: boolean;
 };
 
 function priceLabel(product: CatalogProduct) {
@@ -93,6 +94,7 @@ export default function ShopClient({
   initialPageSize = 24,
   initialTotalPages = 1,
   promotions = [],
+  deferInitialLoad = false,
 }: ShopClientProps) {
   const initialCategoryNormalised =
     normaliseSelectedCategorySlug(initialCategory);
@@ -104,7 +106,7 @@ export default function ShopClient({
   const [priceMin, setPriceMin] = useState(initialPriceMin);
   const [priceMax, setPriceMax] = useState(initialPriceMax);
   const [products, setProducts] = useState<CatalogProduct[]>(initialProducts);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!deferInitialLoad && initialSource === "shell");
   const [error, setError] = useState("");
   const [source, setSource] = useState(initialSource);
   const [total, setTotal] = useState(initialTotal);
@@ -114,6 +116,7 @@ export default function ShopClient({
   const [categories, setCategories] = useState(
     initialCategories.length ? initialCategories : PUBLIC_CATEGORY_LIST,
   );
+  const [shopPromotions, setShopPromotions] = useState<PromotionCardData[]>(promotions);
   const [openCategory, setOpenCategory] = useState(
     () =>
       initialCategories.find(
@@ -138,6 +141,7 @@ export default function ShopClient({
     ],
   );
   const firstClientFetchSkipped = useRef(false);
+  const hasServerHydratedInventory = initialSource !== "shell" && initialProducts.length > 0;
   const lastLoadedKey = useRef(initialRequestKey);
   const loadSeqRef = useRef(0);
 
@@ -174,9 +178,13 @@ export default function ShopClient({
     setLoading(true);
     setError("");
     const params = buildParams();
+    params.set("includeCategories", "0");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch(`/api/products?${params.toString()}`, {
         cache: "no-store",
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("Inventory request failed");
       const result = await response.json();
@@ -189,12 +197,15 @@ export default function ShopClient({
       setTotalPages(Number(result.totalPages ?? 1));
       if (Array.isArray(result.categories) && result.categories.length)
         setCategories(result.categories);
-    } catch {
+    } catch (err) {
       if (loadSeqRef.current !== sequence) return;
       setError(
-        "Inventory could not be loaded. Please refresh the page or contact sales@combay.co.uk.",
+        err instanceof DOMException && err.name === "AbortError"
+          ? "Inventory is taking too long to respond. Please retry; the page shell is loaded and this prevents the browser waiting for minutes."
+          : "Inventory could not be loaded. Please refresh the page or contact sales@combay.co.uk.",
       );
     } finally {
+      clearTimeout(timeout);
       if (loadSeqRef.current === sequence) setLoading(false);
     }
   }
@@ -253,18 +264,56 @@ export default function ShopClient({
     };
   }, [categories]);
 
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/categories/public", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result) => {
+        if (cancelled) return;
+        if (Array.isArray(result?.categories) && result.categories.length) {
+          setCategories(result.categories);
+        }
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (shopPromotions.length) return () => {
+      cancelled = true;
+    };
+    fetch("/api/shop/chrome", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result) => {
+        if (cancelled) return;
+        if (Array.isArray(result?.promotions)) setShopPromotions(result.promotions);
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+  }, [shopPromotions.length]);
+
   useEffect(() => {
     const key = requestKey();
     if (!firstClientFetchSkipped.current) {
       firstClientFetchSkipped.current = true;
-      lastLoadedKey.current = key;
+      if (hasServerHydratedInventory || deferInitialLoad) {
+        lastLoadedKey.current = key;
+        return;
+      }
+      loadProducts();
       return;
     }
     const timer = setTimeout(() => {
       replaceBrowserUrl();
       if (lastLoadedKey.current === key) return;
       loadProducts();
-    }, 220);
+    }, 180);
     return () => clearTimeout(timer);
   }, [category, condition, priceMax, priceMin, query, page, pageSize]);
 
@@ -392,7 +441,7 @@ export default function ShopClient({
                 equipment quickly.
               </p>
             </div>
-            {promotions.length > 0 ? (
+            {shopPromotions.length > 0 ? (
               <div className="rounded-xl border border-white/10 bg-white/5 p-2.5 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
@@ -404,7 +453,7 @@ export default function ShopClient({
                     </p>
                   </div>
                 </div>
-                <PublicPromotionCards promotions={promotions} compact />
+                <PublicPromotionCards promotions={shopPromotions} compact />
               </div>
             ) : null}
           </div>
