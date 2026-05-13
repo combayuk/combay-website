@@ -1,10 +1,27 @@
 import { prisma, withDatabase } from "@/lib/db";
-import { CATEGORIES, PRODUCTS, searchProducts, type CatalogProduct, type ConditionCode, type StockStatus } from "@/lib/catalog";
-import { PUBLIC_CATEGORY_LIST, canonicalCategoryForText, getCanonicalBySlug, isPublicCategoryMatch, type PublicSubcategory } from "@/lib/categoryTaxonomy";
+import {
+  CATEGORIES,
+  PRODUCTS,
+  searchProducts,
+  type CatalogProduct,
+  type ConditionCode,
+  type StockStatus,
+} from "@/lib/catalog";
+import {
+  PUBLIC_CATEGORY_GROUPS,
+  PUBLIC_CATEGORY_LIST,
+  canonicalCategoryForText,
+  getCanonicalBySlug,
+  isPublicCategoryMatch,
+  type PublicSubcategory,
+} from "@/lib/categoryTaxonomy";
 import { buildProductShippingSummary } from "@/lib/shipping";
 import { ensureOperationalTables } from "@/lib/operationalSchema";
 
-export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs" | "variants" | "documents"> & {
+export type ProductWriteInput = Omit<
+  Partial<CatalogProduct>,
+  "images" | "specs" | "variants" | "documents"
+> & {
   id?: string;
   status?: "PUBLISHED" | "DRAFT" | "ARCHIVED";
   source?: string;
@@ -36,18 +53,62 @@ export type ProductWriteInput = Omit<Partial<CatalogProduct>, "images" | "specs"
   adminNotes?: string;
   image?: string | null;
   videoUrl?: string | null;
-  images?: { url: string; originalUrl?: string | null; alt?: string | null; isPrimary?: boolean; sortOrder?: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
+  images?: {
+    url: string;
+    originalUrl?: string | null;
+    alt?: string | null;
+    isPrimary?: boolean;
+    sortOrder?: number;
+    backgroundProcessedAt?: Date | null;
+    backgroundProcessingStatus?: string | null;
+    backgroundProcessingError?: string | null;
+  }[];
   specs?: { label: string; value: string }[];
-  variants?: { id?: string; sku?: string | null; label: string; optionName?: string | null; optionValue?: string | null; price?: number | null; stockQty: number; sortOrder?: number; ebayVariationSku?: string | null; ebayVariationData?: any; ebaySku?: string | null; ebayOfferId?: string | null; ebayInventoryItemGroupKey?: string | null; ebayQuantity?: number | null; ebayPrice?: number | null; ebaySpecificsJson?: any }[];
+  variants?: {
+    id?: string;
+    sku?: string | null;
+    label: string;
+    optionName?: string | null;
+    optionValue?: string | null;
+    price?: number | null;
+    stockQty: number;
+    sortOrder?: number;
+    ebayVariationSku?: string | null;
+    ebayVariationData?: any;
+    ebaySku?: string | null;
+    ebayOfferId?: string | null;
+    ebayInventoryItemGroupKey?: string | null;
+    ebayQuantity?: number | null;
+    ebayPrice?: number | null;
+    ebaySpecificsJson?: any;
+  }[];
   documents?: { name: string; url: string; fileType?: string }[];
 };
 
 type DbProduct = Awaited<ReturnType<typeof prisma.product.findMany>>[number] & {
   category?: { name: string; slug: string } | null;
-  images?: { url: string; originalUrl?: string | null; alt: string | null; isPrimary: boolean; sortOrder: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }[];
+  images?: {
+    url: string;
+    originalUrl?: string | null;
+    alt: string | null;
+    isPrimary: boolean;
+    sortOrder: number;
+    backgroundProcessedAt?: Date | null;
+    backgroundProcessingStatus?: string | null;
+    backgroundProcessingError?: string | null;
+  }[];
   documents?: { name: string; url: string; fileType: string | null }[];
   specs?: { label: string; value: string; sortOrder: number }[];
-  variants?: { id: string; sku: string | null; label: string; optionName: string | null; optionValue: string | null; price: any; stockQty: number; sortOrder: number }[];
+  variants?: {
+    id: string;
+    sku: string | null;
+    label: string;
+    optionName: string | null;
+    optionValue: string | null;
+    price: any;
+    stockQty: number;
+    sortOrder: number;
+  }[];
   tags?: { name: string }[];
   shippingPolicy?: any;
   shippingOverrides?: any[];
@@ -69,14 +130,48 @@ function stockStatus(stockQty: number, priceOnRequest: boolean): StockStatus {
   return "IN_STOCK";
 }
 
-export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string, unknown> {
-  const price = product.price === null || product.price === undefined ? null : Number(product.price);
-  const productImages = (product.images ?? []) as Array<{ url: string; originalUrl?: string | null; alt: string | null; isPrimary: boolean; sortOrder: number; backgroundProcessedAt?: Date | null; backgroundProcessingStatus?: string | null; backgroundProcessingError?: string | null }>;
-  const productSpecs = (product.specs ?? []) as Array<{ label: string; value: string; sortOrder: number }>;
-  const productDocs = (product.documents ?? []) as Array<{ name: string; url: string; fileType: string | null }>;
+export function mapDbProduct(
+  product: DbProduct,
+): CatalogProduct & Record<string, unknown> {
+  const price =
+    product.price === null || product.price === undefined
+      ? null
+      : Number(product.price);
+  const productImages = (product.images ?? []) as Array<{
+    url: string;
+    originalUrl?: string | null;
+    alt: string | null;
+    isPrimary: boolean;
+    sortOrder: number;
+    backgroundProcessedAt?: Date | null;
+    backgroundProcessingStatus?: string | null;
+    backgroundProcessingError?: string | null;
+  }>;
+  const productSpecs = (product.specs ?? []) as Array<{
+    label: string;
+    value: string;
+    sortOrder: number;
+  }>;
+  const productDocs = (product.documents ?? []) as Array<{
+    name: string;
+    url: string;
+    fileType: string | null;
+  }>;
   const productTags = (product.tags ?? []) as Array<{ name: string }>;
-  const productVariants = ((product as any).variants ?? []) as Array<{ id: string; sku: string | null; label: string; optionName: string | null; optionValue: string | null; price: any; stockQty: number; sortOrder: number }>;
-  const primaryImage = productImages.find((image) => image.isPrimary)?.url ?? productImages[0]?.url ?? null;
+  const productVariants = ((product as any).variants ?? []) as Array<{
+    id: string;
+    sku: string | null;
+    label: string;
+    optionName: string | null;
+    optionValue: string | null;
+    price: any;
+    stockQty: number;
+    sortOrder: number;
+  }>;
+  const primaryImage =
+    productImages.find((image) => image.isPrimary)?.url ??
+    productImages[0]?.url ??
+    null;
   const canonicalCategory = canonicalCategoryForText({
     title: product.title,
     category: product.category?.name,
@@ -85,7 +180,9 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     manufacturer: product.manufacturer,
     model: product.model,
     mpn: product.mpn,
-    specsText: productSpecs.map((spec) => `${spec.label} ${spec.value}`).join(" "),
+    specsText: productSpecs
+      .map((spec) => `${spec.label} ${spec.value}`)
+      .join(" "),
   });
 
   return {
@@ -106,9 +203,15 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     priceOnRequest: product.priceOnRequest,
     stockQty: product.stockQty,
     stockStatus: stockStatus(product.stockQty, product.priceOnRequest),
-    leadTime: product.leadTime ?? "UK dispatch normally within 1–2 working days after cleared payment.",
-    warranty: product.warranty ?? "30-day return-to-base warranty unless otherwise stated.",
-    dispatchNote: product.dispatchNote ?? "Packed for courier dispatch with serial number recorded before shipment.",
+    leadTime:
+      product.leadTime ??
+      "UK dispatch normally within 1–2 working days after cleared payment.",
+    warranty:
+      product.warranty ??
+      "30-day return-to-base warranty unless otherwise stated.",
+    dispatchNote:
+      product.dispatchNote ??
+      "Packed for courier dispatch with serial number recorded before shipment.",
     image: primaryImage,
     videoUrl: (product as any).videoUrl ?? null,
     images: productImages.map((image) => ({
@@ -117,7 +220,8 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
       alt: image.alt,
       isPrimary: image.isPrimary,
       sortOrder: image.sortOrder,
-      backgroundProcessedAt: image.backgroundProcessedAt?.toISOString?.() ?? null,
+      backgroundProcessedAt:
+        image.backgroundProcessedAt?.toISOString?.() ?? null,
       backgroundProcessingStatus: image.backgroundProcessingStatus ?? null,
       backgroundProcessingError: image.backgroundProcessingError ?? null,
     })),
@@ -129,7 +233,10 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
         label: variant.label,
         optionName: variant.optionName,
         optionValue: variant.optionValue,
-        price: variant.price === null || variant.price === undefined ? null : Number(variant.price),
+        price:
+          variant.price === null || variant.price === undefined
+            ? null
+            : Number(variant.price),
         stockQty: variant.stockQty,
         sortOrder: variant.sortOrder,
       })),
@@ -143,7 +250,15 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
       url: document.url,
       fileType: document.fileType ?? "Document",
     })),
-    tags: productTags.length ? productTags.map((tag) => tag.name) : [product.sku, product.brand, product.manufacturer, product.model, product.mpn].filter(Boolean) as string[],
+    tags: productTags.length
+      ? productTags.map((tag) => tag.name)
+      : ([
+          product.sku,
+          product.brand,
+          product.manufacturer,
+          product.model,
+          product.mpn,
+        ].filter(Boolean) as string[]),
     status: product.status,
     source: product.source ?? "database",
     createdAt: product.createdAt?.toISOString?.() ?? "",
@@ -158,11 +273,13 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     ebayListingId: (product as any).ebayListingId ?? "",
     ebayOfferId: (product as any).ebayOfferId ?? "",
     ebayPublishStatus: (product as any).ebayPublishStatus ?? "NOT_LISTED",
-    ebayLastPushedAt: (product as any).ebayLastPushedAt?.toISOString?.() ?? null,
+    ebayLastPushedAt:
+      (product as any).ebayLastPushedAt?.toISOString?.() ?? null,
     ebayLastError: (product as any).ebayLastError ?? null,
     ebayValidationErrorsJson: (product as any).ebayValidationErrorsJson ?? null,
     syncExcluded: product.syncExcluded ?? false,
-    ebayExcludedFromSync: (product as any).ebayExcludedFromSync ?? product.syncExcluded ?? false,
+    ebayExcludedFromSync:
+      (product as any).ebayExcludedFromSync ?? product.syncExcluded ?? false,
     ebayShowOnUsCanada: Boolean((product as any).ebayShowOnUsCanada),
     deletedAt: (product as any).deletedAt?.toISOString?.() ?? null,
     deleteStatus: (product as any).deleteStatus ?? null,
@@ -173,24 +290,51 @@ export function mapDbProduct(product: DbProduct): CatalogProduct & Record<string
     specsLocked: (product as any).specsLocked ?? false,
     descriptionLocked: (product as any).descriptionLocked ?? false,
     dimensionsCm: product.dimensions ?? "",
-    weightKg: product.weight === null || product.weight === undefined ? "" : String(product.weight),
+    weightKg:
+      product.weight === null || product.weight === undefined
+        ? ""
+        : String(product.weight),
     shippingPolicyId: (product as any).shippingPolicyId ?? null,
-    packedWeightKg: (product as any).packedWeightKg === null || (product as any).packedWeightKg === undefined ? "" : String((product as any).packedWeightKg),
-    packedLengthCm: (product as any).packedLengthCm === null || (product as any).packedLengthCm === undefined ? "" : String((product as any).packedLengthCm),
-    packedWidthCm: (product as any).packedWidthCm === null || (product as any).packedWidthCm === undefined ? "" : String((product as any).packedWidthCm),
-    packedHeightCm: (product as any).packedHeightCm === null || (product as any).packedHeightCm === undefined ? "" : String((product as any).packedHeightCm),
-    shippingManualQuoteRequired: Boolean((product as any).shippingManualQuoteRequired),
+    packedWeightKg:
+      (product as any).packedWeightKg === null ||
+      (product as any).packedWeightKg === undefined
+        ? ""
+        : String((product as any).packedWeightKg),
+    packedLengthCm:
+      (product as any).packedLengthCm === null ||
+      (product as any).packedLengthCm === undefined
+        ? ""
+        : String((product as any).packedLengthCm),
+    packedWidthCm:
+      (product as any).packedWidthCm === null ||
+      (product as any).packedWidthCm === undefined
+        ? ""
+        : String((product as any).packedWidthCm),
+    packedHeightCm:
+      (product as any).packedHeightCm === null ||
+      (product as any).packedHeightCm === undefined
+        ? ""
+        : String((product as any).packedHeightCm),
+    shippingManualQuoteRequired: Boolean(
+      (product as any).shippingManualQuoteRequired,
+    ),
     shippingCollectionOnly: Boolean((product as any).shippingCollectionOnly),
     shippingUkAllowed: (product as any).shippingUkAllowed ?? true,
     shippingEuropeAllowed: (product as any).shippingEuropeAllowed ?? true,
     shippingWorldwideAllowed: (product as any).shippingWorldwideAllowed ?? true,
-    shippingOverrides: ((product as any).shippingOverrides?.[0]?.zoneOverridesJson ?? null) as any,
+    shippingOverrides: ((product as any).shippingOverrides?.[0]
+      ?.zoneOverridesJson ?? null) as any,
     shipping: buildProductShippingSummary(product as any, "United Kingdom"),
   };
 }
 
-function mapPublicListProduct(product: any): CatalogProduct & Record<string, unknown> {
-  const price = product.price === null || product.price === undefined ? null : Number(product.price);
+function mapPublicListProduct(
+  product: any,
+): CatalogProduct & Record<string, unknown> {
+  const price =
+    product.price === null || product.price === undefined
+      ? null
+      : Number(product.price);
   const canonical = canonicalCategoryForText({
     title: product.title,
     category: product.category?.name,
@@ -220,17 +364,55 @@ function mapPublicListProduct(product: any): CatalogProduct & Record<string, unk
     priceOnRequest: product.priceOnRequest,
     stockQty: product.stockQty,
     stockStatus: stockStatus(product.stockQty, product.priceOnRequest),
-    leadTime: product.leadTime ?? "UK dispatch normally within 1–2 working days after cleared payment.",
-    warranty: product.warranty ?? "30-day return-to-base warranty unless otherwise stated.",
-    dispatchNote: product.dispatchNote ?? "Packed for courier dispatch with serial number recorded before shipment.",
+    leadTime:
+      product.leadTime ??
+      "UK dispatch normally within 1–2 working days after cleared payment.",
+    warranty:
+      product.warranty ??
+      "30-day return-to-base warranty unless otherwise stated.",
+    dispatchNote:
+      product.dispatchNote ??
+      "Packed for courier dispatch with serial number recorded before shipment.",
     image: primaryImage,
-    images: primaryImage ? [{ url: primaryImage, alt: product.title, isPrimary: true, sortOrder: 0 }] : [],
-    variants: hasVariants ? [{ id: product.variants[0].id, sku: product.variants[0].sku, label: product.variants[0].label || "Option", optionName: product.variants[0].optionName, optionValue: product.variants[0].optionValue, price: product.variants[0].price === null || product.variants[0].price === undefined ? null : Number(product.variants[0].price), stockQty: product.variants[0].stockQty, sortOrder: product.variants[0].sortOrder ?? 0 }] : [],
+    images: primaryImage
+      ? [
+          {
+            url: primaryImage,
+            alt: product.title,
+            isPrimary: true,
+            sortOrder: 0,
+          },
+        ]
+      : [],
+    variants: hasVariants
+      ? [
+          {
+            id: product.variants[0].id,
+            sku: product.variants[0].sku,
+            label: product.variants[0].label || "Option",
+            optionName: product.variants[0].optionName,
+            optionValue: product.variants[0].optionValue,
+            price:
+              product.variants[0].price === null ||
+              product.variants[0].price === undefined
+                ? null
+                : Number(product.variants[0].price),
+            stockQty: product.variants[0].stockQty,
+            sortOrder: product.variants[0].sortOrder ?? 0,
+          },
+        ]
+      : [],
     description: product.description ?? "",
     productOverview: product.productOverview ?? product.description ?? "",
     specs: [],
     documents: [],
-    tags: [product.sku, product.brand, product.manufacturer, product.model, product.mpn].filter(Boolean) as string[],
+    tags: [
+      product.sku,
+      product.brand,
+      product.manufacturer,
+      product.model,
+      product.mpn,
+    ].filter(Boolean) as string[],
     status: product.status,
     source: product.source ?? "database",
     createdAt: product.createdAt?.toISOString?.() ?? "",
@@ -238,7 +420,15 @@ function mapPublicListProduct(product: any): CatalogProduct & Record<string, unk
   };
 }
 
-async function getCategoryId(input?: { category?: string; categorySlug?: string; title?: string; brand?: string; manufacturer?: string; model?: string; mpn?: string }) {
+async function getCategoryId(input?: {
+  category?: string;
+  categorySlug?: string;
+  title?: string;
+  brand?: string;
+  manufacturer?: string;
+  model?: string;
+  mpn?: string;
+}) {
   const canonical = canonicalCategoryForText({
     title: input?.title,
     category: input?.category,
@@ -259,7 +449,9 @@ async function getCategoryId(input?: { category?: string; categorySlug?: string;
 }
 
 function cbuKNumber(value?: string | null) {
-  const match = String(value || "").trim().match(/^CBUK(\d+)$/i);
+  const match = String(value || "")
+    .trim()
+    .match(/^CBUK(\d+)$/i);
   return match ? Number(match[1]) : 0;
 }
 
@@ -272,21 +464,41 @@ export async function nextSku() {
   // Phase 27B rule: new products use highest existing/historical CBUK number + 1.
   // Supports legacy short SKUs such as CBUK0009 as well as standard CBUK00009/CBUK00001.
   const [products, auditLogs] = await Promise.all([
-    prisma.product.findMany({ where: { sku: { startsWith: "CBUK" } }, select: { sku: true }, take: 50000 }),
-    prisma.skuAuditLog.findMany({ select: { oldSku: true, newSku: true }, take: 50000 }).catch(() => [] as Array<{ oldSku?: string | null; newSku?: string | null }>),
+    prisma.product.findMany({
+      where: { sku: { startsWith: "CBUK" } },
+      select: { sku: true },
+      take: 50000,
+    }),
+    prisma.skuAuditLog
+      .findMany({ select: { oldSku: true, newSku: true }, take: 50000 })
+      .catch(
+        () => [] as Array<{ oldSku?: string | null; newSku?: string | null }>,
+      ),
   ]);
   let highest = 0;
-  for (const item of products as Array<{ sku: string }>) highest = Math.max(highest, cbuKNumber(item.sku));
-  for (const item of auditLogs as Array<{ oldSku?: string | null; newSku?: string | null }>) {
-    highest = Math.max(highest, cbuKNumber(item.oldSku), cbuKNumber(item.newSku));
+  for (const item of products as Array<{ sku: string }>)
+    highest = Math.max(highest, cbuKNumber(item.sku));
+  for (const item of auditLogs as Array<{
+    oldSku?: string | null;
+    newSku?: string | null;
+  }>) {
+    highest = Math.max(
+      highest,
+      cbuKNumber(item.oldSku),
+      cbuKNumber(item.newSku),
+    );
   }
   return formatCombaySku(highest + 1);
 }
 
 async function safeSkuForCreate(desired?: string | null) {
-  const cleanDesired = String(desired || "").trim().toUpperCase();
+  const cleanDesired = String(desired || "")
+    .trim()
+    .toUpperCase();
   if (cleanDesired) {
-    const existing = await prisma.product.findUnique({ where: { sku: cleanDesired } }).catch(() => null);
+    const existing = await prisma.product
+      .findUnique({ where: { sku: cleanDesired } })
+      .catch(() => null);
     if (!existing) {
       const n = cbuKNumber(cleanDesired);
       return n ? formatCombaySku(n) : cleanDesired;
@@ -313,33 +525,53 @@ function relationPayload(input: ProductWriteInput) {
       backgroundProcessingStatus: image.backgroundProcessingStatus ?? null,
       backgroundProcessingError: image.backgroundProcessingError ?? null,
     })),
-    specs: (input.specs ?? []).filter((spec) => spec.label && spec.value).map((spec, index) => ({
-      label: spec.label,
-      value: spec.value,
-      sortOrder: index,
-    })),
-    documents: (input.documents ?? []).filter((doc) => doc.name && doc.url).map((doc) => ({
-      name: doc.name,
-      url: doc.url,
-      fileType: doc.fileType ?? "Document",
-    })),
+    specs: (input.specs ?? [])
+      .filter((spec) => spec.label && spec.value)
+      .map((spec, index) => ({
+        label: spec.label,
+        value: spec.value,
+        sortOrder: index,
+      })),
+    documents: (input.documents ?? [])
+      .filter((doc) => doc.name && doc.url)
+      .map((doc) => ({
+        name: doc.name,
+        url: doc.url,
+        fileType: doc.fileType ?? "Document",
+      })),
     variants: (input.variants ?? [])
       .filter((variant) => variant.label || variant.sku || variant.optionValue)
       .map((variant, index) => ({
         sku: variant.sku || null,
-        label: variant.label || [variant.optionName, variant.optionValue].filter(Boolean).join(": ") || variant.sku || `Variant ${index + 1}`,
+        label:
+          variant.label ||
+          [variant.optionName, variant.optionValue]
+            .filter(Boolean)
+            .join(": ") ||
+          variant.sku ||
+          `Variant ${index + 1}`,
         optionName: variant.optionName || null,
         optionValue: variant.optionValue || null,
-        price: variant.price === null || variant.price === undefined ? null : Number(variant.price),
+        price:
+          variant.price === null || variant.price === undefined
+            ? null
+            : Number(variant.price),
         stockQty: Math.max(0, Math.floor(Number(variant.stockQty ?? 0))),
         sortOrder: variant.sortOrder ?? index,
         ebayVariationSku: variant.ebayVariationSku || variant.sku || null,
         ebayVariationData: variant.ebayVariationData ?? undefined,
-        ebaySku: variant.ebaySku || variant.ebayVariationSku || variant.sku || null,
+        ebaySku:
+          variant.ebaySku || variant.ebayVariationSku || variant.sku || null,
         ebayOfferId: variant.ebayOfferId || null,
         ebayInventoryItemGroupKey: variant.ebayInventoryItemGroupKey || null,
-        ebayQuantity: variant.ebayQuantity === null || variant.ebayQuantity === undefined ? null : Number(variant.ebayQuantity),
-        ebayPrice: variant.ebayPrice === null || variant.ebayPrice === undefined ? null : Number(variant.ebayPrice),
+        ebayQuantity:
+          variant.ebayQuantity === null || variant.ebayQuantity === undefined
+            ? null
+            : Number(variant.ebayQuantity),
+        ebayPrice:
+          variant.ebayPrice === null || variant.ebayPrice === undefined
+            ? null
+            : Number(variant.ebayPrice),
         ebaySpecificsJson: variant.ebaySpecificsJson ?? undefined,
       })),
   };
@@ -353,96 +585,210 @@ type PublicCategoryListItem = {
   subcategories: Array<PublicSubcategory & { count?: number }>;
 };
 
-function publicCategoryImage(slug?: string | null, icon?: string | null) {
-  if (icon) return icon;
-  const canonical = getCanonicalBySlug(slug);
-  const staticGroup = PUBLIC_CATEGORY_LIST.find((item) => item.slug === (canonical?.groupSlug || slug));
-  return (staticGroup as any)?.image || "/images/categories/real/electrical-components.svg";
+function isUsableImagePath(value?: string | null) {
+  if (!value) return false;
+  return (
+    value.startsWith("/") ||
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("data:image")
+  );
 }
 
-let publicCategoryCache: { expiresAt: number; data: PublicCategoryListItem[] } | null = null;
+function publicCategoryImage(slug?: string | null, icon?: string | null) {
+  if (isUsableImagePath(icon)) return icon as string;
+  const canonical = getCanonicalBySlug(slug);
+  const staticGroup = PUBLIC_CATEGORY_LIST.find(
+    (item) => item.slug === (canonical?.groupSlug || slug),
+  );
+  return (
+    (staticGroup as any)?.image ||
+    "/images/categories/real/electrical-components.svg"
+  );
+}
 
-export async function getPublicCategoryGroupsFromRepository(): Promise<PublicCategoryListItem[]> {
+let publicCategoryCache: {
+  expiresAt: number;
+  data: PublicCategoryListItem[];
+} | null = null;
+
+function makeStaticPublicCategoryGroups() {
+  return PUBLIC_CATEGORY_GROUPS.map((group) => ({
+    label: group.label,
+    slug: group.slug,
+    image: group.image,
+    count: 0,
+    subcategories: group.subcategories.map((sub) => ({ ...sub, count: 0 })),
+  }));
+}
+
+export async function getPublicCategoryGroupsFromRepository(): Promise<
+  PublicCategoryListItem[]
+> {
   const now = Date.now();
-  if (publicCategoryCache && publicCategoryCache.expiresAt > now) return publicCategoryCache.data;
+  if (publicCategoryCache && publicCategoryCache.expiresAt > now)
+    return publicCategoryCache.data;
 
   const dbResult = await withDatabase(async () => {
     await ensureOperationalTables().catch(() => null);
-    const rows = await prisma.category.findMany({
-      where: { products: { some: { status: "PUBLISHED", deletedAt: null } } },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        icon: true,
-        parentId: true,
-        parent: { select: { id: true, name: true, slug: true, icon: true } },
-        _count: { select: { products: { where: { status: "PUBLISHED", deletedAt: null } } } },
-      },
-      orderBy: { name: "asc" },
-      take: 500,
-    });
 
+    // Always start from the approved public taxonomy. This prevents the mega menu and
+    // shop filter from losing categories/icons simply because the imported eBay
+    // category rows are noisy, missing parents, or do not yet include a particular
+    // Combay category such as Military & Surplus.
     const groups = new Map<string, PublicCategoryListItem>();
-    const addGroup = (label: string, slug: string, image?: string | null) => {
-      const cleanSlug = slugify(slug || label, "category");
-      const existing = groups.get(cleanSlug);
+    for (const group of makeStaticPublicCategoryGroups())
+      groups.set(group.slug, group);
+
+    const ensureGroup = (category: {
+      groupLabel: string;
+      groupSlug: string;
+    }) => {
+      const existing = groups.get(category.groupSlug);
       if (existing) return existing;
-      const group: PublicCategoryListItem = { label, slug: cleanSlug, image: publicCategoryImage(cleanSlug, image), count: 0, subcategories: [] };
-      groups.set(cleanSlug, group);
+      const group: PublicCategoryListItem = {
+        label: category.groupLabel,
+        slug: category.groupSlug,
+        image: publicCategoryImage(category.groupSlug),
+        count: 0,
+        subcategories: [],
+      };
+      groups.set(group.slug, group);
       return group;
     };
 
-    for (const row of rows as any[]) {
-      const count = Number(row._count?.products || 0);
-      if (!count) continue;
-      const exact = getCanonicalBySlug(row.slug);
-      const parentExact = row.parent ? getCanonicalBySlug(row.parent.slug) : null;
+    const rows = await prisma.product.findMany({
+      where: { status: "PUBLISHED", deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        sku: true,
+        brand: true,
+        manufacturer: true,
+        model: true,
+        mpn: true,
+        category: { select: { name: true, slug: true, icon: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 5000,
+    });
 
-      if (row.parent) {
-        const groupSlug = parentExact?.groupSlug || slugify(row.parent.slug || row.parent.name, "category");
-        const groupLabel = parentExact?.groupLabel || row.parent.name;
-        const group = addGroup(groupLabel, groupSlug, row.parent.icon);
-        const subSlug = exact?.subcategorySlug || slugify(row.slug || row.name, "subcategory");
-        const subLabel = exact?.subcategoryLabel || row.name;
-        if (!group.subcategories.some((sub) => sub.slug === subSlug)) group.subcategories.push({ label: subLabel, slug: subSlug, count });
-        group.count = (group.count || 0) + count;
-        continue;
-      }
-
-      if (exact?.subcategorySlug) {
-        const group = addGroup(exact.groupLabel, exact.groupSlug, publicCategoryImage(exact.groupSlug));
-        if (!group.subcategories.some((sub) => sub.slug === exact.subcategorySlug)) group.subcategories.push({ label: exact.subcategoryLabel || row.name, slug: exact.subcategorySlug, count });
-        group.count = (group.count || 0) + count;
-      } else if (exact?.groupSlug) {
-        const group = addGroup(exact.groupLabel, exact.groupSlug, row.icon);
-        group.count = (group.count || 0) + count;
-      } else {
-        const group = addGroup(row.name, row.slug, row.icon);
-        group.count = (group.count || 0) + count;
+    for (const product of rows as any[]) {
+      const canonical = canonicalCategoryForText({
+        title: product.title,
+        category: product.category?.name,
+        categorySlug: product.category?.slug,
+        brand: product.brand,
+        manufacturer: product.manufacturer,
+        model: product.model,
+        mpn: product.mpn,
+      });
+      const group = ensureGroup(canonical);
+      group.count = (group.count || 0) + 1;
+      if (canonical.subcategorySlug) {
+        const existingSub = group.subcategories.find(
+          (sub) => sub.slug === canonical.subcategorySlug,
+        );
+        if (existingSub) existingSub.count = (existingSub.count || 0) + 1;
+        else
+          group.subcategories.push({
+            label: canonical.subcategoryLabel || canonical.subcategorySlug,
+            slug: canonical.subcategorySlug,
+            count: 1,
+          });
       }
     }
 
+    const orderedGroupSlugs = new Map(
+      PUBLIC_CATEGORY_GROUPS.map((group, index) => [group.slug, index]),
+    );
     const ordered = Array.from(groups.values())
-      .map((group) => ({ ...group, subcategories: group.subcategories.sort((a, b) => a.label.localeCompare(b.label)) }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .map((group) => ({
+        ...group,
+        image: publicCategoryImage(group.slug, group.image),
+        subcategories: group.subcategories.sort((a, b) => {
+          const staticGroup = PUBLIC_CATEGORY_GROUPS.find(
+            (item) => item.slug === group.slug,
+          );
+          const ai =
+            staticGroup?.subcategories.findIndex(
+              (item) => item.slug === a.slug,
+            ) ?? -1;
+          const bi =
+            staticGroup?.subcategories.findIndex(
+              (item) => item.slug === b.slug,
+            ) ?? -1;
+          if (ai >= 0 && bi >= 0) return ai - bi;
+          if (ai >= 0) return -1;
+          if (bi >= 0) return 1;
+          return a.label.localeCompare(b.label);
+        }),
+      }))
+      .sort((a, b) => {
+        const ai = orderedGroupSlugs.get(a.slug);
+        const bi = orderedGroupSlugs.get(b.slug);
+        if (ai !== undefined && bi !== undefined) return ai - bi;
+        if (ai !== undefined) return -1;
+        if (bi !== undefined) return 1;
+        return a.label.localeCompare(b.label);
+      });
 
-    return ordered.length ? [{ label: "All Categories", slug: "", subcategories: [] }, ...ordered] : PUBLIC_CATEGORY_LIST;
+    return [
+      { label: "All Categories", slug: "", subcategories: [] },
+      ...ordered,
+    ];
   });
 
   const data = dbResult.ok ? dbResult.data : PUBLIC_CATEGORY_LIST;
-  publicCategoryCache = { expiresAt: now + 60_000, data: data as PublicCategoryListItem[] };
+  publicCategoryCache = {
+    expiresAt: now + 60_000,
+    data: data as PublicCategoryListItem[],
+  };
   return publicCategoryCache.data;
 }
 
 const publicProductCardSelect = {
-  id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, model: true, mpn: true,
-  condition: true, price: true, priceOnRequest: true, stockQty: true, status: true, source: true,
-  description: true, productOverview: true, dispatchNote: true, leadTime: true, warranty: true,
-  createdAt: true, updatedAt: true,
+  id: true,
+  sku: true,
+  title: true,
+  slug: true,
+  brand: true,
+  manufacturer: true,
+  model: true,
+  mpn: true,
+  condition: true,
+  price: true,
+  priceOnRequest: true,
+  stockQty: true,
+  status: true,
+  source: true,
+  description: true,
+  productOverview: true,
+  dispatchNote: true,
+  leadTime: true,
+  warranty: true,
+  createdAt: true,
+  updatedAt: true,
   category: { select: { name: true, slug: true } },
-  images: { orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }], take: 1, select: { url: true } },
-  variants: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { id: true, sku: true, label: true, optionName: true, optionValue: true, price: true, stockQty: true, sortOrder: true } },
+  images: {
+    orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }],
+    take: 1,
+    select: { url: true },
+  },
+  variants: {
+    orderBy: { sortOrder: "asc" as const },
+    take: 1,
+    select: {
+      id: true,
+      sku: true,
+      label: true,
+      optionName: true,
+      optionValue: true,
+      price: true,
+      stockQty: true,
+      sortOrder: true,
+    },
+  },
 };
 
 export async function getProductsFromRepository(params: {
@@ -468,8 +814,10 @@ export async function getProductsFromRepository(params: {
     else if (!params.includeArchived) where.status = "PUBLISHED";
 
     if (params.condition) where.condition = params.condition;
-    if (params.priceMin !== null && params.priceMin !== undefined) where.price = { ...(where.price ?? {}), gte: params.priceMin };
-    if (params.priceMax !== null && params.priceMax !== undefined) where.price = { ...(where.price ?? {}), lte: params.priceMax };
+    if (params.priceMin !== null && params.priceMin !== undefined)
+      where.price = { ...(where.price ?? {}), gte: params.priceMin };
+    if (params.priceMax !== null && params.priceMax !== undefined)
+      where.price = { ...(where.price ?? {}), lte: params.priceMax };
 
     const query = String(params.query || "").trim();
     if (query) {
@@ -506,15 +854,20 @@ export async function getProductsFromRepository(params: {
         take: 5000,
       });
       const matchingIds = candidates
-        .filter((product: any) => isPublicCategoryMatch({
-          title: product.title,
-          brand: product.brand,
-          manufacturer: product.manufacturer,
-          model: product.model,
-          mpn: product.mpn,
-          category: product.category?.name,
-          categorySlug: product.category?.slug,
-        }, selectedCategory))
+        .filter((product: any) =>
+          isPublicCategoryMatch(
+            {
+              title: product.title,
+              brand: product.brand,
+              manufacturer: product.manufacturer,
+              model: product.model,
+              mpn: product.mpn,
+              category: product.category?.name,
+              categorySlug: product.category?.slug,
+            },
+            selectedCategory,
+          ),
+        )
         .map((product: any) => product.id);
       total = matchingIds.length;
       const pageIds = matchingIds.slice((page - 1) * pageSize, page * pageSize);
@@ -524,8 +877,13 @@ export async function getProductsFromRepository(params: {
           select: publicProductCardSelect,
           orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
         });
-        const order = new Map<string, number>(pageIds.map((id: string, index: number) => [id, index]));
-        rawProducts.sort((a: any, b: any) => Number(order.get(a.id) ?? 0) - Number(order.get(b.id) ?? 0));
+        const order = new Map<string, number>(
+          pageIds.map((id: string, index: number) => [id, index]),
+        );
+        rawProducts.sort(
+          (a: any, b: any) =>
+            Number(order.get(a.id) ?? 0) - Number(order.get(b.id) ?? 0),
+        );
       }
     } else {
       [total, rawProducts] = await Promise.all([
@@ -542,13 +900,21 @@ export async function getProductsFromRepository(params: {
 
     const categories = await getPublicCategoryGroupsFromRepository();
     const mappedProducts = rawProducts.map(mapPublicListProduct);
-    return { products: mappedProducts, categories, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+    return {
+      products: mappedProducts,
+      categories,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
   });
 
   if (dbResult.ok) {
     return {
       source: "database",
-      message: "Products served from a paginated lightweight PostgreSQL public catalogue query.",
+      message:
+        "Products served from a paginated lightweight PostgreSQL public catalogue query.",
       products: dbResult.data.products,
       total: dbResult.data.total,
       page: dbResult.data.page,
@@ -576,7 +942,13 @@ export async function getProductsFromRepository(params: {
         mpn: product.mpn,
         specsText: product.specs?.map((s) => `${s.label} ${s.value}`).join(" "),
       });
-      return { ...product, category: canonical.groupLabel, categorySlug: canonical.groupSlug, subcategory: canonical.subcategoryLabel ?? "", subcategorySlug: canonical.subcategorySlug ?? "" };
+      return {
+        ...product,
+        category: canonical.groupLabel,
+        categorySlug: canonical.groupSlug,
+        subcategory: canonical.subcategoryLabel ?? "",
+        subcategorySlug: canonical.subcategorySlug ?? "",
+      };
     })
     .filter((product) => isPublicCategoryMatch(product, params.category));
 
@@ -607,7 +979,12 @@ export async function getAdminProductsListFromRepository(params: {
     const where: any = { deletedAt: null };
     if (params.status) where.status = params.status;
     if (params.category) {
-      where.category = { OR: [{ slug: params.category }, { name: { contains: params.category, mode: "insensitive" } }] };
+      where.category = {
+        OR: [
+          { slug: params.category },
+          { name: { contains: params.category, mode: "insensitive" } },
+        ],
+      };
     }
     if (params.query) {
       where.OR = [
@@ -624,16 +1001,39 @@ export async function getAdminProductsListFromRepository(params: {
 
     const [total, statusCounts, products] = await Promise.all([
       prisma.product.count({ where }),
-      prisma.product.groupBy({ by: ["status"], _count: { _all: true } }).catch(() => []),
+      prisma.product
+        .groupBy({ by: ["status"], _count: { _all: true } })
+        .catch(() => []),
       prisma.product.findMany({
         where,
         select: {
-          id: true, sku: true, title: true, slug: true, brand: true, manufacturer: true, mpn: true, condition: true,
-          price: true, priceOnRequest: true, stockQty: true, status: true, source: true, updatedAt: true,
-          ebayPublishStatus: true, ebayListingId: true, ebayOfferId: true, ebayMarketplaceId: true, ebayItemId: true,
-          deleteStatus: true, deletedAt: true,
+          id: true,
+          sku: true,
+          title: true,
+          slug: true,
+          brand: true,
+          manufacturer: true,
+          mpn: true,
+          condition: true,
+          price: true,
+          priceOnRequest: true,
+          stockQty: true,
+          status: true,
+          source: true,
+          updatedAt: true,
+          ebayPublishStatus: true,
+          ebayListingId: true,
+          ebayOfferId: true,
+          ebayMarketplaceId: true,
+          ebayItemId: true,
+          deleteStatus: true,
+          deletedAt: true,
           category: { select: { name: true, slug: true } },
-          images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { url: true } },
+          images: {
+            orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+            take: 1,
+            select: { url: true },
+          },
         },
         orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
         skip: (page - 1) * pageSize,
@@ -641,11 +1041,23 @@ export async function getAdminProductsListFromRepository(params: {
       }),
     ]);
 
-    const counts = { PUBLISHED: 0, DRAFT: 0, ARCHIVED: 0 } as Record<string, number>;
-    (statusCounts as any[]).forEach((row) => { counts[row.status] = row._count?._all ?? 0; });
+    const counts = { PUBLISHED: 0, DRAFT: 0, ARCHIVED: 0 } as Record<
+      string,
+      number
+    >;
+    (statusCounts as any[]).forEach((row) => {
+      counts[row.status] = row._count?._all ?? 0;
+    });
     return {
       products: products.map((product: any) => {
-        const canonical = canonicalCategoryForText({ title: product.title, category: product.category?.name, categorySlug: product.category?.slug, brand: product.brand, manufacturer: product.manufacturer, mpn: product.mpn });
+        const canonical = canonicalCategoryForText({
+          title: product.title,
+          category: product.category?.name,
+          categorySlug: product.category?.slug,
+          brand: product.brand,
+          manufacturer: product.manufacturer,
+          mpn: product.mpn,
+        });
         return {
           id: product.id,
           sku: product.sku,
@@ -657,7 +1069,10 @@ export async function getAdminProductsListFromRepository(params: {
           category: canonical.groupLabel,
           categorySlug: canonical.groupSlug,
           condition: product.condition,
-          price: product.price === null || product.price === undefined ? null : Number(product.price),
+          price:
+            product.price === null || product.price === undefined
+              ? null
+              : Number(product.price),
           priceOnRequest: product.priceOnRequest,
           stockQty: product.stockQty,
           status: product.status,
@@ -681,10 +1096,28 @@ export async function getAdminProductsListFromRepository(params: {
     };
   });
 
-  if (dbResult.ok) return { source: "database", message: "Admin product list served from lightweight paginated endpoint.", categories: PUBLIC_CATEGORY_LIST, ...dbResult.data };
-  const fallback = await getProductsFromRepository({ query: params.query, category: params.category, status: params.status, includeArchived: true });
+  if (dbResult.ok)
+    return {
+      source: "database",
+      message: "Admin product list served from lightweight paginated endpoint.",
+      categories: PUBLIC_CATEGORY_LIST,
+      ...dbResult.data,
+    };
+  const fallback = await getProductsFromRepository({
+    query: params.query,
+    category: params.category,
+    status: params.status,
+    includeArchived: true,
+  });
   const start = (page - 1) * pageSize;
-  return { ...fallback, products: fallback.products.slice(start, start + pageSize), page, pageSize, totalPages: Math.max(1, Math.ceil(fallback.products.length / pageSize)), counts: {} };
+  return {
+    ...fallback,
+    products: fallback.products.slice(start, start + pageSize),
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(fallback.products.length / pageSize)),
+    counts: {},
+  };
 }
 
 export async function getProductByIdFromRepository(id: string) {
@@ -692,14 +1125,28 @@ export async function getProductByIdFromRepository(id: string) {
     await ensureOperationalTables().catch(() => null);
     const product = await prisma.product.findFirst({
       where: { OR: [{ id }, { sku: id }, { slug: id }] },
-      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true, shippingPolicy: { include: { rates: { include: { zone: true } } } }, shippingOverrides: true },
+      include: {
+        category: true,
+        images: true,
+        documents: true,
+        specs: true,
+        variants: { orderBy: { sortOrder: "asc" } },
+        tags: true,
+        shippingPolicy: { include: { rates: { include: { zone: true } } } },
+        shippingOverrides: true,
+      },
     });
     return product ? mapDbProduct(product) : null;
   });
 
-  if (dbResult.ok) return { source: "database", product: dbResult.data, error: null };
+  if (dbResult.ok)
+    return { source: "database", product: dbResult.data, error: null };
 
-  const fallback = PRODUCTS.find((product) => product.id === id || product.sku === id || product.slug === id) ?? null;
+  const fallback =
+    PRODUCTS.find(
+      (product) =>
+        product.id === id || product.sku === id || product.slug === id,
+    ) ?? null;
   return {
     source: "catalog-fallback",
     product: fallback,
@@ -710,7 +1157,11 @@ export async function getProductByIdFromRepository(id: string) {
 export async function saveProductToRepository(input: ProductWriteInput) {
   return withDatabase(async () => {
     await ensureOperationalTables().catch(() => null);
-    const existingById = input.id ? await prisma.product.findUnique({ where: { id: input.id } }).catch(() => null) : null;
+    const existingById = input.id
+      ? await prisma.product
+          .findUnique({ where: { id: input.id } })
+          .catch(() => null)
+      : null;
     const title = input.title?.trim() || "Untitled product";
     let sku = existingById?.sku || input.sku?.trim().toUpperCase() || "";
     if (!existingById) {
@@ -718,11 +1169,21 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       // This fixes repeated new products being saved as the same SKU such as CBUK0009.
       sku = await safeSkuForCreate(sku);
     } else if (sku && sku !== existingById.sku) {
-      const conflict = await prisma.product.findFirst({ where: { sku, NOT: { id: existingById.id } } }).catch(() => null);
+      const conflict = await prisma.product
+        .findFirst({ where: { sku, NOT: { id: existingById.id } } })
+        .catch(() => null);
       if (conflict) sku = existingById.sku;
     }
     const slug = slugify(input.slug || title, sku.toLowerCase());
-    const categoryId = await getCategoryId({ category: input.category, categorySlug: input.categorySlug, title, brand: input.brand, manufacturer: input.manufacturer, model: input.model, mpn: input.mpn });
+    const categoryId = await getCategoryId({
+      category: input.category,
+      categorySlug: input.categorySlug,
+      title,
+      brand: input.brand,
+      manufacturer: input.manufacturer,
+      model: input.model,
+      mpn: input.mpn,
+    });
     const relations = relationPayload(input);
     const existing = existingById;
 
@@ -737,7 +1198,12 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       categoryId,
       condition: input.condition ?? "USED",
       status: input.status ?? "DRAFT",
-      price: input.priceOnRequest || input.price === null || input.price === undefined ? null : Number(input.price),
+      price:
+        input.priceOnRequest ||
+        input.price === null ||
+        input.price === undefined
+          ? null
+          : Number(input.price),
       priceOnRequest: Boolean(input.priceOnRequest),
       stockQty: Number(input.stockQty ?? 0),
       description: input.description ?? null,
@@ -754,21 +1220,38 @@ export async function saveProductToRepository(input: ProductWriteInput) {
       source: input.source ?? "admin",
       seoTitle: (input as any).seoTitle ?? null,
       seoDescription: (input as any).seoDescription ?? null,
-      seoKeywords: (input as any).seoKeywords ?? (Array.isArray(input.tags) ? input.tags.join(", ") : null),
+      seoKeywords:
+        (input as any).seoKeywords ??
+        (Array.isArray(input.tags) ? input.tags.join(", ") : null),
       ebayItemId: (input as any).ebayItemId ?? null,
-      syncExcluded: Boolean((input as any).syncExcluded ?? (input as any).ebayExcludedFromSync),
-      ebayExcludedFromSync: Boolean((input as any).ebayExcludedFromSync ?? (input as any).syncExcluded),
+      syncExcluded: Boolean(
+        (input as any).syncExcluded ?? (input as any).ebayExcludedFromSync,
+      ),
+      ebayExcludedFromSync: Boolean(
+        (input as any).ebayExcludedFromSync ?? (input as any).syncExcluded,
+      ),
       ebayShowOnUsCanada: Boolean((input as any).ebayShowOnUsCanada),
       shippingPolicyId: (input as any).shippingPolicyId || null,
-      packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
-      packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,
-      packedWidthCm: (input as any).packedWidthCm ? Number((input as any).packedWidthCm) : null,
-      packedHeightCm: (input as any).packedHeightCm ? Number((input as any).packedHeightCm) : null,
-      shippingManualQuoteRequired: Boolean((input as any).shippingManualQuoteRequired),
+      packedWeightKg: (input as any).packedWeightKg
+        ? Number((input as any).packedWeightKg)
+        : null,
+      packedLengthCm: (input as any).packedLengthCm
+        ? Number((input as any).packedLengthCm)
+        : null,
+      packedWidthCm: (input as any).packedWidthCm
+        ? Number((input as any).packedWidthCm)
+        : null,
+      packedHeightCm: (input as any).packedHeightCm
+        ? Number((input as any).packedHeightCm)
+        : null,
+      shippingManualQuoteRequired: Boolean(
+        (input as any).shippingManualQuoteRequired,
+      ),
       shippingCollectionOnly: Boolean((input as any).shippingCollectionOnly),
       shippingUkAllowed: (input as any).shippingUkAllowed !== false,
       shippingEuropeAllowed: (input as any).shippingEuropeAllowed !== false,
-      shippingWorldwideAllowed: (input as any).shippingWorldwideAllowed !== false,
+      shippingWorldwideAllowed:
+        (input as any).shippingWorldwideAllowed !== false,
       rawEbayDescription: (input as any).rawEbayDescription ?? null,
       titleLocked: Boolean((input as any).titleLocked),
       priceLocked: Boolean((input as any).priceLocked),
@@ -783,58 +1266,120 @@ export async function saveProductToRepository(input: ProductWriteInput) {
 
     await prisma.productImage.deleteMany({ where: { productId: product.id } });
     if (relations.images.length) {
-      await prisma.productImage.createMany({ data: relations.images.map((image) => ({ ...image, productId: product.id })) });
+      await prisma.productImage.createMany({
+        data: relations.images.map((image) => ({
+          ...image,
+          productId: product.id,
+        })),
+      });
     }
 
     await prisma.productSpec.deleteMany({ where: { productId: product.id } });
     if (relations.specs.length) {
-      await prisma.productSpec.createMany({ data: relations.specs.map((spec) => ({ ...spec, productId: product.id })) });
+      await prisma.productSpec.createMany({
+        data: relations.specs.map((spec) => ({
+          ...spec,
+          productId: product.id,
+        })),
+      });
     }
 
-    await prisma.productDocument.deleteMany({ where: { productId: product.id } });
+    await prisma.productDocument.deleteMany({
+      where: { productId: product.id },
+    });
     if (relations.documents.length) {
-      await prisma.productDocument.createMany({ data: relations.documents.map((document) => ({ ...document, productId: product.id })) });
+      await prisma.productDocument.createMany({
+        data: relations.documents.map((document) => ({
+          ...document,
+          productId: product.id,
+        })),
+      });
     }
 
-    await prisma.productVariant.deleteMany({ where: { productId: product.id } });
+    await prisma.productVariant.deleteMany({
+      where: { productId: product.id },
+    });
     if (relations.variants.length) {
-      await prisma.productVariant.createMany({ data: relations.variants.map((variant) => ({ ...variant, productId: product.id })) });
+      await prisma.productVariant.createMany({
+        data: relations.variants.map((variant) => ({
+          ...variant,
+          productId: product.id,
+        })),
+      });
     }
 
-    const shippingOverrides = (input as any).shippingOverrides && typeof (input as any).shippingOverrides === "object" ? (input as any).shippingOverrides : null;
-    const hasShippingOverride = Boolean(shippingOverrides && Object.keys(shippingOverrides).length) || Boolean((input as any).shippingManualQuoteRequired) || Boolean((input as any).shippingCollectionOnly);
+    const shippingOverrides =
+      (input as any).shippingOverrides &&
+      typeof (input as any).shippingOverrides === "object"
+        ? (input as any).shippingOverrides
+        : null;
+    const hasShippingOverride =
+      Boolean(shippingOverrides && Object.keys(shippingOverrides).length) ||
+      Boolean((input as any).shippingManualQuoteRequired) ||
+      Boolean((input as any).shippingCollectionOnly);
     if (hasShippingOverride) {
       await prisma.productShippingOverride.upsert({
         where: { productId: product.id },
         update: {
           shippingPolicyId: (input as any).shippingPolicyId || null,
           zoneOverridesJson: shippingOverrides,
-          packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
-          packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,
-          packedWidthCm: (input as any).packedWidthCm ? Number((input as any).packedWidthCm) : null,
-          packedHeightCm: (input as any).packedHeightCm ? Number((input as any).packedHeightCm) : null,
-          manualQuoteRequired: Boolean((input as any).shippingManualQuoteRequired),
+          packedWeightKg: (input as any).packedWeightKg
+            ? Number((input as any).packedWeightKg)
+            : null,
+          packedLengthCm: (input as any).packedLengthCm
+            ? Number((input as any).packedLengthCm)
+            : null,
+          packedWidthCm: (input as any).packedWidthCm
+            ? Number((input as any).packedWidthCm)
+            : null,
+          packedHeightCm: (input as any).packedHeightCm
+            ? Number((input as any).packedHeightCm)
+            : null,
+          manualQuoteRequired: Boolean(
+            (input as any).shippingManualQuoteRequired,
+          ),
           collectionOnly: Boolean((input as any).shippingCollectionOnly),
         },
         create: {
           productId: product.id,
           shippingPolicyId: (input as any).shippingPolicyId || null,
           zoneOverridesJson: shippingOverrides,
-          packedWeightKg: (input as any).packedWeightKg ? Number((input as any).packedWeightKg) : null,
-          packedLengthCm: (input as any).packedLengthCm ? Number((input as any).packedLengthCm) : null,
-          packedWidthCm: (input as any).packedWidthCm ? Number((input as any).packedWidthCm) : null,
-          packedHeightCm: (input as any).packedHeightCm ? Number((input as any).packedHeightCm) : null,
-          manualQuoteRequired: Boolean((input as any).shippingManualQuoteRequired),
+          packedWeightKg: (input as any).packedWeightKg
+            ? Number((input as any).packedWeightKg)
+            : null,
+          packedLengthCm: (input as any).packedLengthCm
+            ? Number((input as any).packedLengthCm)
+            : null,
+          packedWidthCm: (input as any).packedWidthCm
+            ? Number((input as any).packedWidthCm)
+            : null,
+          packedHeightCm: (input as any).packedHeightCm
+            ? Number((input as any).packedHeightCm)
+            : null,
+          manualQuoteRequired: Boolean(
+            (input as any).shippingManualQuoteRequired,
+          ),
           collectionOnly: Boolean((input as any).shippingCollectionOnly),
         },
       });
     } else {
-      await prisma.productShippingOverride.deleteMany({ where: { productId: product.id } });
+      await prisma.productShippingOverride.deleteMany({
+        where: { productId: product.id },
+      });
     }
 
     const saved = await prisma.product.findUnique({
       where: { id: product.id },
-      include: { category: true, images: true, documents: true, specs: true, variants: { orderBy: { sortOrder: "asc" } }, tags: true, shippingPolicy: { include: { rates: { include: { zone: true } } } }, shippingOverrides: true },
+      include: {
+        category: true,
+        images: true,
+        documents: true,
+        specs: true,
+        variants: { orderBy: { sortOrder: "asc" } },
+        tags: true,
+        shippingPolicy: { include: { rates: { include: { zone: true } } } },
+        shippingOverrides: true,
+      },
     });
 
     return saved ? mapDbProduct(saved) : product;
@@ -850,15 +1395,29 @@ export async function migrateExistingProductsToSequentialSkus() {
     await ensureOperationalTables().catch(() => null);
     const products = await prisma.product.findMany({
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, sku: true, ebayListingId: true, ebayOfferId: true, ebayInventoryItemSku: true },
+      select: {
+        id: true,
+        sku: true,
+        ebayListingId: true,
+        ebayOfferId: true,
+        ebayInventoryItemSku: true,
+      },
     });
     const migrationRun = `sku-migration-${Date.now()}`;
     // Avoid unique conflicts when SKUs are being swapped/re-numbered by temporarily moving all rows first.
     for (let index = 0; index < products.length; index += 1) {
-      await prisma.product.update({ where: { id: products[index].id }, data: { sku: `TMP-${migrationRun}-${index + 1}` } });
+      await prisma.product.update({
+        where: { id: products[index].id },
+        data: { sku: `TMP-${migrationRun}-${index + 1}` },
+      });
     }
 
-    const changed: Array<{ id: string; oldSku: string; newSku: string; ebayLinked: boolean }> = [];
+    const changed: Array<{
+      id: string;
+      oldSku: string;
+      newSku: string;
+      ebayLinked: boolean;
+    }> = [];
     for (let index = 0; index < products.length; index += 1) {
       const product = products[index];
       const newSku = formatCombaySku(index + 1);
@@ -867,76 +1426,185 @@ export async function migrateExistingProductsToSequentialSkus() {
         where: { id: product.id },
         data: {
           sku: newSku,
-          ebayInventoryItemSku: product.ebayListingId || product.ebayOfferId ? (product.ebayInventoryItemSku || oldSku) : newSku,
+          ebayInventoryItemSku:
+            product.ebayListingId || product.ebayOfferId
+              ? product.ebayInventoryItemSku || oldSku
+              : newSku,
           ebaySkuLocked: Boolean(product.ebayListingId || product.ebayOfferId),
         } as any,
       });
       if (oldSku !== newSku) {
-        await prisma.skuAuditLog.create({
-          data: {
-            productId: product.id,
-            oldSku,
-            newSku,
-            reason: product.ebayListingId || product.ebayOfferId ? "Phase 27B historical SKU migration. eBay-linked product retained marketplace inventory SKU and requires eBay SKU repair review." : "Phase 27B historical SKU migration to strict CBUK sequence.",
-            changedBy: "system",
-            ebayUpdateStatus: product.ebayListingId || product.ebayOfferId ? "REVIEW_REQUIRED" : "NOT_REQUIRED",
-          },
-        }).catch(() => null);
-        changed.push({ id: product.id, oldSku, newSku, ebayLinked: Boolean(product.ebayListingId || product.ebayOfferId) });
+        await prisma.skuAuditLog
+          .create({
+            data: {
+              productId: product.id,
+              oldSku,
+              newSku,
+              reason:
+                product.ebayListingId || product.ebayOfferId
+                  ? "Phase 27B historical SKU migration. eBay-linked product retained marketplace inventory SKU and requires eBay SKU repair review."
+                  : "Phase 27B historical SKU migration to strict CBUK sequence.",
+              changedBy: "system",
+              ebayUpdateStatus:
+                product.ebayListingId || product.ebayOfferId
+                  ? "REVIEW_REQUIRED"
+                  : "NOT_REQUIRED",
+            },
+          })
+          .catch(() => null);
+        changed.push({
+          id: product.id,
+          oldSku,
+          newSku,
+          ebayLinked: Boolean(product.ebayListingId || product.ebayOfferId),
+        });
       }
     }
-    return { total: products.length, changedCount: changed.length, changed, nextSku: await nextSku() };
+    return {
+      total: products.length,
+      changedCount: changed.length,
+      changed,
+      nextSku: await nextSku(),
+    };
   });
 }
 
 export async function hardDeleteProductInRepository(id: string) {
   return withDatabase(async () => {
     await ensureOperationalTables().catch(() => null);
-    const product = await prisma.product.findFirst({ where: { OR: [{ id }, { sku: id }, { slug: id }] } });
+    const product = await prisma.product.findFirst({
+      where: { OR: [{ id }, { sku: id }, { slug: id }] },
+    });
     if (!product) throw new Error("Product not found.");
     const [orderItems, invoiceLines, movements, ebayLogs] = await Promise.all([
-      prisma.orderItem.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }] } }).catch(() => 0),
+      prisma.orderItem
+        .count({
+          where: { OR: [{ productId: product.id }, { sku: product.sku }] },
+        })
+        .catch(() => 0),
       prisma.invoiceLine.count({ where: { sku: product.sku } }).catch(() => 0),
-      prisma.inventoryMovement.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }] } }).catch(() => 0),
-      prisma.ebaySyncLog.count({ where: { OR: [{ productId: product.id }, { sku: product.sku }, { ebayListingId: product.ebayListingId || product.ebayItemId || "__none__" }, { ebayOfferId: product.ebayOfferId || "__none__" }] } }).catch(() => 0),
+      prisma.inventoryMovement
+        .count({
+          where: { OR: [{ productId: product.id }, { sku: product.sku }] },
+        })
+        .catch(() => 0),
+      prisma.ebaySyncLog
+        .count({
+          where: {
+            OR: [
+              { productId: product.id },
+              { sku: product.sku },
+              {
+                ebayListingId:
+                  product.ebayListingId || product.ebayItemId || "__none__",
+              },
+              { ebayOfferId: product.ebayOfferId || "__none__" },
+            ],
+          },
+        })
+        .catch(() => 0),
     ]);
-    const blockers = { orderItems, invoiceLines, movements, ebayLogs, ebayListingId: Boolean(product.ebayListingId || product.ebayItemId), ebayOfferId: Boolean(product.ebayOfferId) };
+    const blockers = {
+      orderItems,
+      invoiceLines,
+      movements,
+      ebayLogs,
+      ebayListingId: Boolean(product.ebayListingId || product.ebayItemId),
+      ebayOfferId: Boolean(product.ebayOfferId),
+    };
     // Phase 27H: eBay history alone must not block deletion from the Combay website/admin catalogue.
     // Only business/accounting/stock records block destructive deletion. Marketplace ending remains a separate action.
     const blocked = Boolean(orderItems || invoiceLines || movements);
     if (blocked) {
-      await prisma.product.update({ where: { id: product.id }, data: { status: "ARCHIVED", deleteRequestedAt: new Date(), deleteStatus: "DELETE_BLOCKED", deletedAt: new Date() } as any }).catch(() => null);
-      return { deleted: false, archived: true, blocked: true, blockers, message: "Product has order, invoice, or stock movement history, so it was removed from active Combay views and marked delete-blocked instead of destroying accounting/stock evidence." };
+      await prisma.product
+        .update({
+          where: { id: product.id },
+          data: {
+            status: "ARCHIVED",
+            deleteRequestedAt: new Date(),
+            deleteStatus: "DELETE_BLOCKED",
+            deletedAt: new Date(),
+          } as any,
+        })
+        .catch(() => null);
+      return {
+        deleted: false,
+        archived: true,
+        blocked: true,
+        blockers,
+        message:
+          "Product has order, invoice, or stock movement history, so it was removed from active Combay views and marked delete-blocked instead of destroying accounting/stock evidence.",
+      };
     }
     await prisma.product.delete({ where: { id: product.id } });
-    return { deleted: true, archived: false, blocked: false, blockers, message: ebayLogs || product.ebayListingId || product.ebayItemId || product.ebayOfferId ? "Product permanently deleted from Combay. eBay history/logs were retained separately for audit; this did not end the eBay listing." : "Product permanently deleted from Combay." };
+    return {
+      deleted: true,
+      archived: false,
+      blocked: false,
+      blockers,
+      message:
+        ebayLogs ||
+        product.ebayListingId ||
+        product.ebayItemId ||
+        product.ebayOfferId
+          ? "Product permanently deleted from Combay. eBay history/logs were retained separately for audit; this did not end the eBay listing."
+          : "Product permanently deleted from Combay.",
+    };
   });
 }
 
 export async function archiveProductInRepository(id: string) {
   return withDatabase(async () => {
     await ensureOperationalTables().catch(() => null);
-    const existing = await prisma.product.findFirst({ where: { OR: [{ id }, { sku: id }, { slug: id }] } });
+    const existing = await prisma.product.findFirst({
+      where: { OR: [{ id }, { sku: id }, { slug: id }] },
+    });
     if (!existing) throw new Error("Product not found.");
-    return prisma.product.update({ where: { id: existing.id }, data: { status: "ARCHIVED" } });
+    return prisma.product.update({
+      where: { id: existing.id },
+      data: { status: "ARCHIVED" },
+    });
   });
 }
-
 
 export async function restoreProductInRepository(id: string) {
   return withDatabase(async () => {
     await ensureOperationalTables().catch(() => null);
-    const existing = await prisma.product.findFirst({ where: { OR: [{ id }, { sku: id }, { slug: id }] } });
+    const existing = await prisma.product.findFirst({
+      where: { OR: [{ id }, { sku: id }, { slug: id }] },
+    });
     if (!existing) throw new Error("Product not found.");
-    return prisma.product.update({ where: { id: existing.id }, data: { status: "DRAFT", deletedAt: null, deleteRequestedAt: null, deletePurgeAfter: null, deleteStatus: null } as any });
+    return prisma.product.update({
+      where: { id: existing.id },
+      data: {
+        status: "DRAFT",
+        deletedAt: null,
+        deleteRequestedAt: null,
+        deletePurgeAfter: null,
+        deleteStatus: null,
+      } as any,
+    });
   });
 }
 
-export async function bulkDeleteOrArchiveProductsInRepository(ids: string[], mode: "archive" | "hard" | "restore" = "archive") {
+export async function bulkDeleteOrArchiveProductsInRepository(
+  ids: string[],
+  mode: "archive" | "hard" | "restore" = "archive",
+) {
   return withDatabase(async () => {
     await ensureOperationalTables().catch(() => null);
-    const uniqueIds = Array.from(new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))).slice(0, 200);
-    const result: { success: true; deleted: number; archived: number; restored: number; skipped: number; failed: number; errors: Array<{ productId: string; sku?: string; reason: string }> } = {
+    const uniqueIds = Array.from(
+      new Set(ids.map((id) => String(id || "").trim()).filter(Boolean)),
+    ).slice(0, 200);
+    const result: {
+      success: true;
+      deleted: number;
+      archived: number;
+      restored: number;
+      skipped: number;
+      failed: number;
+      errors: Array<{ productId: string; sku?: string; reason: string }>;
+    } = {
       success: true,
       deleted: 0,
       archived: 0,
@@ -948,10 +1616,18 @@ export async function bulkDeleteOrArchiveProductsInRepository(ids: string[], mod
 
     for (const productId of uniqueIds) {
       try {
-        const action = mode === "hard" ? await hardDeleteProductInRepository(productId) : mode === "restore" ? await restoreProductInRepository(productId) : await archiveProductInRepository(productId);
+        const action =
+          mode === "hard"
+            ? await hardDeleteProductInRepository(productId)
+            : mode === "restore"
+              ? await restoreProductInRepository(productId)
+              : await archiveProductInRepository(productId);
         if (!action.ok) {
           result.failed += 1;
-          result.errors.push({ productId, reason: action.reason || "Action failed." });
+          result.errors.push({
+            productId,
+            reason: action.reason || "Action failed.",
+          });
           continue;
         }
         const data: any = action.data;
@@ -959,7 +1635,13 @@ export async function bulkDeleteOrArchiveProductsInRepository(ids: string[], mod
           if (data?.deleted) result.deleted += 1;
           else if (data?.archived) result.archived += 1;
           else result.skipped += 1;
-          if (data?.blocked) result.errors.push({ productId, reason: data.message || "Protected product was archived instead of hard-deleted." });
+          if (data?.blocked)
+            result.errors.push({
+              productId,
+              reason:
+                data.message ||
+                "Protected product was archived instead of hard-deleted.",
+            });
         } else if (mode === "restore") {
           result.restored += 1;
         } else {
@@ -967,7 +1649,13 @@ export async function bulkDeleteOrArchiveProductsInRepository(ids: string[], mod
         }
       } catch (error) {
         result.failed += 1;
-        result.errors.push({ productId, reason: error instanceof Error ? error.message : "Unknown product action error." });
+        result.errors.push({
+          productId,
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Unknown product action error.",
+        });
       }
     }
 
