@@ -1,5 +1,5 @@
-export const COMBAY_BUILD_PHASE = "27J";
+export const COMBAY_BUILD_PHASE = "27K";
 export const COMBAY_BUILD_LABEL =
-  "Phase 27J — operational reliability dashboard, eBay order/stock reconciliation, system health checks and category repair";
+  "Phase 27K — catalogue launch readiness, product data quality repair centre, bulk catalogue fixes and resources/product linking";
 export const COMBAY_BUILD_ARCHIVE =
-  "combay-27j-operational-reliability-stock-ebay-diagnostics-cumulative-full-project.tar.gz";
+  "combay-27k-catalogue-launch-readiness-product-data-quality-cumulative-full-project.tar.gz";

@@ -191,3 +191,47 @@ export async function deleteResource(id: string) {
     return { ok: true };
   });
 }
+
+export async function listResourcesForProduct(productId: string, options: { publicOnly?: boolean; take?: number } = {}) {
+  const cleanProductId = String(productId || "").trim();
+  const take = Math.max(1, Math.min(12, Number(options.take || 4)));
+  if (!cleanProductId) return { ok: true as const, data: [] as ReturnType<typeof mapResource>[] };
+  return withDatabase(async () => {
+    await ensureResourceTables();
+    const statusClause = options.publicOnly === false ? "" : `AND "status" = 'PUBLISHED'`;
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT * FROM "ResourceArticle" WHERE COALESCE("relatedProductsJson", '[]'::jsonb) @> $1::jsonb ${statusClause} ORDER BY "isFeatured" DESC, "publishedAt" DESC NULLS LAST, "updatedAt" DESC LIMIT $2`,
+      JSON.stringify([cleanProductId]),
+      take,
+    );
+    return rows.map(mapResource);
+  });
+}
+
+export async function listRelatedProductsForResource(resource: { relatedProductIds?: string[] }, take = 6) {
+  const ids = Array.from(new Set((resource.relatedProductIds || []).map((id) => String(id || "").trim()).filter(Boolean))).slice(0, 20);
+  if (!ids.length) return { ok: true as const, data: [] as Array<{ id: string; sku: string; title: string; slug: string; brand: string; image: string | null }> };
+  return withDatabase(async () => {
+    const products = await prisma.product.findMany({
+      where: { id: { in: ids }, deletedAt: null, status: "PUBLISHED" as any },
+      select: {
+        id: true,
+        sku: true,
+        title: true,
+        slug: true,
+        brand: true,
+        manufacturer: true,
+        images: { orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }], take: 1, select: { url: true } },
+      },
+      take: Math.max(1, Math.min(12, Number(take || 6))),
+    });
+    return (products as any[]).map((product) => ({
+      id: product.id,
+      sku: product.sku,
+      title: product.title,
+      slug: product.slug,
+      brand: product.brand || product.manufacturer || "",
+      image: product.images?.[0]?.url || null,
+    }));
+  });
+}
