@@ -1,0 +1,18 @@
+Phase 27I.2 — Shop speed + first-viewport mega menu correction
+
+Scope:
+- Rebuilt desktop mega menu into a fixed, compact first-viewport panel.
+- Search bar, Browse all, all approved public categories and subcategory links are visible without menu scrolling on normal desktop viewports.
+- Restored category icons through approved taxonomy image paths with fallback image handling.
+- Removed public shop/category runtime schema bootstrap from public read paths. Public catalogue reads must not run DDL/ALTER TABLE operations during customer page loads.
+- Replaced expensive per-request product scan for public category menu/filter counts with approved static taxonomy plus lightweight Category table merge.
+- Replaced selected-category filtering that loaded up to 5,000 candidate products and filtered them in application memory with a direct Prisma WHERE clause using category relation and taxonomy keyword aliases.
+- Reduced public product card payload by removing full descriptions/overview from listing queries.
+- Stabilised ShopClient URL/filter syncing by removing useSearchParams loop risk, keeping existing products visible during updates, and ignoring stale overlapping product fetch responses.
+- Reduced shop hero vertical height so the search/filter/product area appears earlier.
+- Added cache headers to /api/categories/public.
+- Updated /api/system/version to Phase 27I.2.
+
+Important:
+- Product detail/admin/write routes still use operational schema bootstrap where needed.
+- Public shop should now load from read-only product/category queries and should not wait for runtime DB schema DDL.

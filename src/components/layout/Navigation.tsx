@@ -17,9 +17,10 @@ const FALLBACK_SHOP_CATS = PUBLIC_CATEGORY_GROUPS.map((group) => ({
   name: group.label,
   slug: group.slug,
   image: group.image,
-  items: group.subcategories
-    .slice(0, 3)
-    .map((item) => ({ name: item.label, slug: item.slug })),
+  items: group.subcategories.map((item) => ({
+    name: item.label,
+    slug: item.slug,
+  })),
 }));
 
 type ShopMenuCategory = {
@@ -107,9 +108,7 @@ export default function Navigation() {
             image:
               cat.image || "/images/categories/real/electrical-components.svg",
             items: Array.isArray(cat.subcategories)
-              ? cat.subcategories
-                  .slice(0, 4)
-                  .map((item: any) => ({
+              ? cat.subcategories.map((item: any) => ({
                     name: String(item.label || item.name || item.slug),
                     slug: String(item.slug),
                   }))
@@ -191,65 +190,23 @@ export default function Navigation() {
                 />
               </button>
               {shopOpen && (
-                <div className="absolute left-0 top-full max-h-[calc(100vh-120px)] w-[780px] overflow-y-auto rounded-b-xl border border-slate-200 bg-white shadow-2xl">
-                  <div className="grid grid-cols-3 gap-px bg-slate-100 p-px">
-                    {shopCats.map((cat) => (
-                      <div
-                        key={cat.slug}
-                        className="group bg-white p-2.5 transition-colors hover:bg-slate-50"
-                      >
-                        <Link
-                          href={shopCategoryHref(cat.slug)}
-                          onClick={(event) =>
-                            handleShopCategoryClick(event, cat.slug)
-                          }
-                          className="mb-1 flex items-center gap-2"
-                        >
-                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-slate-50">
-                            <img
-                              src={usableImage(cat.image)}
-                              onError={(event) => {
-                                event.currentTarget.src =
-                                  "/images/categories/real/electrical-components.svg";
-                              }}
-                              alt=""
-                              className="h-8 w-8 object-contain"
-                            />
-                          </span>
-                          <span className="font-display text-[12px] font-900 leading-tight text-[#2D4F7A] group-hover:text-[#C9872F]">
-                            {cat.name}
-                          </span>
-                        </Link>
-                        <ul className="space-y-0.5 pl-10">
-                          {cat.items.map((item) => (
-                            <li key={item.slug}>
-                              <Link
-                                href={shopCategoryHref(item.slug)}
-                                onClick={(event) =>
-                                  handleShopCategoryClick(event, item.slug)
-                                }
-                                className="text-[10.5px] leading-3.5 text-slate-500 hover:text-[#2D4F7A]"
-                              >
-                                {item.name}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
+                <div
+                  className="fixed left-1/2 top-[64px] z-[70] w-[min(1120px,calc(100vw-24px))] -translate-x-1/2 overflow-hidden rounded-b-xl border border-slate-200 bg-white shadow-2xl"
+                  onMouseEnter={openShop}
+                  onMouseLeave={closeShop}
+                >
                   <form
                     action="/shop"
                     method="get"
                     onSubmit={handleMegaSearchSubmit}
-                    className="bg-slate-50 px-3 py-2.5"
+                    className="border-b border-slate-100 bg-slate-50 px-3 py-2"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center justify-between gap-2">
                       <label
-                        className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-800 text-slate-500 shadow-sm focus-within:border-[#E8A44A] ${megaSearchError ? "border-red-500 ring-2 ring-red-100" : "border-slate-200"}`}
+                        className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-white px-3 py-1.5 text-xs font-800 text-slate-500 shadow-sm focus-within:border-[#E8A44A] ${megaSearchError ? "border-red-500 ring-2 ring-red-100" : "border-slate-200"}`}
                       >
                         <Search
-                          size={15}
+                          size={14}
                           className="flex-shrink-0 text-[#C9872F]"
                         />
                         <input
@@ -260,30 +217,77 @@ export default function Navigation() {
                             if (event.target.value.trim())
                               setMegaSearchError(false);
                           }}
-                          placeholder="Search by SKU, MPN, model or manufacturer"
-                          className="min-w-0 flex-1 bg-transparent text-sm font-600 text-[#2D4F7A] outline-none placeholder:text-slate-400"
+                          placeholder="Search by SKU, MPN, model, manufacturer or product name"
+                          className="min-w-0 flex-1 bg-transparent text-[13px] font-700 text-[#2D4F7A] outline-none placeholder:text-slate-400"
                         />
                       </label>
                       <button
                         type="submit"
-                        className="btn-primary py-2 text-[11px] whitespace-nowrap"
+                        className="btn-primary whitespace-nowrap px-3 py-1.5 text-[11px]"
                       >
-                        Search stock →
+                        Search stock
                       </button>
                       <Link
                         href="/shop"
                         onClick={(event) => handleShopCategoryClick(event, "")}
-                        className="btn-secondary py-2 text-[11px] whitespace-nowrap"
+                        className="btn-secondary whitespace-nowrap px-3 py-1.5 text-[11px]"
                       >
                         Browse all
                       </Link>
                     </div>
                     {megaSearchError ? (
-                      <p className="mt-2 pl-1 text-xs font-800 text-red-600">
+                      <p className="mt-1 pl-1 text-[11px] font-800 text-red-600">
                         Please type something.
                       </p>
                     ) : null}
                   </form>
+
+                  <div className="grid max-h-[calc(100vh-116px)] grid-cols-4 gap-px overflow-hidden bg-slate-100 p-px">
+                    {shopCats.map((cat) => (
+                      <div
+                        key={cat.slug}
+                        className="group min-h-[104px] bg-white p-2 transition-colors hover:bg-slate-50"
+                      >
+                        <Link
+                          href={shopCategoryHref(cat.slug)}
+                          onClick={(event) =>
+                            handleShopCategoryClick(event, cat.slug)
+                          }
+                          className="mb-1.5 flex items-center gap-1.5"
+                        >
+                          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-slate-50">
+                            <img
+                              src={usableImage(cat.image)}
+                              onError={(event) => {
+                                event.currentTarget.src =
+                                  "/images/categories/real/electrical-components.svg";
+                              }}
+                              alt=""
+                              className="h-6 w-6 object-contain"
+                            />
+                          </span>
+                          <span className="font-display text-[12px] font-900 leading-tight text-[#2D4F7A] group-hover:text-[#C9872F]">
+                            {cat.name}
+                          </span>
+                        </Link>
+                        <ul className="grid gap-0.5 pl-8">
+                          {cat.items.map((item) => (
+                            <li key={item.slug}>
+                              <Link
+                                href={shopCategoryHref(item.slug)}
+                                onClick={(event) =>
+                                  handleShopCategoryClick(event, item.slug)
+                                }
+                                className="block truncate text-[10.5px] leading-3.5 text-slate-500 hover:text-[#2D4F7A]"
+                              >
+                                {item.name}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

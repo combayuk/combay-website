@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import {
   ChevronDown,
   Search,
@@ -95,8 +94,6 @@ export default function ShopClient({
   initialTotalPages = 1,
   promotions = [],
 }: ShopClientProps) {
-  const searchParams = useSearchParams();
-  const urlSignature = searchParams.toString();
   const initialCategoryNormalised =
     normaliseSelectedCategorySlug(initialCategory);
   const [query, setQuery] = useState(initialQuery);
@@ -142,6 +139,7 @@ export default function ShopClient({
   );
   const firstClientFetchSkipped = useRef(false);
   const lastLoadedKey = useRef(initialRequestKey);
+  const loadSeqRef = useRef(0);
 
   function buildParams(pageOverride = page) {
     const params = new URLSearchParams();
@@ -170,6 +168,8 @@ export default function ShopClient({
 
   async function loadProducts() {
     const key = requestKey();
+    const sequence = loadSeqRef.current + 1;
+    loadSeqRef.current = sequence;
     lastLoadedKey.current = key;
     setLoading(true);
     setError("");
@@ -180,6 +180,7 @@ export default function ShopClient({
       });
       if (!response.ok) throw new Error("Inventory request failed");
       const result = await response.json();
+      if (loadSeqRef.current !== sequence) return;
       setProducts(result.products ?? []);
       setSource(result.source ?? "");
       setTotal(Number(result.total ?? result.products?.length ?? 0));
@@ -189,11 +190,12 @@ export default function ShopClient({
       if (Array.isArray(result.categories) && result.categories.length)
         setCategories(result.categories);
     } catch {
+      if (loadSeqRef.current !== sequence) return;
       setError(
         "Inventory could not be loaded. Please refresh the page or contact sales@combay.co.uk.",
       );
     } finally {
-      setLoading(false);
+      if (loadSeqRef.current === sequence) setLoading(false);
     }
   }
 
@@ -202,15 +204,30 @@ export default function ShopClient({
     const nextCategory = normaliseSelectedCategorySlug(
       params.get("category") ?? params.get("cat") ?? "",
     );
-    setQuery(params.get("q") ?? "");
-    setCategory(nextCategory);
-    setCondition(params.get("condition") ?? "");
-    setPriceMin(params.get("min") ?? params.get("priceMin") ?? "");
-    setPriceMax(params.get("max") ?? params.get("priceMax") ?? "");
-    setPage(Math.max(1, Number(params.get("page") || 1)));
-    setPageSize(
-      Math.min(48, Math.max(12, Number(params.get("pageSize") || 24))),
+    const nextQuery = params.get("q") ?? "";
+    const nextCondition = params.get("condition") ?? "";
+    const nextMin = params.get("min") ?? params.get("priceMin") ?? "";
+    const nextMax = params.get("max") ?? params.get("priceMax") ?? "";
+    const nextPage = Math.max(1, Number(params.get("page") || 1));
+    const nextPageSize = Math.min(
+      48,
+      Math.max(12, Number(params.get("pageSize") || 24)),
     );
+
+    setQuery((current) => (current === nextQuery ? current : nextQuery));
+    setCategory((current) =>
+      current === nextCategory ? current : nextCategory,
+    );
+    setCondition((current) =>
+      current === nextCondition ? current : nextCondition,
+    );
+    setPriceMin((current) => (current === nextMin ? current : nextMin));
+    setPriceMax((current) => (current === nextMax ? current : nextMax));
+    setPage((current) => (current === nextPage ? current : nextPage));
+    setPageSize((current) =>
+      current === nextPageSize ? current : nextPageSize,
+    );
+
     if (nextCategory) {
       const parent = categories.find(
         (cat) =>
@@ -235,12 +252,6 @@ export default function ShopClient({
       window.removeEventListener("combay-shop-url-change", applyCurrentUrl);
     };
   }, [categories]);
-
-  useEffect(() => {
-    // Handles Next.js Link navigations to /shop?category=... from elsewhere. The
-    // custom in-page mega-menu event above handles clicks while already on /shop.
-    applyUrlStateFromSearch(urlSignature ? `?${urlSignature}` : "");
-  }, [urlSignature]);
 
   useEffect(() => {
     const key = requestKey();
@@ -366,23 +377,23 @@ export default function ShopClient({
   return (
     <div className="bg-slate-50">
       <section className="bg-navy-950 text-white">
-        <div className="mx-auto max-w-[1500px] px-4 py-6">
-          <div className="grid gap-4 lg:grid-cols-[1fr_340px] lg:items-end">
+        <div className="mx-auto max-w-[1500px] px-4 py-3">
+          <div className="grid gap-3 lg:grid-cols-[1fr_320px] lg:items-end">
             <div>
-              <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
                 Industrial inventory
               </p>
-              <h1 className="mb-2 font-display text-2xl font-900 leading-tight lg:text-4xl">
+              <h1 className="mb-1 font-display text-xl font-900 leading-tight lg:text-2xl">
                 B2B industrial equipment catalogue
               </h1>
-              <p className="max-w-3xl text-sm leading-6 text-white/65">
+              <p className="max-w-3xl text-xs leading-5 text-white/65">
                 Search by SKU, MPN, model, manufacturer or product name. Filter
                 stocked automation, laboratory, test, AV, networking and process
                 equipment quickly.
               </p>
             </div>
             {promotions.length > 0 ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 shadow-sm">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-2.5 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
                     <p className="font-display text-sm font-900 text-white">

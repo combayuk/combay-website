@@ -12,6 +12,7 @@ import {
   PUBLIC_CATEGORY_LIST,
   canonicalCategoryForText,
   getCanonicalBySlug,
+  normaliseSelectedCategorySlug,
   isPublicCategoryMatch,
   type PublicSubcategory,
 } from "@/lib/categoryTaxonomy";
@@ -402,8 +403,8 @@ function mapPublicListProduct(
           },
         ]
       : [],
-    description: product.description ?? "",
-    productOverview: product.productOverview ?? product.description ?? "",
+    description: "",
+    productOverview: "",
     specs: [],
     documents: [],
     tags: [
@@ -629,122 +630,141 @@ export async function getPublicCategoryGroupsFromRepository(): Promise<
   if (publicCategoryCache && publicCategoryCache.expiresAt > now)
     return publicCategoryCache.data;
 
-  const dbResult = await withDatabase(async () => {
-    await ensureOperationalTables().catch(() => null);
+  const groups = new Map<string, PublicCategoryListItem>();
+  for (const group of makeStaticPublicCategoryGroups())
+    groups.set(group.slug, group);
 
-    // Always start from the approved public taxonomy. This prevents the mega menu and
-    // shop filter from losing categories/icons simply because the imported eBay
-    // category rows are noisy, missing parents, or do not yet include a particular
-    // Combay category such as Military & Surplus.
-    const groups = new Map<string, PublicCategoryListItem>();
-    for (const group of makeStaticPublicCategoryGroups())
-      groups.set(group.slug, group);
-
-    const ensureGroup = (category: {
-      groupLabel: string;
-      groupSlug: string;
-    }) => {
-      const existing = groups.get(category.groupSlug);
-      if (existing) return existing;
-      const group: PublicCategoryListItem = {
-        label: category.groupLabel,
-        slug: category.groupSlug,
-        image: publicCategoryImage(category.groupSlug),
-        count: 0,
-        subcategories: [],
-      };
-      groups.set(group.slug, group);
-      return group;
-    };
-
-    const rows = await prisma.product.findMany({
-      where: { status: "PUBLISHED", deletedAt: null },
-      select: {
-        id: true,
-        title: true,
-        sku: true,
-        brand: true,
-        manufacturer: true,
-        model: true,
-        mpn: true,
-        category: { select: { name: true, slug: true, icon: true } },
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 5000,
+  // Keep this endpoint fast. The public menu/filter taxonomy must not scan every
+  // product on each shop load. We start from the approved Combay public taxonomy
+  // and only merge lightweight Category table rows when the database is available.
+  // Product-count enrichment can be added later as an async/admin task, not as a
+  // blocking public page query.
+  await withDatabase(async () => {
+    const rows = await prisma.category.findMany({
+      select: { name: true, slug: true, icon: true },
+      orderBy: { name: "asc" },
+      take: 150,
     });
 
-    for (const product of rows as any[]) {
-      const canonical = canonicalCategoryForText({
-        title: product.title,
-        category: product.category?.name,
-        categorySlug: product.category?.slug,
-        brand: product.brand,
-        manufacturer: product.manufacturer,
-        model: product.model,
-        mpn: product.mpn,
-      });
-      const group = ensureGroup(canonical);
-      group.count = (group.count || 0) + 1;
-      if (canonical.subcategorySlug) {
-        const existingSub = group.subcategories.find(
-          (sub) => sub.slug === canonical.subcategorySlug,
-        );
-        if (existingSub) existingSub.count = (existingSub.count || 0) + 1;
-        else
-          group.subcategories.push({
-            label: canonical.subcategoryLabel || canonical.subcategorySlug,
-            slug: canonical.subcategorySlug,
-            count: 1,
-          });
+    for (const row of rows as Array<{ name: string; slug: string; icon?: string | null }>) {
+      const canonical =
+        getCanonicalBySlug(row.slug) ||
+        canonicalCategoryForText({ category: row.name, categorySlug: row.slug });
+      const group = groups.get(canonical.groupSlug);
+      if (group) {
+        group.label = group.label || canonical.groupLabel;
+        group.image = publicCategoryImage(group.slug, group.image || row.icon);
+        continue;
       }
-    }
 
-    const orderedGroupSlugs = new Map(
-      PUBLIC_CATEGORY_GROUPS.map((group, index) => [group.slug, index]),
-    );
-    const ordered = Array.from(groups.values())
-      .map((group) => ({
-        ...group,
-        image: publicCategoryImage(group.slug, group.image),
-        subcategories: group.subcategories.sort((a, b) => {
-          const staticGroup = PUBLIC_CATEGORY_GROUPS.find(
-            (item) => item.slug === group.slug,
-          );
-          const ai =
-            staticGroup?.subcategories.findIndex(
-              (item) => item.slug === a.slug,
-            ) ?? -1;
-          const bi =
-            staticGroup?.subcategories.findIndex(
-              (item) => item.slug === b.slug,
-            ) ?? -1;
-          if (ai >= 0 && bi >= 0) return ai - bi;
-          if (ai >= 0) return -1;
-          if (bi >= 0) return 1;
-          return a.label.localeCompare(b.label);
-        }),
-      }))
-      .sort((a, b) => {
-        const ai = orderedGroupSlugs.get(a.slug);
-        const bi = orderedGroupSlugs.get(b.slug);
-        if (ai !== undefined && bi !== undefined) return ai - bi;
-        if (ai !== undefined) return -1;
-        if (bi !== undefined) return 1;
-        return a.label.localeCompare(b.label);
+      groups.set(canonical.groupSlug, {
+        label: canonical.groupLabel,
+        slug: canonical.groupSlug,
+        image: publicCategoryImage(canonical.groupSlug, row.icon),
+        count: 0,
+        subcategories: [],
       });
+    }
+  }).catch(() => null);
 
-    return [
-      { label: "All Categories", slug: "", subcategories: [] },
-      ...ordered,
-    ];
+  const orderedGroupSlugs = new Map(
+    PUBLIC_CATEGORY_GROUPS.map((group, index) => [group.slug, index]),
+  );
+  const ordered = Array.from(groups.values()).sort((a, b) => {
+    const ai = orderedGroupSlugs.get(a.slug);
+    const bi = orderedGroupSlugs.get(b.slug);
+    if (ai !== undefined && bi !== undefined) return ai - bi;
+    if (ai !== undefined) return -1;
+    if (bi !== undefined) return 1;
+    return a.label.localeCompare(b.label);
   });
 
-  const data = dbResult.ok ? dbResult.data : PUBLIC_CATEGORY_LIST;
   publicCategoryCache = {
-    expiresAt: now + 60_000,
-    data: data as PublicCategoryListItem[],
+    expiresAt: now + 10 * 60_000,
+    data: [{ label: "All Categories", slug: "", subcategories: [] }, ...ordered],
   };
   return publicCategoryCache.data;
+}
+
+
+function uniqueStrings(values: Array<string | undefined | null>, limit = 28) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const clean = String(value || "")
+      .trim()
+      .replace(/-/g, " ")
+      .replace(/\s+/g, " ");
+    if (!clean || clean.length < 2) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function publicCategoryWhere(selectedCategoryRaw?: string | null) {
+  const selected = normaliseSelectedCategorySlug(selectedCategoryRaw);
+  if (!selected) return null;
+
+  const canonical = getCanonicalBySlug(selected);
+  const group = canonical
+    ? PUBLIC_CATEGORY_GROUPS.find((item) => item.slug === canonical.groupSlug)
+    : undefined;
+  const subcategory = canonical?.subcategorySlug
+    ? group?.subcategories.find((item) => item.slug === canonical.subcategorySlug)
+    : undefined;
+
+  const directSlugs = uniqueStrings([
+    selected,
+    canonical?.groupSlug,
+    canonical?.subcategorySlug,
+    ...(canonical && !canonical.subcategorySlug
+      ? group?.subcategories.map((item) => item.slug) ?? []
+      : []),
+  ], 16).map((value) => value.toLowerCase().replace(/\s+/g, "-"));
+
+  const directNames = uniqueStrings([
+    canonical?.groupLabel,
+    canonical?.subcategoryLabel,
+    group?.label,
+    subcategory?.label,
+    ...(canonical && !canonical.subcategorySlug
+      ? group?.subcategories.map((item) => item.label) ?? []
+      : []),
+  ], 16);
+
+  const aliases = uniqueStrings([
+    canonical?.groupLabel,
+    canonical?.subcategoryLabel,
+    selected,
+    ...(subcategory?.aliases ?? []),
+    ...(canonical && !canonical.subcategorySlug ? group?.aliases ?? [] : []),
+    ...(canonical && !canonical.subcategorySlug
+      ? group?.subcategories.flatMap((item) => item.aliases ?? []).slice(0, 24) ?? []
+      : []),
+  ], 30);
+
+  const categoryOr: any[] = [];
+  if (directSlugs.length) {
+    categoryOr.push({ category: { is: { slug: { in: directSlugs } } } });
+  }
+  for (const name of directNames) {
+    categoryOr.push({ category: { is: { name: { contains: name, mode: "insensitive" } } } });
+  }
+  for (const term of aliases) {
+    categoryOr.push({ title: { contains: term, mode: "insensitive" } });
+    if (term.length >= 3) {
+      categoryOr.push({ brand: { contains: term, mode: "insensitive" } });
+      categoryOr.push({ manufacturer: { contains: term, mode: "insensitive" } });
+      categoryOr.push({ model: { contains: term, mode: "insensitive" } });
+      categoryOr.push({ mpn: { contains: term, mode: "insensitive" } });
+    }
+  }
+
+  return categoryOr.length ? { OR: categoryOr } : null;
 }
 
 const publicProductCardSelect = {
@@ -762,8 +782,6 @@ const publicProductCardSelect = {
   stockQty: true,
   status: true,
   source: true,
-  description: true,
-  productOverview: true,
   dispatchNote: true,
   leadTime: true,
   warranty: true,
@@ -804,11 +822,13 @@ export async function getProductsFromRepository(params: {
 }) {
   const page = Math.max(1, Number(params.page || 1));
   const pageSize = Math.min(48, Math.max(12, Number(params.pageSize || 24)));
-  const selectedCategory = String(params.category || "").trim();
 
   const dbResult = await withDatabase(async () => {
-    await ensureOperationalTables().catch(() => null);
+    // Public shop reads must stay read-only and fast. Runtime schema bootstrap is
+    // intentionally not called here because it issues many ALTER/CREATE statements
+    // and was making the public shop wait on database DDL during cold starts.
     const where: any = { deletedAt: null };
+    const andFilters: any[] = [];
 
     if (params.status) where.status = params.status;
     else if (!params.includeArchived) where.status = "PUBLISHED";
@@ -821,84 +841,34 @@ export async function getProductsFromRepository(params: {
 
     const query = String(params.query || "").trim();
     if (query) {
-      where.OR = [
-        { sku: { contains: query, mode: "insensitive" } },
-        { title: { contains: query, mode: "insensitive" } },
-        { brand: { contains: query, mode: "insensitive" } },
-        { manufacturer: { contains: query, mode: "insensitive" } },
-        { model: { contains: query, mode: "insensitive" } },
-        { mpn: { contains: query, mode: "insensitive" } },
-      ];
-    }
-
-    let total = 0;
-    let rawProducts: any[] = [];
-
-    if (selectedCategory) {
-      // Category membership is canonicalised from historical/imported product data. Keep this query light:
-      // identify matching product IDs from narrow rows, then load only the current visible page's card payload.
-      const candidates = await prisma.product.findMany({
-        where,
-        select: {
-          id: true,
-          title: true,
-          sku: true,
-          brand: true,
-          manufacturer: true,
-          model: true,
-          mpn: true,
-          updatedAt: true,
-          category: { select: { name: true, slug: true } },
-        },
-        orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
-        take: 5000,
+      andFilters.push({
+        OR: [
+          { sku: { contains: query, mode: "insensitive" } },
+          { title: { contains: query, mode: "insensitive" } },
+          { brand: { contains: query, mode: "insensitive" } },
+          { manufacturer: { contains: query, mode: "insensitive" } },
+          { model: { contains: query, mode: "insensitive" } },
+          { mpn: { contains: query, mode: "insensitive" } },
+        ],
       });
-      const matchingIds = candidates
-        .filter((product: any) =>
-          isPublicCategoryMatch(
-            {
-              title: product.title,
-              brand: product.brand,
-              manufacturer: product.manufacturer,
-              model: product.model,
-              mpn: product.mpn,
-              category: product.category?.name,
-              categorySlug: product.category?.slug,
-            },
-            selectedCategory,
-          ),
-        )
-        .map((product: any) => product.id);
-      total = matchingIds.length;
-      const pageIds = matchingIds.slice((page - 1) * pageSize, page * pageSize);
-      if (pageIds.length) {
-        rawProducts = await prisma.product.findMany({
-          where: { id: { in: pageIds } },
-          select: publicProductCardSelect,
-          orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
-        });
-        const order = new Map<string, number>(
-          pageIds.map((id: string, index: number) => [id, index]),
-        );
-        rawProducts.sort(
-          (a: any, b: any) =>
-            Number(order.get(a.id) ?? 0) - Number(order.get(b.id) ?? 0),
-        );
-      }
-    } else {
-      [total, rawProducts] = await Promise.all([
-        prisma.product.count({ where }),
-        prisma.product.findMany({
-          where,
-          select: publicProductCardSelect,
-          orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-      ]);
     }
 
-    const categories = await getPublicCategoryGroupsFromRepository();
+    const categoryFilter = publicCategoryWhere(params.category);
+    if (categoryFilter) andFilters.push(categoryFilter);
+    if (andFilters.length) where.AND = andFilters;
+
+    const [total, rawProducts, categories] = await Promise.all([
+      prisma.product.count({ where }),
+      prisma.product.findMany({
+        where,
+        select: publicProductCardSelect,
+        orderBy: [{ updatedAt: "desc" }, { sku: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      getPublicCategoryGroupsFromRepository(),
+    ]);
+
     const mappedProducts = rawProducts.map(mapPublicListProduct);
     return {
       products: mappedProducts,
@@ -964,6 +934,7 @@ export async function getProductsFromRepository(params: {
     categories: PUBLIC_CATEGORY_LIST,
   };
 }
+
 
 export async function getAdminProductsListFromRepository(params: {
   query?: string;
